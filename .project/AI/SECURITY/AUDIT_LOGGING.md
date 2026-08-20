@@ -37,6 +37,9 @@ Authentication audit metadata contains only safe reason categories and request c
 - Other approval/reversal operations identified by PAGE_SPECS
 - Affiliated College creation, identity updates, and lifecycle status changes (`COLLEGE_CREATED`, `COLLEGE_UPDATED`, `COLLEGE_STATUS_CHANGED`)
 - Authorized signatory creation, appointment updates, and lifecycle status changes (`AUTHORIZED_SIGNATORY_CREATED`, `AUTHORIZED_SIGNATORY_UPDATED`, `AUTHORIZED_SIGNATORY_STATUS_CHANGED`)
+- Academic session creation, updates, lifecycle and current selection (`ACADEMIC_SESSION_CREATED`, `ACADEMIC_SESSION_UPDATED`, `ACADEMIC_SESSION_STATUS_CHANGED`, `ACADEMIC_SESSION_CURRENT_CHANGED`)
+- Degree level creation, updates and lifecycle (`DEGREE_LEVEL_CREATED`, `DEGREE_LEVEL_UPDATED`, `DEGREE_LEVEL_STATUS_CHANGED`)
+- Degree, discipline/specialization, program-template and course-category creation, update and lifecycle (`DEGREE_*`, `DISCIPLINE_*`, `PROGRAM_TEMPLATE_*`, `COURSE_CATEGORY_*`)
 
 ## Recommended Audit Fields
 Reconcile with existing audit/history tables before creating a new table.

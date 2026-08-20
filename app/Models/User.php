@@ -28,7 +28,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'mobile', 'account_type', 'status', 'password'])]
+#[Fillable(['name', 'email', 'mobile', 'account_type', 'primary_college_id', 'status', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -67,6 +67,31 @@ class User extends Authenticatable implements PasskeyUser
             ->get()
             ->flatMap(fn (Role $role) => $role->permissions->pluck('code'))
             ->unique()->sort()->values()->all();
+    }
+
+    public function hasCollegePermission(string $code, int $collegeId): bool
+    {
+        return $this->hasPermission($code, 'COLLEGE', "college:{$collegeId}");
+    }
+
+    /** @return array<int, int> */
+    public function activeCollegeScopeIds(): array
+    {
+        return $this->roles()->where('roles.status', 'ACTIVE')->wherePivot('status', 'ACTIVE')->wherePivot('scope_type', 'COLLEGE')
+            ->where(fn ($q) => $q->whereNull('user_roles.effective_from')->orWhere('user_roles.effective_from', '<=', now()))
+            ->where(fn ($q) => $q->whereNull('user_roles.effective_until')->orWhere('user_roles.effective_until', '>=', now()))
+            ->pluck('user_roles.scope_reference')->map(fn ($scope) => (int) str_replace('college:', '', $scope))->filter()->unique()->values()->all();
+    }
+
+    /** @return array<int, string> */
+    public function allEffectivePermissionCodes(): array
+    {
+        $codes = collect($this->permissionCodes());
+        foreach ($this->activeCollegeScopeIds() as $collegeId) {
+            $codes = $codes->merge($this->permissionCodes('COLLEGE', "college:{$collegeId}"));
+        }
+
+        return $codes->unique()->sort()->values()->all();
     }
 
     /**

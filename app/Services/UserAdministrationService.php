@@ -50,6 +50,6 @@ class UserAdministrationService
 
     private function audit(string $event, User $user, int $actorId, ?string $ip, ?array $before, array $after): void
     {
-        DB::table('audit_logs')->insert(['actor_user_id' => $actorId, 'event' => $event, 'resource_type' => 'User', 'resource_id' => $user->id, 'before' => $before ? json_encode($before) : null, 'after' => json_encode($after), 'ip_address' => $ip, 'created_at' => now()]);
+        DB::table('audit_logs')->insert(['actor_user_id' => $actorId, 'event' => $event, 'resource_type' => 'User', 'resource_id' => $user->id, 'scope_type' => $user->primary_college_id ? 'COLLEGE' : null, 'scope_reference' => $user->primary_college_id ? "college:{$user->primary_college_id}" : null, 'before' => $before ? json_encode($before) : null, 'after' => json_encode($after), 'ip_address' => $ip, 'created_at' => now()]);
     }
 }

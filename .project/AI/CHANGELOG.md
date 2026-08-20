@@ -1,4 +1,48 @@
+
+## 2026-08-20 — NEXT batch precedence conflict removed
+- Removed remaining contradictory frozen-workflow wording that forced every `next` command to one milestone.
+- `PROJECT_CONSTITUTION.md` now explicitly treats `next N` / `nextN` as approval for N sequential milestones in one run.
+- `PAGE_IMPLEMENTATION_REGISTRY.md` now supports multi-milestone advancement for approved batches.
+- Added precedence wording so generic singular approval rules cannot override a numeric batch command.
 # Project Changelog
+
+## 2026-08-21 — University Academic Masters Batch
+
+- Implemented Degrees, Disciplines / Specializations, Program Templates and Course Categories in frozen hierarchy order.
+- Added normalized University-owned tables, explicit parent constraints, stable per-University codes, ordering and non-destructive lifecycle.
+- Added sixteen University-scoped permissions, transactional audit events, permission-aware navigation, Inertia routes and focused feature tests.
+- Added a reusable premium academic-master page with semantic theme tokens, accessible dialogs, inline validation, pending controls, empty states and lifecycle confirmations.
+- Passed 92 tests / 539 assertions plus TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migrations and Vite production build.
+- Updated page/table specs, schema catalog, relationships, permission/audit catalogs, registry and current state. Course Types is next.
+
+## 2026-08-21 — College Audit and Academic Setup Batch
+
+- Implemented exact-scope, read-only College Access Audit and canonical College scope persistence for delegated access events.
+- Implemented University Academic Sessions with date validation, lifecycle, audit history and transactional single-current selection.
+- Implemented ordered University Degree Levels with non-destructive lifecycle, RBAC and audit history.
+- Added three page specifications, two table specifications, schema/relationship/security catalog updates, migrations, routes, services, Inertia pages and feature tests.
+- Passed 88 tests / 515 assertions plus TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migrations and Vite production build.
+- Stopped after exactly three milestones. Degrees is next.
+
+## 2026-08-20 — College Delegated RBAC Batch
+
+- Implemented College Role Permissions using an explicit `is_college_delegable` allow-list and actor-held same-College grant checks.
+- Implemented College User Role Assignment for active custom roles owned by the same College.
+- Implemented fixed-College assignment lifecycle status and inclusive effective dates.
+- Added sensitive College permission assign/remove, role assign/unassign and scope-update capabilities.
+- Added backend denial for University permissions, non-held delegated permissions, cross-College users/roles/assignments and self-escalation.
+- Added transactional audit coverage and dedicated cross-College security tests.
+- Passed 83 tests / 459 assertions plus TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migration and Vite production build.
+- Did not implement College Access Audit; it remains next.
+
+## 2026-08-20 — College Admin Assignment, College Users and College Roles
+
+- Added protected single-College `COLLEGE_ADMIN` assignment through the central login/RBAC foundation.
+- Added primary College ownership for College Staff and exact-scope permission resolution/navigation.
+- Implemented College-scoped staff list/create/edit/status/password-reset workflows and College-owned custom role list/create/edit/status workflows.
+- Added eleven College access permissions, Super Admin delegation, scoped SQL queries and cross-College tampering tests.
+- Passed 81 tests / 433 assertions plus TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migration and Vite production build.
+- Deferred permission delegation to the next College Role Permissions milestone.
 
 ## 2026-08-20 — Scope Assignment
 
@@ -7,7 +51,7 @@
 - Persisted sensitive `scope.update`, added an effective-access index, and enforced active/not-yet-started/expired assignment filtering during permission resolution.
 - Blocked invalid College references, duplicate role/scope combinations, protected system-assignment changes and self-scope escalation.
 - Added transactional `USER_ROLE_SCOPE_UPDATED` audit history with safe before/after scope and lifecycle data.
-- Focused verification passed 7 tests / 43 assertions plus TypeScript, ESLint and Prettier; full-suite/build results are recorded in the implementation state after final validation.
+- Passed 77 tests / 392 assertions plus TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migration, and the Vite production build.
 - Did not implement Audit Logs; it remains the next milestone.
 
 ## 2026-08-19 — Institution Branding Documentation Standard

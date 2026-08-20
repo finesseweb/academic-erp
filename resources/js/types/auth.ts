@@ -15,6 +15,7 @@ export type User = {
 export type Auth = {
     user: User;
     permissions: string[];
+    collegeScopeIds: number[];
 };
 
 /* @chisel-passkeys */

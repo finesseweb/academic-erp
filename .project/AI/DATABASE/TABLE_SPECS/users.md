@@ -27,6 +27,7 @@
 - Authentication implements five-attempt temporary lockout for 15 minutes and resets the counter after a successful login.
 
 ## Change History
+- 2026-08-20: Added nullable `primary_college_id` ownership for College Staff and College/status/name access index.
 - 2026-08-13: Created by Core Identity/RBAC foundation.
 - 2026-08-13: Authentication service implemented active/disabled/locked handling.
 - 2026-08-13: Added optional one-to-one user theme preference relationship.

@@ -18,6 +18,7 @@
 - Disable rather than delete a permission referenced by history/configuration.
 
 ## Change History
+- 2026-08-20: Added `is_college_delegable` allow-list metadata and its status/module lookup index; College administrators cannot delegate permissions without this flag.
 - 2026-08-13: Created and seeded initial platform permissions.
 - 2026-08-13: Added `theme.select_own` and `theme.manage_personal_selection`; granted both to the global `SUPER_ADMIN` system role.
 - 2026-08-18: Current Laravel repository persists `university.view` and `university.update` for the University Profile milestone. Earlier catalog claims must be verified during their respective milestones.

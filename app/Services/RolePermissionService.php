@@ -20,6 +20,7 @@ class RolePermissionService
             $removed = array_values(array_map(fn ($id) => $codes[$id], $removedIds));
             DB::table('audit_logs')->insert([
                 'actor_user_id' => $actorId, 'event' => 'ROLE_PERMISSIONS_UPDATED', 'resource_type' => 'Role', 'resource_id' => $role->id,
+                'scope_type' => $role->owner_scope_type === 'COLLEGE' ? 'COLLEGE' : null, 'scope_reference' => $role->owner_scope_type === 'COLLEGE' ? $role->owner_scope_reference : null,
                 'before' => json_encode(['permission_codes' => $removed]), 'after' => json_encode(['added' => $added, 'removed' => $removed]),
                 'ip_address' => $ip, 'created_at' => now(),
             ]);

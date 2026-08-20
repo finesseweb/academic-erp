@@ -51,12 +51,12 @@ class UserRoleService
 
     private function audit(string $event, UserRole $assignment, int $actorId, ?string $ip, array $data): void
     {
-        DB::table('audit_logs')->insert(['actor_user_id' => $actorId, 'event' => $event, 'resource_type' => 'UserRole', 'resource_id' => $assignment->id, 'before' => $event === 'USER_ROLE_UNASSIGNED' ? json_encode($data) : null, 'after' => $event === 'USER_ROLE_ASSIGNED' ? json_encode($data) : null, 'ip_address' => $ip, 'created_at' => now()]);
+        DB::table('audit_logs')->insert(['actor_user_id' => $actorId, 'event' => $event, 'resource_type' => 'UserRole', 'resource_id' => $assignment->id, 'scope_type' => $assignment->scope_type, 'scope_reference' => $assignment->scope_reference, 'before' => $event === 'USER_ROLE_UNASSIGNED' ? json_encode($data) : null, 'after' => $event === 'USER_ROLE_ASSIGNED' ? json_encode($data) : null, 'ip_address' => $ip, 'created_at' => now()]);
     }
 
     private function auditChange(string $event, UserRole $assignment, int $actorId, ?string $ip, array $before, array $after): void
     {
-        DB::table('audit_logs')->insert(['actor_user_id' => $actorId, 'event' => $event, 'resource_type' => 'UserRole', 'resource_id' => $assignment->id, 'before' => json_encode($before), 'after' => json_encode($after), 'ip_address' => $ip, 'created_at' => now()]);
+        DB::table('audit_logs')->insert(['actor_user_id' => $actorId, 'event' => $event, 'resource_type' => 'UserRole', 'resource_id' => $assignment->id, 'scope_type' => $assignment->scope_type, 'scope_reference' => $assignment->scope_reference, 'before' => json_encode($before), 'after' => json_encode($after), 'ip_address' => $ip, 'created_at' => now()]);
     }
 
     private function snapshot(UserRole $assignment): array

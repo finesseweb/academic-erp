@@ -91,19 +91,54 @@ Codex must reconcile this file at the beginning of every `next` run and update i
   - Reuses `resources/js/pages/users/roles.tsx` with per-assignment scope/lifecycle editing
   - Laravel request/controller/service: `UpdateUserRoleScopeRequest`, `UserRoleController@updateScope`, `UserRoleService@updateScope`
   - Migration: `2026_08_20_150000_add_scope_assignment_access`
+  - Local MySQL apply: COMPLETE — migration applied on 2026-08-20
   - Permission: sensitive `scope.update`
   - University/active-College scope validation, status/effective dates, duplicate/system/self safeguards, transactional audit, and runtime effective-period permission enforcement implemented
-  - Focused verification: 7 tests / 43 assertions; TypeScript, ESLint and Prettier passed
+  - Verification: 77 tests / 392 assertions, TypeScript, ESLint, Prettier, Pint, route inspection, migration, and production build passed
   - Review: PENDING_REVIEW
-- Audit Logs: VERIFY_REPOSITORY
+- Audit Logs: IMPLEMENTED
+  - Read-only Inertia report, sensitive `audit.view`, filters/details, migration and tests verified from repository reality
+
+### College Access & Role Management
+- College Administrator Login / Assignment: IMPLEMENTED
+- College Users: IMPLEMENTED
+- College Roles: IMPLEMENTED
+- College Role Permissions: IMPLEMENTED
+  - Reuses the shared role-permission matrix with College delegation context
+  - Enforces `is_college_delegable`, actor-held grants, role ownership and cross-College denial
+- College User Role Assignment: IMPLEMENTED
+  - Inertia page: `resources/js/pages/college-users/roles.tsx`
+  - Same-College custom role assignment/removal, preview, duplicate/self/cross-College safeguards and audit implemented
+- College Scope Assignment: IMPLEMENTED
+  - Fixed-College assignment status/effective-date editing and runtime lifecycle enforcement implemented
+- Migration: `2026_08_20_210000_create_college_access_foundation`
+- Delegation migration: `2026_08_20_235000_add_college_delegated_access_permissions`
+- Delegation migration local MySQL apply: COMPLETE — applied on 2026-08-20
+- Local MySQL apply: COMPLETE — migration applied on 2026-08-20
+- Security: exact College-scoped permission checks and cross-College denial are backend enforced
+- College Access Audit: IMPLEMENTED
+  - Exact College-scoped immutable report, filters, delegated audit scope persistence and cross-College denial
+  - Permission: sensitive, non-delegable `college_audit.view`
+- Verification: included in batch verification below
+- Review: PENDING_REVIEW
 
 ### University Academic Setup
-- Academic Sessions: VERIFY_REPOSITORY
-- Degree Levels: VERIFY_REPOSITORY
-- Degrees: VERIFY_REPOSITORY
-- Disciplines / Specializations: VERIFY_REPOSITORY
-- Program Templates: VERIFY_REPOSITORY
-- Course Categories: VERIFY_REPOSITORY
+- Academic Sessions: IMPLEMENTED
+  - University-scoped CRUD/lifecycle/current selection, shared modern date picker and audit trail
+  - Migration: `2026_08_21_100000_create_academic_sessions_table`
+- Degree Levels: IMPLEMENTED
+  - University-scoped ordered classifications, lifecycle, permissions and audit trail
+  - Migration: `2026_08_21_110000_create_degree_levels_table`
+- Batch verification: 88 tests / 515 assertions, TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migrations and production build passed
+- Degrees: IMPLEMENTED
+  - University-owned awards linked to active Degree Levels; lifecycle, RBAC and audit implemented
+- Disciplines / Specializations: IMPLEMENTED
+  - University-owned discipline/specialization hierarchy, lifecycle, RBAC and audit implemented
+- Program Templates: IMPLEMENTED
+  - Degree-linked University blueprint with optional discipline, term structure, lifecycle, RBAC and audit
+- Course Categories: IMPLEMENTED
+  - Controlled classification groups, ordering, lifecycle, RBAC and audit implemented
+- Academic masters batch verification: 92 tests / 539 assertions, TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migrations and Vite production build passed
 - Course Types: VERIFY_REPOSITORY
 - Course / Paper Master: VERIFY_REPOSITORY
 - Curriculum Header: VERIFY_REPOSITORY
@@ -121,7 +156,7 @@ Remain planned unless repository inspection proves otherwise.
 
 ## Next Eligible Milestone
 
-Audit Logs is the next eligible milestone in the frozen hierarchy. Existing repository artifacts remain `VERIFY_REPOSITORY` and must be reconciled against its page specification before implementation.
+Course Types is the next eligible milestone in the frozen hierarchy.
 
 ## Approved Deferred Cross-Cutting Standards
 

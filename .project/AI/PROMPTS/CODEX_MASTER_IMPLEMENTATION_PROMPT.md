@@ -8,7 +8,7 @@ You are implementing a production-grade Academic ERP using React, Laravel, Larav
 BEFORE ANY CODE CHANGE:
 1. Read the complete .project/AI/ documentation directory, prioritizing PROJECT_CONSTITUTION.md, AGENTS.md, ARCHITECTURE.md, DATABASE_RULES.md, DOCUMENTATION_MAINTENANCE.md, relevant SECURITY docs, THEME_SYSTEM.md, UI_UX_GUIDELINES.md and the relevant PAGE_SPEC.
 2. Inspect existing source code and reuse established components/patterns.
-3. Identify the first incomplete approved milestone and implement only that milestone completely.
+3. Identify the earliest genuinely incomplete approved milestone from repository reality. Implement only the owner-approved batch count; for `next` this is 1, and for `next N`/`nextN` it is exactly N sequential eligible incomplete milestones.
 
 QUALITY:
 - Premium modern enterprise SaaS/ERP UI; restrained, professional, consistent and responsive.
@@ -42,21 +42,22 @@ Before any project work, read `.project/AI/` and treat it as authoritative.
 
 Do not implement planned pages automatically.
 Only implement the page/milestone explicitly approved by the project owner.
-Do not continue to the next page after completion without new approval.
+Do not continue beyond the owner-approved count. A `next N`/`nextN` command explicitly approves N sequential eligible incomplete milestones in that batch.
 Keep affected `.project/AI/` documentation synchronized with approved implementation.
 
-## Automatic `next` Workflow — Mandatory
+## Automatic `next` / `next N` Workflow — Mandatory
 
-If the owner says `next`, do not ask what to build.
+If the owner says `next`, `next N`, or `nextN`, do not ask what to build when hierarchy and repository reality make it unambiguous.
 
-Read `.project/AI/MASTER_DEVELOPMENT_HIERARCHY.md`,
-`.project/AI/NEXT_WORKFLOW.md`,
-`.project/AI/CURRENT_IMPLEMENTATION_STATE.md`,
-and the relevant PAGE_SPEC(s).
+Read `.project/AI/MASTER_DEVELOPMENT_HIERARCHY.md`, `.project/AI/NEXT_WORKFLOW.md`, `.project/AI/CURRENT_IMPLEMENTATION_STATE.md`, `.project/AI/PAGE_IMPLEMENTATION_REGISTRY.md`, and relevant PAGE_SPEC(s).
 
-Inspect the repository, select the earliest eligible incomplete milestone, implement it, validate it, synchronize documentation, report and stop.
+Repository reality is the resume authority: inspect current code first, reconcile stale statuses, skip already-completed milestones without counting them, and start from the earliest genuinely incomplete eligible milestone. Never restart from the beginning merely because instruction files were replaced.
 
-`next` approves exactly one milestone.
+Command count:
+- `next` = exactly 1 newly completed milestone.
+- `next N` or `nextN` = exactly N newly completed milestones, sequentially.
+
+For each approved milestone: implement it completely, validate it, synchronize documentation, then continue only if the current batch still has remaining approved milestones. Stop after exactly the requested count.
 
 ## Frozen React + Laravel + MySQL Stack
 

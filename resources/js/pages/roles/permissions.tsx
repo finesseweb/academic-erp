@@ -30,6 +30,7 @@ type Permission = {
     code: string;
     description: string;
     is_sensitive: boolean;
+    can_assign?: boolean;
 };
 type Role = {
     id: number;
@@ -43,13 +44,19 @@ type P = {
     role: Role;
     permissions: { module: string; permissions: Permission[] }[];
     can: { assign: boolean; remove: boolean };
+    context?: { eyebrow: string; backUrl: string; updateUrl: string };
 };
 const actionName = (action: string) =>
     action
         .split('_')
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
-export default function RolePermissions({ role, permissions, can }: P) {
+export default function RolePermissions({
+    role,
+    permissions,
+    can,
+    context,
+}: P) {
     const initial = useMemo(
         () => role.permissions.map((p) => p.id),
         [role.permissions],
@@ -72,8 +79,15 @@ export default function RolePermissions({ role, permissions, can }: P) {
         .filter((group) => group.permissions.length);
     const toggle = (id: number, value: boolean) => {
         const originally = initial.includes(id);
+        const permission = permissions
+            .flatMap((group) => group.permissions)
+            .find((item) => item.id === id);
 
-        if (value && !originally && !can.assign) {
+        if (
+            value &&
+            !originally &&
+            (!can.assign || permission?.can_assign === false)
+        ) {
             return;
         }
 
@@ -101,7 +115,7 @@ export default function RolePermissions({ role, permissions, can }: P) {
                         </div>
                         <div>
                             <p className="text-xs font-medium tracking-wide text-primary uppercase">
-                                Role permission matrix
+                                {context?.eyebrow ?? 'Role permission matrix'}
                             </p>
                             <h1 className="text-xl font-semibold">
                                 {role.name}
@@ -113,7 +127,7 @@ export default function RolePermissions({ role, permissions, can }: P) {
                         </div>
                     </div>
                     <Button variant="outline" asChild>
-                        <Link href="/admin/roles">
+                        <Link href={context?.backUrl ?? '/admin/roles'}>
                             <ChevronLeft />
                             Back to roles
                         </Link>
@@ -215,7 +229,8 @@ export default function RolePermissions({ role, permissions, can }: P) {
                                             ? initial.includes(p.id) &&
                                               !can.remove
                                             : !initial.includes(p.id) &&
-                                              !can.assign);
+                                              (!can.assign ||
+                                                  p.can_assign === false));
 
                                     return (
                                         <label
@@ -315,7 +330,10 @@ export default function RolePermissions({ role, permissions, can }: P) {
                                         scopes.
                                     </DialogDescription>
                                     <Form
-                                        action={`/admin/roles/${role.id}/permissions`}
+                                        action={
+                                            context?.updateUrl ??
+                                            `/admin/roles/${role.id}/permissions`
+                                        }
                                         method="put"
                                         disableWhileProcessing
                                     >

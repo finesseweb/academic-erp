@@ -20,6 +20,7 @@
 - STUDENT and PARENT fit as future role records; no role-specific user columns belong here.
 
 ## Change History
+- 2026-08-20: Added protected `COLLEGE_ADMIN` template and College-owned custom-role creation.
 - 2026-08-13: Created; seeded protected global `SUPER_ADMIN`.
 - 2026-08-18: Repository migration now persists the protected global `SUPER_ADMIN` and grants the two implemented University Profile permissions. Other catalog grants remain milestone-gated.
 - 2026-08-19: Added the owner-scope/status administration index and implemented audited custom-role metadata and lifecycle management.

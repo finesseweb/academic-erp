@@ -42,6 +42,24 @@ This is the canonical registry for ERP authorization permission codes.
 ## Audit / Security
 - `audit.view`
 
+## College Access Administration
+- `college_admin.assign`
+- `college_user.view`
+- `college_user.create`
+- `college_user.update`
+- `college_user.disable`
+- `college_user.enable`
+- `college_user.reset_password`
+- `college_role.view`
+- `college_role.create`
+- `college_role.update`
+- `college_role.disable`
+- `college_permission.assign`
+- `college_permission.remove`
+- `college_role.assign`
+- `college_role.unassign`
+- `college_scope.update`
+
 ## Appearance / Theme Management
 - `theme.view`
 - `theme.select_own`
@@ -151,6 +169,10 @@ Repository implementation note (2026-08-20): `permission.assign_to_role` and `pe
 Repository implementation note (2026-08-20): `role.assign` and `role.unassign` are persisted as sensitive capabilities. Custom roles may be assigned at explicit University or validated College scope; protected system role assignments remain migration-controlled.
 
 Repository implementation note (2026-08-20): sensitive `scope.update` is persisted and enforced when changing an existing assignment's canonical University/College scope, status or effective period. Protected system assignments and self-scope changes are blocked.
+
+Repository implementation note (2026-08-21): sensitive, non-delegable `college_audit.view` is persisted for exact-College immutable access history. Academic Sessions persist `academic_session.view/create/update/close/set_current`; Degree Levels persist `degree_level.view/create/update/disable`. Academic permissions are University-scoped and initially granted to Super Admin.
+
+Repository implementation note (2026-08-21): University Academic Setup persists and enforces `degree.*`, `discipline.*`, `program_template.*`, and `course_category.*` view/create/update/disable capability families. Disable is sensitive; these permissions are non-College-delegable and initially granted to Super Admin.
 
 ## University / College Governance
 - `university.view`

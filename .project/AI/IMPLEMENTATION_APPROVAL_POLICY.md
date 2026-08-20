@@ -1,5 +1,7 @@
 # IMPLEMENTATION APPROVAL POLICY
 
+> **Batch precedence:** For command interpretation, `next N` / `nextN` explicitly approves N sequential eligible incomplete milestones in one run. Any generic rule below that refers to a page/milestone in the singular applies to each item inside that approved batch and must not collapse the batch to one.
+
 ## Core Rule
 The ERP may be fully documented in advance, but implementation is approval-gated.
 
@@ -19,7 +21,7 @@ PLANNED / DOCUMENTED
 → OWNER ACCEPTS
 → ACCEPTED
 
-Never automatically start the next page after completing the approved page.
+Never start work beyond the owner-approved count. A `next N`/`nextN` command approves exactly N sequential eligible incomplete milestones; within that approved batch, continue automatically after each milestone is completed, validated and documented.
 
 ## PAGE_SPEC Status Block
 Each page should use:
@@ -56,9 +58,12 @@ If implementation requires a major architecture/product change not already appro
 Normal implementation changes: update affected docs automatically.
 Major architecture/product changes: approval first, then update docs and code.
 
-## `next` Is Explicit Milestone Approval
+## `next` / `next N` Is Explicit Milestone Approval
 
-The owner command `next` approves exactly the earliest eligible incomplete milestone from the frozen master hierarchy.
+The owner command `next` approves exactly 1 earliest eligible incomplete milestone from the frozen master hierarchy.
 
-It removes the need for the owner to manually repeat that milestone name.
-It never approves all subsequent milestones.
+The owner command `next N` or `nextN` approves exactly N sequential eligible incomplete milestones, where N is a positive integer.
+
+Before selecting/counting work, the agent MUST inspect repository reality and reconcile status documentation. Work resumes from the earliest genuinely incomplete eligible milestone. Already-completed milestones are skipped and do not consume N. A partially completed earliest eligible milestone is finished first and counts as one.
+
+The command removes the need for the owner to manually repeat milestone names. It never approves work beyond the requested count.

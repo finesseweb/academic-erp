@@ -21,6 +21,12 @@ Do not invent table entries. Add an entry only after inspecting/approving the re
 | University profile | `universities` | University Foundation | University root | `id` | `code` | Platform | `TABLE_SPECS/universities.md` |
 | Affiliated College | `colleges` | University Foundation | University-owned child | `id` | `code` | `universities.id` | `TABLE_SPECS/colleges.md` |
 | Authorized signatory appointment | `authorized_signatories` | University Foundation | University-owned child | `id` | Appointment identity + authority period | `universities.id` | `TABLE_SPECS/authorized_signatories.md` |
+| Academic session | `academic_sessions` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `universities.id` | `TABLE_SPECS/academic_sessions.md` |
+| Degree level | `degree_levels` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `universities.id` | `TABLE_SPECS/degree_levels.md` |
+| Degree | `degrees` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `degree_levels.id` | `TABLE_SPECS/degrees.md` |
+| Discipline / specialization | `academic_disciplines` | Academic Master | University-owned hierarchy | `id` | (`university_id`, `code`) | `universities.id`; optional self parent | `TABLE_SPECS/academic_disciplines.md` |
+| Program template | `program_templates` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `degrees.id` | `TABLE_SPECS/program_templates.md` |
+| Course category | `course_categories` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `universities.id` | `TABLE_SPECS/course_categories.md` |
 
 ## Domain Grouping
 Maintain tables under clear ERP domains as they are discovered, for example:

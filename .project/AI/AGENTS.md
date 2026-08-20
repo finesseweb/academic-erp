@@ -38,22 +38,16 @@ Before any project work, read `.project/AI/` and treat it as authoritative.
 
 Do not implement planned pages automatically.
 Only implement the page/milestone explicitly approved by the project owner.
-Do not continue to the next page after completion without new approval.
+Do not continue beyond the owner-approved count. For `next N`/`nextN`, the N milestones are already explicitly approved as one sequential batch.
 Keep affected `.project/AI/` documentation synchronized with approved implementation.
 
-## Automatic `next` Workflow — Mandatory
+## Automatic `next` / `next N` Workflow — Mandatory
 
-If the owner says `next`, do not ask what to build.
+If the owner says `next`, `next N`, or `nextN`, do not ask what to build when the hierarchy is unambiguous. Read the master hierarchy, workflow, current implementation state, registry, PAGE_SPECs and required supporting docs.
 
-Read `.project/AI/MASTER_DEVELOPMENT_HIERARCHY.md`,
-`.project/AI/NEXT_WORKFLOW.md`,
-`.project/AI/CURRENT_IMPLEMENTATION_STATE.md`,
-and the relevant PAGE_SPEC(s).
+Inspect repository reality first and resume from the earliest genuinely incomplete eligible milestone. Repository reality overrides stale status docs. Already-completed milestones are skipped and do not consume the requested count; a partially completed earliest eligible milestone is finished first and counts as one.
 
-Inspect the repository, select the earliest eligible incomplete milestone, implement it, validate it, synchronize documentation, report and stop.
-
-`next` approves exactly one milestone.
-
+`next` approves exactly 1 newly completed milestone. `next N`/`nextN` approves exactly N newly completed milestones. Complete, validate and document each milestone before proceeding to the next in that approved batch. Stop after exactly the requested count. Replacing these workflow files never resets progress.
 ## Frozen React + Laravel + MySQL Stack
 
 Frontend:

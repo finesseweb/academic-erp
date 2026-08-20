@@ -23,6 +23,16 @@ This file is the compact join map for application queries and reporting. It must
 | `colleges.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | College affiliated with the University root |
 | `colleges.principal_user_id` | `users.id` | many-to-one | No | Yes | SET NULL | Optional linked Principal/College Admin account |
 | `authorized_signatories.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | Governed signing appointment owned by the University |
+| `academic_sessions.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University academic period |
+| `degree_levels.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University degree classification |
+| `degrees.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University degree ownership |
+| `degrees.degree_level_id` | `degree_levels.id` | many-to-one | Yes | Yes | RESTRICT | Degree classification |
+| `academic_disciplines.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University subject-domain ownership |
+| `academic_disciplines.parent_id` | `academic_disciplines.id` | many-to-one | No | Yes | RESTRICT | Specialization parent discipline |
+| `program_templates.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University blueprint ownership |
+| `program_templates.degree_id` | `degrees.id` | many-to-one | Yes | Yes | RESTRICT | Award granted by template |
+| `program_templates.discipline_id` | `academic_disciplines.id` | many-to-one | No | Yes | RESTRICT | Optional primary subject domain |
+| `course_categories.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University curriculum classification ownership |
 
 ## Common Join Paths
 Document frequently used, verified business join paths here as modules are migrated.
@@ -61,6 +71,8 @@ For important fact/transaction tables, record their grain, e.g. "one row per stu
 - `user_theme_preferences`: zero or one row per user.
 - `colleges`: one row per affiliated College under the root University.
 - `authorized_signatories`: one row per University signatory appointment and authority category.
+- `academic_sessions`: one row per University academic period; at most one is current.
+- `degree_levels`: one row per ordered University degree classification.
 
 Verified theme resolution path:
 `users -> user_theme_preferences` plus applicable `theme_policies`

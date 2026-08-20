@@ -2,12 +2,20 @@
 
 - Canonical root: `.project/AI/`
 - Frozen master hierarchy: enabled
-- `next` = approval for one milestone: enabled
+- `next` = approval for exactly 1 next eligible incomplete milestone: enabled
+- `next N` and `nextN` = approval for exactly N sequential eligible incomplete milestones: enabled
+- N must be a positive integer
 - Repository inspection before selection: mandatory
-- Previous incomplete step cannot be skipped
+- Resume from actual existing implementation state: mandatory
+- Repository reality overrides stale status documentation
+- Already-completed milestones are skipped and do not consume N
+- Partially completed earliest eligible milestone is completed first and counts as one
+- Previous incomplete prerequisite cannot be skipped
 - PAGE_SPEC required before implementation
 - Missing PAGE_SPEC may be created for the selected frozen milestone
 - Completed functionality must not be rebuilt unnecessarily
-- Documentation/status updated after implementation
-- Codex must stop after one milestone
-- Another `next` is required for another milestone
+- Each milestone must be validated and documented before the next milestone in the same batch begins
+- Documentation/status updated after each implemented milestone
+- Agent stops after exactly the owner-requested count
+- A new owner command is required for work beyond that count
+- Replacing workflow instruction files must not reset project progress

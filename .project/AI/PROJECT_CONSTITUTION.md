@@ -91,8 +91,8 @@ All work must read from `.project/AI/` first.
 Documentation does not constitute implementation approval.
 
 Do not implement a PAGE_SPEC, module, migration, API, workflow, or future feature merely because it is documented.
-Implement only the page/milestone explicitly approved by the project owner.
-After completing approved work, stop and report. Do not automatically continue to the next page.
+Implement only the page/milestone count explicitly approved by the project owner.
+If the owner approves a batch with `next N` or `nextN`, that entire batch of N sequential eligible milestones is explicitly approved. Complete, validate, and document each approved milestone in order without asking for another command between them. Stop only after the full approved count is completed, or when a genuine blocker requires owner input.
 
 See `IMPLEMENTATION_APPROVAL_POLICY.md`.
 
@@ -103,7 +103,8 @@ The project uses:
 - `NEXT_WORKFLOW.md`
 - `CURRENT_IMPLEMENTATION_STATE.md`
 
-When the project owner says `next`, that message is explicit approval for exactly ONE next eligible milestone.
+When the project owner says `next`, that message is explicit approval for exactly 1 next eligible milestone.
+When the project owner says `next N` or `nextN`, that message is explicit approval for exactly N sequential eligible incomplete milestones in the same run.
 
 Codex must:
 1. read `.project/AI/`;
@@ -114,7 +115,18 @@ Codex must:
 6. implement it;
 7. validate it;
 8. update documentation/state;
-9. stop.
+9. if the approved batch counter is still below N, immediately select and execute the next eligible incomplete milestone;
+10. stop only when the full approved count has been completed, or when a genuine blocker requires owner input.
 
-Do not require the owner to name the milestone when the frozen hierarchy makes it clear.
-Do not start another milestone until the owner says `next` again.
+Do not require the owner to name milestone names when the frozen hierarchy makes the sequence clear.
+For `next N`/`nextN`, do not ask the owner to say `next` again between milestones; the original batch command already approves all N milestones.
+
+
+## Batch Command Precedence — Mandatory
+If any older wording anywhere in `.project/AI/` appears to imply that every `next`-style command can advance only one milestone, this section and `NEXT_WORKFLOW.md` control the interpretation:
+- plain `next` = 1 milestone;
+- `next N` / `nextN` = N milestones in one sequential approved batch.
+A batch command is not reduced to one milestone by any generic "one page", "one milestone", "stop after approved work", or approval-gate wording elsewhere. Those rules apply per milestone inside the approved batch and to work beyond the approved count.
+
+## Automatic `next` / `next N` Workflow — Mandatory
+`next` approves exactly 1 next eligible incomplete milestone. `next N` or `nextN` approves exactly N sequential eligible incomplete milestones. The agent MUST inspect repository reality first, reconcile stale implementation statuses, resume at the earliest genuinely incomplete eligible milestone, skip already-completed milestones without counting them, complete/validate/document each selected milestone in order, and stop after exactly the requested count. Replacing workflow instruction files never resets implementation progress.

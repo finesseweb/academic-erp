@@ -58,22 +58,26 @@ For every new Codex/AI session:
 3. Read the University hierarchy and hierarchy-to-page map.
 4. Read `IMPLEMENTATION_APPROVAL_POLICY.md`.
 5. Read only the relevant PAGE_SPEC and supporting domain/security/database/theme/realtime docs.
-6. Implement only the page/milestone explicitly approved by the owner.
-7. Validate and update affected docs.
-8. Stop and wait for approval before starting another page.
+6. Implement only the owner-approved milestone or owner-approved `next` batch count.
+7. Validate and update affected docs after each milestone.
+8. Stop when the approved count is complete and wait for a new owner command.
 
-## One-Word `next` Development Workflow
+## `next` / `next N` Development Workflow
 
-The owner can now drive development with the command:
+The owner can drive development with:
+- `next` for 1 next eligible incomplete milestone.
+- `next 2` or `next2` for 2.
+- `next N` or `nextN` for any positive integer N.
 
-`next`
+Codex/AI first inspects the existing repository and reconciles implementation-status documentation, then resumes at the earliest genuinely incomplete eligible milestone in the frozen hierarchy. Already-completed milestones are skipped and do not consume the requested count. It completes, validates and documents each milestone before moving to the next within the same approved batch, then stops after exactly the requested number.
 
-Codex automatically checks repository reality, finds the next eligible milestone in the frozen hierarchy, reads its PAGE_SPEC, implements it, validates it, updates `.project/AI/`, reports, and stops.
+Replacing these workflow files does not reset project progress.
 
 Key files:
 - `MASTER_DEVELOPMENT_HIERARCHY.md`
 - `NEXT_WORKFLOW.md`
 - `CURRENT_IMPLEMENTATION_STATE.md`
+- `PAGE_IMPLEMENTATION_REGISTRY.md`
 
 ## React + Laravel + MySQL Project Standard
 
