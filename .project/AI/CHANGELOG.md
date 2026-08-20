@@ -6,6 +6,14 @@
 - Added precedence wording so generic singular approval rules cannot override a numeric batch command.
 # Project Changelog
 
+## 2026-08-21 — Program Template Academic Hierarchy Refinement
+
+- Replaced the ambiguous mixed Discipline/Specialization selector with a required top-level Discipline selector and an optional dependent Specialization selector.
+- Added `program_templates.specialization_id`; the migration safely normalizes historical specialization-only selections into their parent Discipline plus Specialization.
+- Enforced same-University, active-record and parent-match validation in Laravel.
+- Prevented a Discipline with existing Specializations from being converted into a Specialization in both the UI and backend validation.
+- Updated the Program Templates and Disciplines page specifications plus schema catalog, relationship map and table specifications.
+
 ## 2026-08-21 — University Academic Masters Batch
 
 - Implemented Degrees, Disciplines / Specializations, Program Templates and Course Categories in frozen hierarchy order.

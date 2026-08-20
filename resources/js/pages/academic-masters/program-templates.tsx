@@ -2,9 +2,11 @@ import { AcademicMasterPage } from '@/components/academic-master-page';
 import type { MasterRecord } from '@/components/academic-master-page';
 type Item = MasterRecord & {
     degree_id: number;
-    discipline_id: number | null;
+    discipline_id: number;
+    specialization_id: number | null;
     degree: { name: string };
-    discipline: { name: string } | null;
+    discipline: { name: string };
+    specialization: { name: string } | null;
     term_structure: string;
     duration_terms: number;
 };
@@ -12,12 +14,14 @@ type Props = {
     templates: Item[];
     degrees: { id: number; name: string }[];
     disciplines: { id: number; name: string }[];
+    specializations: { id: number; parent_id: number; name: string }[];
     can: { create: boolean; update: boolean; disable: boolean };
 };
 export default function ProgramTemplates({
     templates,
     degrees,
     disciplines,
+    specializations,
     can,
 }: Props) {
     return (
@@ -41,15 +45,35 @@ export default function ProgramTemplates({
                 },
                 {
                     name: 'discipline_id',
-                    label: 'Primary discipline',
+                    label: 'Discipline',
                     type: 'select',
-                    options: [
-                        { value: 'none', label: 'No primary discipline' },
-                        ...disciplines.map((x) => ({
-                            value: String(x.id),
-                            label: x.name,
-                        })),
-                    ],
+                    required: true,
+                    options: disciplines.map((x) => ({
+                        value: String(x.id),
+                        label: x.name,
+                    })),
+                },
+                {
+                    name: 'specialization_id',
+                    label: 'Specialization',
+                    type: 'select',
+                    options: [{ value: 'none', label: 'No specialization' }],
+                    optionsForValue: {
+                        field: 'discipline_id',
+                        resolve: (disciplineId) => [
+                            { value: 'none', label: 'No specialization' },
+                            ...specializations
+                                .filter(
+                                    (x) => String(x.parent_id) === disciplineId,
+                                )
+                                .map((x) => ({
+                                    value: String(x.id),
+                                    label: x.name,
+                                })),
+                        ],
+                    },
+                    helperText:
+                        'Optional. Only specializations of the selected discipline are available.',
                 },
                 { name: 'name', label: 'Template name', required: true },
                 { name: 'code', label: 'Code', required: true },
@@ -95,7 +119,16 @@ export default function ProgramTemplates({
                 { name: 'description', label: 'Description', type: 'textarea' },
             ]}
             meta={(r) =>
-                `${(r.degree as { name: string }).name}${r.discipline ? ` · ${(r.discipline as { name: string }).name}` : ''} · ${r.duration_terms} ${String(r.term_structure).toLowerCase()} terms`
+                [
+                    (r.degree as { name: string }).name,
+                    (r.discipline as { name: string }).name,
+                    r.specialization
+                        ? (r.specialization as { name: string }).name
+                        : null,
+                    `${r.duration_terms} ${String(r.term_structure).toLowerCase()} terms`,
+                ]
+                    .filter(Boolean)
+                    .join(' / ')
             }
         />
     );

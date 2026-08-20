@@ -41,8 +41,13 @@ export type MasterField = {
     min?: number;
     max?: number;
     options?: { value: string; label: string }[];
+    optionsForValue?: {
+        field: string;
+        resolve: (value: string) => { value: string; label: string }[];
+    };
     defaultValue?: string | number;
     disabledWhen?: { field: string; equals: string };
+    disabledWhenRecord?: (record?: MasterRecord) => boolean;
     requiredWhen?: { field: string; equals: string };
     disabledValue?: string;
     disabledDisplayValue?: string;
@@ -77,14 +82,24 @@ function Editor({
             const next = { ...current, [name]: value };
 
             for (const dependent of props.fields) {
-                if (dependent.disabledWhen?.field !== name) {
-                    continue;
+                if (dependent.disabledWhen?.field === name) {
+                    if (value === dependent.disabledWhen.equals) {
+                        next[dependent.name] = dependent.disabledValue ?? '';
+                    } else if (
+                        next[dependent.name] === dependent.disabledValue
+                    ) {
+                        next[dependent.name] = '';
+                    }
                 }
 
-                if (value === dependent.disabledWhen.equals) {
-                    next[dependent.name] = dependent.disabledValue ?? '';
-                } else if (next[dependent.name] === dependent.disabledValue) {
-                    next[dependent.name] = '';
+                if (dependent.optionsForValue?.field === name) {
+                    const optionValues = dependent.optionsForValue
+                        .resolve(value)
+                        .map((option) => option.value);
+
+                    if (!optionValues.includes(next[dependent.name])) {
+                        next[dependent.name] = '';
+                    }
                 }
             }
 
@@ -124,10 +139,25 @@ function Editor({
                         <>
                             {props.fields.map((field) => {
                                 const disabled = Boolean(
-                                    field.disabledWhen &&
-                                    values[field.disabledWhen.field] ===
-                                        field.disabledWhen.equals,
+                                    (field.disabledWhen &&
+                                        values[field.disabledWhen.field] ===
+                                            field.disabledWhen.equals) ||
+                                    field.disabledWhenRecord?.(record),
                                 );
+                                const options = field.optionsForValue
+                                    ? field.optionsForValue.resolve(
+                                          values[field.optionsForValue.field],
+                                      )
+                                    : field.options;
+                                const disabledValue =
+                                    field.disabledValue ?? values[field.name];
+                                const disabledDisplayValue =
+                                    field.disabledDisplayValue ??
+                                    options?.find(
+                                        (option) =>
+                                            option.value === disabledValue,
+                                    )?.label ??
+                                    disabledValue;
                                 const required = Boolean(
                                     field.required ||
                                     (field.requiredWhen &&
@@ -154,21 +184,14 @@ function Editor({
                                             <>
                                                 <Input
                                                     id={`${field.name}-${record?.id ?? 'new'}`}
-                                                    value={
-                                                        field.disabledDisplayValue ??
-                                                        field.disabledValue ??
-                                                        ''
-                                                    }
+                                                    value={disabledDisplayValue}
                                                     disabled
                                                     aria-required={required}
                                                 />
                                                 <input
                                                     type="hidden"
                                                     name={field.name}
-                                                    value={
-                                                        field.disabledValue ??
-                                                        ''
-                                                    }
+                                                    value={disabledValue}
                                                 />
                                             </>
                                         ) : field.type === 'select' ? (
@@ -196,20 +219,14 @@ function Editor({
                                                     />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {field.options?.map(
-                                                        (option) => (
-                                                            <SelectItem
-                                                                key={
-                                                                    option.value
-                                                                }
-                                                                value={
-                                                                    option.value
-                                                                }
-                                                            >
-                                                                {option.label}
-                                                            </SelectItem>
-                                                        ),
-                                                    )}
+                                                    {options?.map((option) => (
+                                                        <SelectItem
+                                                            key={option.value}
+                                                            value={option.value}
+                                                        >
+                                                            {option.label}
+                                                        </SelectItem>
+                                                    ))}
                                                 </SelectContent>
                                             </Select>
                                         ) : field.type === 'textarea' ? (
@@ -250,9 +267,7 @@ function Editor({
                                             <input
                                                 type="hidden"
                                                 name={field.name}
-                                                value={
-                                                    field.disabledValue ?? ''
-                                                }
+                                                value={disabledValue}
                                             />
                                         ) : null}
                                         {field.helperText ? (

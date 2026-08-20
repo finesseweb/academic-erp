@@ -135,7 +135,8 @@ Codex must reconcile this file at the beginning of every `next` run and update i
 - Disciplines / Specializations: IMPLEMENTED
   - University-owned discipline/specialization hierarchy, lifecycle, RBAC and audit implemented
 - Program Templates: IMPLEMENTED
-  - Degree-linked University blueprint with optional discipline, term structure, lifecycle, RBAC and audit
+  - Degree-linked University blueprint with required top-level Discipline and optional same-Discipline Specialization, term structure, lifecycle, RBAC and audit
+  - Migration: `2026_08_21_160000_split_program_template_discipline_and_specialization`; applied to local MySQL
 - Course Categories: IMPLEMENTED
   - Controlled classification groups, ordering, lifecycle, RBAC and audit implemented
 - Academic masters batch verification: 92 tests / 539 assertions, TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migrations and Vite production build passed

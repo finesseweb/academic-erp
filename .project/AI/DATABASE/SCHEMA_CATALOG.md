@@ -25,7 +25,7 @@ Do not invent table entries. Add an entry only after inspecting/approving the re
 | Degree level | `degree_levels` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `universities.id` | `TABLE_SPECS/degree_levels.md` |
 | Degree | `degrees` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `degree_levels.id` | `TABLE_SPECS/degrees.md` |
 | Discipline / specialization | `academic_disciplines` | Academic Master | University-owned hierarchy | `id` | (`university_id`, `code`) | `universities.id`; optional self parent | `TABLE_SPECS/academic_disciplines.md` |
-| Program template | `program_templates` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `degrees.id` | `TABLE_SPECS/program_templates.md` |
+| Program template | `program_templates` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `degrees.id`; `academic_disciplines.id` | `TABLE_SPECS/program_templates.md` |
 | Course category | `course_categories` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `universities.id` | `TABLE_SPECS/course_categories.md` |
 
 ## Domain Grouping

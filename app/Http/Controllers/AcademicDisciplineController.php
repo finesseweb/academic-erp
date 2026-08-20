@@ -22,7 +22,7 @@ class AcademicDisciplineController extends Controller
         $u = University::firstOrFail();
         $base = AcademicDiscipline::where('university_id', $u->id);
 
-        return Inertia::render('academic-masters/disciplines', ['disciplines' => (clone $base)->with('parent:id,name')->orderBy('display_order')->orderBy('name')->get(), 'parents' => (clone $base)->where('kind', 'DISCIPLINE')->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']), 'can' => $this->can($r)]);
+        return Inertia::render('academic-masters/disciplines', ['disciplines' => (clone $base)->with('parent:id,name')->withCount('specializations')->orderBy('display_order')->orderBy('name')->get(), 'parents' => (clone $base)->where('kind', 'DISCIPLINE')->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']), 'can' => $this->can($r)]);
     }
 
     public function store(Request $r): RedirectResponse
@@ -61,7 +61,11 @@ class AcademicDisciplineController extends Controller
         }$data = $r->validate(['kind' => ['required', Rule::in(['DISCIPLINE', 'SPECIALIZATION'])], 'parent_id' => ['nullable', Rule::exists('academic_disciplines', 'id')->where(fn ($q) => $q->where('university_id', $uid)->where('kind', 'DISCIPLINE')->where('status', 'ACTIVE'))], 'name' => ['required', 'string', 'max:120'], 'code' => ['required', 'string', 'max:40', Rule::unique('academic_disciplines')->where('university_id', $uid)->ignore($record)], 'description' => ['nullable', 'string', 'max:1000'], 'display_order' => ['required', 'integer', 'min:0', 'max:65535'], 'status' => ['required', Rule::in(['ACTIVE', 'INACTIVE'])]]);
         if ($data['kind'] === 'SPECIALIZATION' && ! $data['parent_id']) {
             throw ValidationException::withMessages(['parent_id' => 'Select an active parent discipline for a specialization.']);
-        }if ($data['kind'] === 'DISCIPLINE') {
+        }
+        if ($record?->kind === 'DISCIPLINE' && $data['kind'] === 'SPECIALIZATION' && $record->specializations()->exists()) {
+            throw ValidationException::withMessages(['kind' => 'A discipline with specializations cannot be changed to a specialization.']);
+        }
+        if ($data['kind'] === 'DISCIPLINE') {
             $data['parent_id'] = null;
         }
 

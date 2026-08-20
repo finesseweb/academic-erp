@@ -4,6 +4,7 @@ type Item = MasterRecord & {
     kind: string;
     parent_id: number | null;
     parent: { name: string } | null;
+    specializations_count: number;
 };
 type Props = {
     disciplines: Item[];
@@ -30,6 +31,11 @@ export default function Disciplines({ disciplines, parents, can }: Props) {
                         { value: 'DISCIPLINE', label: 'Discipline' },
                         { value: 'SPECIALIZATION', label: 'Specialization' },
                     ],
+                    disabledWhenRecord: (record) =>
+                        record?.kind === 'DISCIPLINE' &&
+                        Number(record.specializations_count) > 0,
+                    helperText:
+                        'A discipline with specializations keeps its type to preserve the academic hierarchy.',
                 },
                 {
                     name: 'parent_id',

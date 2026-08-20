@@ -25,6 +25,7 @@ class AcademicDisciplineTest extends TestCase
         $id = (int) \DB::table('academic_disciplines')->value('id');
         $this->actingAs($a)->post('/admin/disciplines', ['kind' => 'SPECIALIZATION', 'parent_id' => $id, 'name' => 'Artificial Intelligence', 'code' => 'AI', 'display_order' => 2, 'status' => 'ACTIVE'])->assertRedirect();
         $this->actingAs($a)->post('/admin/disciplines', ['kind' => 'SPECIALIZATION', 'parent_id' => 'none', 'name' => 'Invalid', 'code' => 'INV', 'display_order' => 3, 'status' => 'ACTIVE'])->assertSessionHasErrors('parent_id');
+        $this->actingAs($a)->patch("/admin/disciplines/{$id}", ['kind' => 'SPECIALIZATION', 'parent_id' => $id, 'name' => 'Computer Science', 'code' => 'CS', 'display_order' => 1, 'status' => 'ACTIVE'])->assertSessionHasErrors('kind');
         $this->assertDatabaseHas('academic_disciplines', ['code' => 'AI', 'parent_id' => $id]);
         $this->assertDatabaseHas('audit_logs', ['event' => 'DISCIPLINE_CREATED', 'resource_type' => 'AcademicDiscipline']);
         $this->actingAs(User::factory()->create())->get('/admin/disciplines')->assertForbidden();

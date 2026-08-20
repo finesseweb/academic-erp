@@ -28,9 +28,11 @@ class ProgramTemplateTest extends TestCase
         $l = DegreeLevel::create(['university_id' => $u->id, 'name' => 'UG', 'code' => 'UG', 'display_order' => 1, 'status' => 'ACTIVE']);
         $d = Degree::create(['university_id' => $u->id, 'degree_level_id' => $l->id, 'name' => 'BSc', 'code' => 'BSC', 'display_order' => 1, 'status' => 'ACTIVE']);
         $s = AcademicDiscipline::create(['university_id' => $u->id, 'kind' => 'DISCIPLINE', 'name' => 'Science', 'code' => 'SCI', 'display_order' => 1, 'status' => 'ACTIVE']);
-        $p = ['degree_id' => $d->id, 'discipline_id' => $s->id, 'name' => 'BSc Science', 'code' => 'BSC-SCI', 'term_structure' => 'SEMESTER', 'duration_terms' => 6, 'display_order' => 1, 'status' => 'ACTIVE'];
+        $specialization = AcademicDiscipline::create(['university_id' => $u->id, 'parent_id' => $s->id, 'kind' => 'SPECIALIZATION', 'name' => 'Physics', 'code' => 'PHY', 'display_order' => 1, 'status' => 'ACTIVE']);
+        $p = ['degree_id' => $d->id, 'discipline_id' => $s->id, 'specialization_id' => $specialization->id, 'name' => 'BSc Science', 'code' => 'BSC-SCI', 'term_structure' => 'SEMESTER', 'duration_terms' => 6, 'display_order' => 1, 'status' => 'ACTIVE'];
         $this->actingAs($a)->post('/admin/program-templates', $p)->assertRedirect();
-        $this->assertDatabaseHas('program_templates', ['code' => 'BSC-SCI', 'duration_terms' => 6]);
+        $this->assertDatabaseHas('program_templates', ['code' => 'BSC-SCI', 'discipline_id' => $s->id, 'specialization_id' => $specialization->id, 'duration_terms' => 6]);
+        $this->actingAs($a)->post('/admin/program-templates', [...$p, 'code' => 'INVALID-SPEC', 'specialization_id' => $s->id])->assertSessionHasErrors('specialization_id');
         $this->assertDatabaseHas('audit_logs', ['event' => 'PROGRAM_TEMPLATE_CREATED']);
         $this->actingAs(User::factory()->create())->get('/admin/program-templates')->assertForbidden();
     }

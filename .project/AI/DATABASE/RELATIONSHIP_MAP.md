@@ -31,7 +31,8 @@ This file is the compact join map for application queries and reporting. It must
 | `academic_disciplines.parent_id` | `academic_disciplines.id` | many-to-one | No | Yes | RESTRICT | Specialization parent discipline |
 | `program_templates.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University blueprint ownership |
 | `program_templates.degree_id` | `degrees.id` | many-to-one | Yes | Yes | RESTRICT | Award granted by template |
-| `program_templates.discipline_id` | `academic_disciplines.id` | many-to-one | No | Yes | RESTRICT | Optional primary subject domain |
+| `program_templates.discipline_id` | `academic_disciplines.id` | many-to-one | Required for new/updated templates | Yes | RESTRICT | Top-level Discipline selected for the template |
+| `program_templates.specialization_id` | `academic_disciplines.id` | many-to-one | No | Yes | RESTRICT | Optional Specialization; application validation requires its `parent_id` to match `discipline_id` |
 | `course_categories.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University curriculum classification ownership |
 
 ## Common Join Paths
