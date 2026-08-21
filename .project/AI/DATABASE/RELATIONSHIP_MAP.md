@@ -31,8 +31,10 @@ This file is the compact join map for application queries and reporting. It must
 | `academic_disciplines.parent_id` | `academic_disciplines.id` | many-to-one | No | Yes | RESTRICT | Specialization parent discipline |
 | `program_templates.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University blueprint ownership |
 | `program_templates.degree_id` | `degrees.id` | many-to-one | Yes | Yes | RESTRICT | Award granted by template |
-| `program_templates.discipline_id` | `academic_disciplines.id` | many-to-one | Required for new/updated templates | Yes | RESTRICT | Top-level Discipline selected for the template |
-| `program_templates.specialization_id` | `academic_disciplines.id` | many-to-one | No | Yes | RESTRICT | Optional Specialization; application validation requires its `parent_id` to match `discipline_id` |
+| `program_template_disciplines.program_template_id` | `program_templates.id` | many-to-one | Yes | Yes | CASCADE | Program Template side of many-to-many Discipline binding |
+| `program_template_disciplines.discipline_id` | `academic_disciplines.id` | many-to-one | Yes | Yes | RESTRICT | Top-level Discipline mapped to a Program Template; application validation requires same University, active status and `kind = DISCIPLINE` |
+| `program_template_discipline_specializations.program_template_discipline_id` | `program_template_disciplines.id` | many-to-one | Yes | Yes | CASCADE | Specialization belongs to one specific Template/Discipline mapping |
+| `program_template_discipline_specializations.specialization_id` | `academic_disciplines.id` | many-to-one | Yes | Yes | RESTRICT | Optional mapped Specialization; application validation requires same University, active status, `kind = SPECIALIZATION`, and `parent_id` matching the mapped Discipline |
 | `course_categories.university_id` | `universities.id` | many-to-one | Yes | Yes | RESTRICT | University curriculum classification ownership |
 
 ## Common Join Paths

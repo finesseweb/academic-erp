@@ -135,8 +135,11 @@ Codex must reconcile this file at the beginning of every `next` run and update i
 - Disciplines / Specializations: IMPLEMENTED
   - University-owned discipline/specialization hierarchy, lifecycle, RBAC and audit implemented
 - Program Templates: IMPLEMENTED
-  - Degree-linked University blueprint with required top-level Discipline and optional same-Discipline Specialization, term structure, lifecycle, RBAC and audit
-  - Migration: `2026_08_21_160000_split_program_template_discipline_and_specialization`; applied to local MySQL
+  - Degree-linked University blueprint with many-to-many top-level Disciplines; each mapped Discipline supports zero-to-many same-Discipline Specializations
+  - Scalable wide two-pane create/edit Academic Structure selector with Discipline/Specialization search, independent selections and responsive stacking
+  - Compact list view with collapsed-by-default expandable Academic Structure summary/details and controlled scrolling for large mappings
+  - Uses existing semantic Tailwind/theme tokens; no separate Program Template CSS file introduced
+  - Migration: `2026_08_21_150000_make_program_template_disciplines_many_to_many`; preserves prior single-Discipline mappings, uses MySQL-safe short FK names and is applied to local MySQL
 - Course Categories: IMPLEMENTED
   - Controlled classification groups, ordering, lifecycle, RBAC and audit implemented
 - Academic masters batch verification: 92 tests / 539 assertions, TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migrations and Vite production build passed

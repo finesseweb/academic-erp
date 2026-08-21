@@ -6,6 +6,18 @@
 - Added precedence wording so generic singular approval rules cannot override a numeric batch command.
 # Project Changelog
 
+## 2026-08-21 — Program Template Many-to-Many Academic Structure
+
+- Replaced the Program Template single-Discipline/single-Specialization persistence model with `program_template_disciplines` plus nested `program_template_discipline_specializations`.
+- Program Templates can now bind multiple top-level Disciplines, and every mapped Discipline can independently bind zero or more of its own Specializations.
+- Added migration `2026_08_21_150000_make_program_template_disciplines_many_to_many`, preserving existing direct Discipline/Specialization mappings before removing old columns.
+- Added explicit short MySQL foreign-key names (`ptd_*`, `ptds_*`) after MySQL rejected Laravel's generated identifier as longer than the 64-character limit.
+- Reworked Program Template create/edit into a wide responsive two-pane selector with searchable/scrollable Discipline and Specialization panes, selected filtering and persistent per-Discipline selections.
+- Reworked Program Template list display so `Academic Structure` is collapsed by default, shows Discipline/Specialization counts, expands inline for details and internally scrolls when mappings are large.
+- Kept the existing Discipline/Specialization master hierarchy unchanged and reused its parent-child validation as the canonical specialization relationship.
+- Added no separate CSS file; the revised interface uses existing semantic Tailwind/theme tokens and remains compatible with the application's configured themes.
+- Updated Program Template/Discipline page specs, table specs, schema catalog, relationship map and current implementation state.
+
 ## 2026-08-21 — Program Template Academic Hierarchy Refinement
 
 - Replaced the ambiguous mixed Discipline/Specialization selector with a required top-level Discipline selector and an optional dependent Specialization selector.
