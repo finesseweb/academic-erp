@@ -56,3 +56,24 @@ For every table, maintain enough information so another AI agent can quickly det
 - Its primary/business keys.
 - The most important parent relationship.
 - Where to read detailed columns, relationships and indexes.
+
+## courses — implemented 2026-08-21
+
+`courses` is the University-owned reusable Course / Subject Master.
+
+Core columns:
+- `id`
+- `university_id`
+- `course_category_id`
+- `course_type_id`
+- `name`
+- `code`
+- `description`
+- `display_order`
+- `status`
+- timestamps
+
+Key rules:
+- Course code is unique within a University.
+- Category and Type are required.
+- Program/Discipline/Specialization, term, credits and L-T-P are not stored directly in this master.

@@ -82,3 +82,46 @@ Verified theme resolution path:
 
 - A preference is effective only when the policy permits personal selection and RBAC grants `theme.select_own`.
 - Current runtime resolves the `GLOBAL/global` policy. Future College resolution must validate Affiliated College ownership before consulting an College-scoped policy.
+
+## Course / Subject Master relationships — implemented 2026-08-21
+
+Implemented database relationships:
+
+```text
+universities.id
+    └── courses.university_id
+
+course_categories.id
+    └── courses.course_category_id
+
+course_types.id
+    └── courses.course_type_id
+```
+
+Business view:
+
+```text
+University
+├── Course Categories
+│       └── Course / Subject Master
+└── Course Types
+        └── Course / Subject Master
+```
+
+There is intentionally **no direct Course → Discipline or Course → Specialization relationship in the Course Master**.
+
+The next Curriculum / Course Mapping layer will provide the academic-context relationship:
+
+```text
+Program Template
+    ↓
+Discipline
+    ↓
+Specialization (optional)
+    ↓
+Course / Subject
+    ↓
+Term / Semester + curriculum-specific academic values
+```
+
+This keeps Course / Subject Master reusable across curricula and prevents curriculum-specific values from being permanently stored on the master.

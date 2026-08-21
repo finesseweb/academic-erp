@@ -114,3 +114,12 @@ On `next` / `next N` / `nextN`:
 - `next N` / `nextN` advances exactly N newly completed eligible milestones sequentially in the same approved run;
 - each milestone is validated and documented before the next milestone in the approved batch begins;
 - already-completed milestones are skipped and do not consume the requested count.
+
+## Course / Subject Master — implemented 2026-08-21
+
+- Page: Course / Subject Master
+- Route: `/admin/courses`
+- Status: IMPLEMENTED
+- UI pattern: shared `AcademicMasterPage`
+- Permission gate: `course.view`
+- Next dependent implementation: Curriculum / Course Mapping

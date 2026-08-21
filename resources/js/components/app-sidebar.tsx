@@ -74,6 +74,16 @@ const mainNavItems: NavItem[] = [
         href: '/admin/course-categories',
         icon: GraduationCap,
     },
+    {
+        title: 'Course Types',
+        href: '/admin/course-types',
+        icon: GraduationCap,
+    },
+    {
+    title: 'Course / Subject Master',
+    href: '/admin/courses',
+    icon: GraduationCap,
+},
 ];
 
 const footerNavItems: NavItem[] = [];
@@ -81,6 +91,7 @@ const footerNavItems: NavItem[] = [];
 export function AppSidebar() {
     const { auth } = usePage().props;
     const collegeId = auth.collegeScopeIds?.[0];
+
     const scopedItems: NavItem[] = collegeId
         ? [
               ...(auth.permissions.includes('college_user.view')
@@ -112,6 +123,7 @@ export function AppSidebar() {
                   : []),
           ]
         : [];
+
     const items = [
         ...mainNavItems.filter((item) => {
             if (item.href === '/admin/university') {
@@ -165,6 +177,14 @@ export function AppSidebar() {
             if (item.href === '/admin/course-categories') {
                 return auth.permissions.includes('course_category.view');
             }
+
+            if (item.href === '/admin/course-types') {
+                return auth.permissions.includes('course_type.view');
+            }
+
+            if (item.href === '/admin/courses') {
+    return auth.permissions.includes('course.view');
+}
 
             return true;
         }),

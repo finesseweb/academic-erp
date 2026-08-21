@@ -172,3 +172,16 @@ After every `next` milestone:
 2. record useful migration/API/page references if needed;
 3. identify the next eligible milestone;
 4. do not mark later milestones implemented.
+
+## Course / Subject Master — implemented 2026-08-21
+
+- Course Categories: IMPLEMENTED.
+- Course Types: IMPLEMENTED.
+- Course / Subject Master: IMPLEMENTED.
+- Next academic milestone: Curriculum / Course Mapping.
+- Course / Subject Master is University-scoped and reusable.
+- Fields: Course Category, Course Type, Course / Subject Name, Course Code, Description, Display Order, Status.
+- Controller authorization follows the ERP's custom `hasPermission()` pattern.
+- University scope follows the existing Academic Master pattern using `University::firstOrFail()`.
+- Create/update/status lifecycle uses `AcademicMasterService`.
+- Course Master intentionally does not directly bind Program Template, Discipline, Specialization, semester/term, credits, or L-T-P/contact hours. Those belong to Curriculum / Course Mapping.

@@ -206,3 +206,12 @@ Repository implementation note (2026-08-21): University Academic Setup persists 
 - `fee.refund.approve`
 
 These permission identifiers are documentation-level until the corresponding backend capability is implemented.
+
+## Course / Subject permissions — implemented 2026-08-21
+
+- `course.view` — view Course / Subject Master and permit the sidebar entry.
+- `course.create` — create Course / Subject records.
+- `course.update` — update Course / Subject records.
+- `course.disable` — change Course / Subject active/inactive status.
+
+Controller authorization uses the project's custom `hasPermission()` mechanism.

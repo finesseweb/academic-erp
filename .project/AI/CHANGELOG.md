@@ -199,3 +199,13 @@
 - Canonical documentation root remains `.project/AI/` and must always be read first.
 - Theme hierarchy is User -> Affiliated College -> University Global -> Premium Light.
 - College Fee Management includes College-level Installment Plans under University finance governance.
+
+## 2026-08-21 — Course / Subject Master
+
+- Implemented Course / Subject Master.
+- Added University-scoped Course Category and Course Type relationships.
+- Added permissions: `course.view`, `course.create`, `course.update`, `course.disable`.
+- Added `/admin/courses` Academic Master page and sidebar permission contract.
+- Corrected controller authorization to use existing ERP `hasPermission()` behavior rather than Laravel Gate `can()`.
+- Kept Course Master independent from Program/Discipline/Specialization and curriculum-specific term, credit and L-T-P values.
+- Marked Curriculum / Course Mapping as the next academic implementation milestone.
