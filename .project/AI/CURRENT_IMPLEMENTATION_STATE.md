@@ -328,3 +328,23 @@ Curriculum Manage Structure blank-screen regression fixed by restoring the missi
 - Backend blocks delete unless lifecycle is DRAFT.
 - Student Group/Cohort assignment lock remains a mandatory guard to connect when the canonical assignment module/table is implemented.
 - Audit event: `CURRICULUM_DELETED`.
+
+
+## Phase 5 — Governance Approval Workflow — 2026-08-22
+Status: IN PROGRESS
+- Phase 5A Workflow Setup implemented.
+- Generic approval_workflows + ordered approval_workflow_stages added.
+- Approver is Role-based from existing Role Master; no Dean/Director/Registrar names are hard-coded.
+- Curriculum is the first supported `applies_to`.
+- Curriculum submit/inbox/decision/publish is Phase 5B and is NOT yet implemented.
+
+
+## Phase 5B Academic Approval Execution — 2026-08-22
+- Curriculum Submit for Approval: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Validate Structure is mandatory before submission.
+- Workflow stages are snapshotted into approval request stages.
+- Curriculum locks while approval is pending.
+- Approval Inbox resolves current stage by active/effective Role assignment.
+- Approve advances level; final approval activates Curriculum.
+- Return/Reject unlock DRAFT Curriculum for correction and resubmission.
+- Approval history is displayed.

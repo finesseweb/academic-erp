@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AcademicDisciplineController;
 use App\Http\Controllers\AcademicSessionController;
+use App\Http\Controllers\ApprovalWorkflowController;
+use App\Http\Controllers\ApprovalRequestController;
 use App\Http\Controllers\CurriculumController;
 use App\Http\Controllers\CurriculumStructureController;
 use App\Http\Controllers\AuditLogController;
@@ -103,11 +105,18 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/admin/courses', [CourseController::class, 'store'])->name('courses.store');
     Route::patch('/admin/courses/{course}', [CourseController::class, 'update'])->name('courses.update');
     Route::patch('/admin/courses/{course}/status', [CourseController::class, 'updateStatus'])->name('courses.status');
+    Route::get('admin/academic-approval/inbox', [ApprovalRequestController::class, 'index'])->name('approval-requests.index');
+    Route::post('admin/academic-approval/requests/{approvalRequest}/decision', [ApprovalRequestController::class, 'decide'])->name('approval-requests.decide');
+    Route::get('admin/academic-approval/workflows', [ApprovalWorkflowController::class, 'index'])->name('approval-workflows.index');
+    Route::post('admin/academic-approval/workflows', [ApprovalWorkflowController::class, 'store'])->name('approval-workflows.store');
+    Route::post('admin/academic-approval/workflows/{workflow}/stages', [ApprovalWorkflowController::class, 'storeStage'])->name('approval-workflows.stages.store');
+    Route::patch('admin/academic-approval/workflows/{workflow}/status', [ApprovalWorkflowController::class, 'status'])->name('approval-workflows.status');
     Route::get('admin/curricula', [CurriculumController::class, 'index'])->name('curricula.index');
     Route::post('admin/curricula', [CurriculumController::class, 'store'])->name('curricula.store');
     Route::patch('admin/curricula/{curriculum}', [CurriculumController::class, 'update'])->name('curricula.update');
     Route::delete('admin/curricula/{curriculum}', [CurriculumController::class, 'destroy'])->name('curricula.destroy');
     Route::post('admin/curricula/{curriculum}/clone-structure', [CurriculumController::class, 'cloneStructure'])->name('curricula.clone-structure');
+    Route::post('admin/curricula/{curriculum}/submit-for-approval', [CurriculumController::class, 'submitForApproval'])->name('curricula.submit-approval');
     Route::patch('admin/curricula/{curriculum}/retire', [CurriculumController::class, 'retire'])->name('curricula.retire');
     Route::get('admin/curricula/{curriculum}/structure/terms', [CurriculumStructureController::class, 'terms'])->name('curricula.structure.terms');
     Route::get('admin/curricula/{curriculum}/clone-targets/{targetCurriculum}/terms', [CurriculumStructureController::class, 'cloneTargetTerms'])->name('curricula.clone-target-terms');

@@ -236,3 +236,16 @@ Partial clone may target another compatible DRAFT Curriculum version.
 
 ## Delete Guard for Future Assignment Module — 2026-08-22
 When Student Group/Cohort Curriculum Assignment is implemented, its canonical existence check must be connected to the centralized `CurriculumStructureDeleteService::assertDraftAndUnassigned()` before assignment goes live. This single guard protects Curriculum, Term, Slot and Mapping hard-delete operations.
+
+
+## Current Next Workflow — Phase 5B
+After Phase 5A Workflow Setup, implement Curriculum Approval Execution:
+Validate Structure -> Submit -> lock structure -> approver inbox -> Approve/Reject/Return -> approval history -> final activation/publish.
+Do not start Admissions until Gate 5 is PASS.
+
+
+## Phase 5B QA Gate — 2026-08-22
+Do not start Admissions yet.
+First test Gate 5 end-to-end:
+Workflow Setup -> Submit -> Role Inbox -> Approve/Return/Reject -> Multi-level advance -> Final Activation -> History -> Permission checks.
+After Gate 5 is PASS, next SRS phase is Admissions & Seat Management.

@@ -440,3 +440,11 @@ Full and granular cross-version reuse is supported. Partial clone target must re
 
 ### Final Curriculum Delete Safety — 2026-08-22
 Hard delete is a setup-correction feature only. Entire Curriculum, Term, Slot and Mapping deletion are allowed only before operational assignment and while the target Curriculum is DRAFT. ACTIVE/RETIRED or assigned academic history must never be hard-deleted.
+
+
+### Phase 5 Governance Approval — Implementation Note
+Phase 5A starts with reusable Workflow Setup and Role-based ordered stages. Phase 5B connects the engine to Curriculum lifecycle and approval execution. Gate 5 must pass before Admissions.
+
+
+### Phase 5B Governance Approval Execution — 2026-08-22
+Curriculum is now connected to the generic approval engine. Final approval is the only new path in this phase that automatically changes a submitted Curriculum from DRAFT to ACTIVE. Gate 5 requires QA before Admissions.

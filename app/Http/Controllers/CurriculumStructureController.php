@@ -57,6 +57,7 @@ class CurriculumStructureController extends Controller
                 'name' => $curriculum->name,
                 'version' => $curriculum->version,
                 'lifecycle_status' => $curriculum->lifecycle_status,
+                'approval_status' => $curriculum->approval_status ?? 'NOT_SUBMITTED',
                 'program_template' => $curriculum->programTemplate,
                 'academic_session' => $curriculum->academicSession,
                 'terms' => $curriculum->terms->map(fn (CurriculumTerm $term) => [
@@ -71,7 +72,13 @@ class CurriculumStructureController extends Controller
             'permissions' => [
                 'update' => $request->user()->hasPermission('curriculum.update'),
             ],
-            'structureEditable' => $curriculum->lifecycle_status === 'DRAFT',
+            'structureEditable' =>
+                $curriculum->lifecycle_status === 'DRAFT' &&
+                ! in_array(
+                    $curriculum->approval_status ?? 'NOT_SUBMITTED',
+                    ['SUBMITTED', 'UNDER_APPROVAL', 'APPROVED'],
+                    true
+                ),
             'cloneTargets' => Curriculum::query()
                 ->where('university_id', $curriculum->university_id)
                 ->where('program_template_id', $curriculum->program_template_id)
@@ -194,6 +201,7 @@ class CurriculumStructureController extends Controller
                 'name' => $curriculum->name,
                 'version' => $curriculum->version,
                 'lifecycle_status' => $curriculum->lifecycle_status,
+                'approval_status' => $curriculum->approval_status ?? 'NOT_SUBMITTED',
                 'program_template' => $curriculum->programTemplate,
                 'academic_session' => $curriculum->academicSession,
             ],
@@ -244,7 +252,13 @@ class CurriculumStructureController extends Controller
             'permissions' => [
                 'update' => $request->user()->hasPermission('curriculum.update'),
             ],
-            'structureEditable' => $curriculum->lifecycle_status === 'DRAFT',
+            'structureEditable' =>
+                $curriculum->lifecycle_status === 'DRAFT' &&
+                ! in_array(
+                    $curriculum->approval_status ?? 'NOT_SUBMITTED',
+                    ['SUBMITTED', 'UNDER_APPROVAL', 'APPROVED'],
+                    true
+                ),
             'cloneTargets' => Curriculum::query()
                 ->where('university_id', $curriculum->university_id)
                 ->where('program_template_id', $curriculum->program_template_id)
@@ -466,6 +480,7 @@ class CurriculumStructureController extends Controller
                     'name' => $curriculum->name,
                     'version' => $curriculum->version,
                     'lifecycle_status' => $curriculum->lifecycle_status,
+                'approval_status' => $curriculum->approval_status ?? 'NOT_SUBMITTED',
                     'program_template' => $curriculum->programTemplate,
                     'academic_session' => $curriculum->academicSession,
                 ],

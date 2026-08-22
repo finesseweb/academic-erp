@@ -112,9 +112,17 @@ class CurriculumTermService
 
     private function assertStructureEditable(Curriculum $curriculum): void
     {
-        if ($curriculum->lifecycle_status !== 'DRAFT') {
+        if (
+            $curriculum->lifecycle_status !== 'DRAFT' ||
+            in_array(
+                $curriculum->approval_status ?? 'NOT_SUBMITTED',
+                ['SUBMITTED', 'UNDER_APPROVAL', 'APPROVED'],
+                true
+            )
+        ) {
             throw ValidationException::withMessages([
-                'curriculum' => 'Only a DRAFT curriculum can change its structure. Active and retired curriculum versions remain historical records.',
+                'curriculum' =>
+                    'Curriculum structure is locked while it is under approval, approved, active or retired.',
             ]);
         }
     }

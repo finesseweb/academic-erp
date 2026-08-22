@@ -258,9 +258,17 @@ class CurriculumCloneService
 
     private function assertDraft(Curriculum $curriculum): void
     {
-        if ($curriculum->lifecycle_status !== 'DRAFT') {
+        if (
+            $curriculum->lifecycle_status !== 'DRAFT' ||
+            in_array(
+                $curriculum->approval_status ?? 'NOT_SUBMITTED',
+                ['SUBMITTED', 'UNDER_APPROVAL', 'APPROVED'],
+                true
+            )
+        ) {
             throw ValidationException::withMessages([
-                'curriculum' => 'Semester and Slot cloning is allowed only inside a DRAFT Curriculum.',
+                'curriculum' =>
+                    'Clone target must be an editable DRAFT Curriculum that is not under approval.',
             ]);
         }
     }

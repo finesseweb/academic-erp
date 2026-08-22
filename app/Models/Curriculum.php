@@ -18,6 +18,7 @@ class Curriculum extends Model
         'effective_from',
         'effective_to',
         'lifecycle_status',
+        'approval_status',
         'description',
         'created_by',
         'updated_by',

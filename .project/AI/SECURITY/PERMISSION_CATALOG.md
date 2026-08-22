@@ -234,3 +234,12 @@ Repository implementation note (2026-08-22): Curriculum Header persists and enfo
 Controller/Form Request authorization uses the project's custom `hasPermission()` mechanism.
 These permissions are University-scoped, non-College-delegable and initially granted to
 the protected global `SUPER_ADMIN` system role by migration.
+
+
+## Academic Approval Workflow permissions — Phase 5A implemented 2026-08-22
+- `approval_workflow.view`
+- `approval_workflow.create`
+- `approval_workflow.update`
+- `approval_workflow.disable`
+
+Approver identities are never authorized by hard-coded role names. Workflow stages reference configured Role Master records.

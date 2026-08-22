@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { BookOpenCheck, CircleX, Copy, Pencil, Plus, RotateCcw, Search, Settings2, Trash2, X } from 'lucide-react';
+import { BookOpenCheck, CircleX, Copy, Pencil, Plus, RotateCcw, Search, Send, Settings2, Trash2, X } from 'lucide-react';
 import { FormEvent, useMemo, useState } from 'react';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 
 type Option = { id: number; name: string; code: string };
+type ApprovalWorkflowOption = { id: number; name: string; code: string };
 type Curriculum = {
     id: number;
     code: string;
@@ -22,6 +23,13 @@ type Curriculum = {
     effective_from: string | null;
     effective_to: string | null;
     lifecycle_status: 'DRAFT' | 'ACTIVE' | 'RETIRED';
+    approval_status:
+        | 'NOT_SUBMITTED'
+        | 'SUBMITTED'
+        | 'UNDER_APPROVAL'
+        | 'RETURNED'
+        | 'REJECTED'
+        | 'APPROVED';
     description: string | null;
     program_template: Option;
     academic_session: Option;
@@ -36,7 +44,13 @@ type Props = {
     filters: { search?: string; status?: string };
     programTemplates: Option[];
     academicSessions: Option[];
-    permissions: { create: boolean; update: boolean; disable: boolean };
+    approvalWorkflows: ApprovalWorkflowOption[];
+    permissions: {
+        create: boolean;
+        update: boolean;
+        disable: boolean;
+        submitApproval: boolean;
+    };
 };
 
 const emptyForm = {
@@ -51,10 +65,22 @@ const emptyForm = {
     description: '',
 };
 
-export default function CurriculumIndex({ curricula, filters, programTemplates, academicSessions, permissions }: Props) {
+export default function CurriculumIndex({
+    curricula,
+    filters,
+    programTemplates,
+    academicSessions,
+    approvalWorkflows,
+    permissions,
+}: Props) {
     const [editing, setEditing] = useState<Curriculum | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [cloning, setCloning] = useState<Curriculum | null>(null);
+    const [submittingApproval, setSubmittingApproval] =
+        useState<Curriculum | null>(null);
+    const approvalForm = useForm({
+        approval_workflow_id: '',
+    });
     const cloneForm = useForm({
         academic_session_id: '',
         code: '',
@@ -127,6 +153,33 @@ export default function CurriculumIndex({ curricula, filters, programTemplates, 
             {
                 preserveScroll: true,
                 onSuccess: () => setCloning(null),
+            },
+        );
+    };
+
+    const openSubmitApproval = (item: Curriculum) => {
+        setSubmittingApproval(item);
+        approvalForm.clearErrors();
+        approvalForm.setData({
+            approval_workflow_id:
+                approvalWorkflows.length === 1
+                    ? String(approvalWorkflows[0].id)
+                    : '',
+        });
+    };
+
+    const submitForApproval = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (!submittingApproval) {
+            return;
+        }
+
+        approvalForm.post(
+            `/admin/curricula/${submittingApproval.id}/submit-for-approval`,
+            {
+                preserveScroll: true,
+                onSuccess: () => setSubmittingApproval(null),
             },
         );
     };
@@ -261,6 +314,9 @@ export default function CurriculumIndex({ curricula, filters, programTemplates, 
                                         <th className="px-4 py-4">Version</th>
                                         <th className="px-4 py-4">Effective</th>
                                         <th className="px-4 py-4">Status</th>
+                                        <th className="px-4 py-3">
+                                            Approval
+                                        </th>
                                         <th className="px-4 py-3 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -287,6 +343,24 @@ export default function CurriculumIndex({ curricula, filters, programTemplates, 
                                                         : item.lifecycle_status === 'DRAFT'
                                                           ? 'Draft'
                                                           : 'Retired'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                                                    {item.approval_status ===
+                                                    'NOT_SUBMITTED'
+                                                        ? 'Not Submitted'
+                                                        : item.approval_status
+                                                              .replaceAll(
+                                                                  '_',
+                                                                  ' ',
+                                                              )
+                                                              .toLowerCase()
+                                                              .replace(
+                                                                  /^./,
+                                                                  (value) =>
+                                                                      value.toUpperCase(),
+                                                              )}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4">
@@ -320,8 +394,15 @@ export default function CurriculumIndex({ curricula, filters, programTemplates, 
                                                     )}
 
                                                     {permissions.update &&
-                                                        item.lifecycle_status !==
-                                                            'RETIRED' && (
+                                                        item.lifecycle_status ===
+                                                            'DRAFT' &&
+                                                        ![
+                                                            'SUBMITTED',
+                                                            'UNDER_APPROVAL',
+                                                            'APPROVED',
+                                                        ].includes(
+                                                            item.approval_status,
+                                                        ) && (
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
@@ -338,7 +419,14 @@ export default function CurriculumIndex({ curricula, filters, programTemplates, 
 
                                                     {permissions.update &&
                                                         item.lifecycle_status ===
-                                                            'DRAFT' && (
+                                                            'DRAFT' &&
+                                                        ![
+                                                            'SUBMITTED',
+                                                            'UNDER_APPROVAL',
+                                                            'APPROVED',
+                                                        ].includes(
+                                                            item.approval_status,
+                                                        ) && (
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
@@ -423,6 +511,110 @@ export default function CurriculumIndex({ curricula, filters, programTemplates, 
                     )}
                 </Card>
             </div>
+
+            {submittingApproval && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-lg rounded-xl border border-border bg-card shadow-xl">
+                        <div className="border-b p-5">
+                            <h2 className="text-lg font-semibold">
+                                Submit for Academic Approval
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {submittingApproval.name} (
+                                {submittingApproval.code}) will become
+                                read-only until the approval request is
+                                returned or rejected.
+                            </p>
+                        </div>
+
+                        <form
+                            onSubmit={submitForApproval}
+                            className="space-y-4 p-5"
+                        >
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">
+                                    Approval Workflow *
+                                </label>
+                                <Select
+                                    value={
+                                        approvalForm.data
+                                            .approval_workflow_id
+                                    }
+                                    onValueChange={(value) =>
+                                        approvalForm.setData(
+                                            'approval_workflow_id',
+                                            value,
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select workflow" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {approvalWorkflows.map(
+                                            (workflow) => (
+                                                <SelectItem
+                                                    key={workflow.id}
+                                                    value={String(
+                                                        workflow.id,
+                                                    )}
+                                                >
+                                                    {workflow.name} (
+                                                    {workflow.code})
+                                                </SelectItem>
+                                            ),
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                                {approvalForm.errors
+                                    .approval_workflow_id && (
+                                    <p className="text-xs text-destructive">
+                                        {
+                                            approvalForm.errors
+                                                .approval_workflow_id
+                                        }
+                                    </p>
+                                )}
+                                {approvalForm.errors.curriculum && (
+                                    <p className="text-xs text-destructive">
+                                        {
+                                            approvalForm.errors
+                                                .curriculum
+                                        }
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                                Validate Structure must pass before
+                                submission. Final approval automatically
+                                activates the Curriculum.
+                            </div>
+
+                            <div className="flex justify-end gap-2 border-t pt-4">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() =>
+                                        setSubmittingApproval(null)
+                                    }
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={approvalForm.processing}
+                                >
+                                    <Send className="size-4" />
+                                    {approvalForm.processing
+                                        ? 'Submitting…'
+                                        : 'Submit for Approval'}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {cloning && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">

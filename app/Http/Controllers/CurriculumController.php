@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CloneCurriculumStructureRequest;
 use App\Http\Requests\StoreCurriculumRequest;
+use App\Http\Requests\SubmitCurriculumApprovalRequest;
 use App\Http\Requests\UpdateCurriculumRequest;
 use App\Models\AcademicSession;
+use App\Models\ApprovalWorkflow;
 use App\Models\Curriculum;
 use App\Models\ProgramTemplate;
 use App\Models\University;
 use App\Services\CurriculumCloneService;
+use App\Services\ApprovalRequestService;
 use App\Services\CurriculumService;
 use App\Services\CurriculumStructureDeleteService;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +25,7 @@ class CurriculumController extends Controller
     public function __construct(
         private readonly CurriculumService $service,
         private readonly CurriculumCloneService $cloneService,
+        private readonly ApprovalRequestService $approvalRequestService,
         private readonly CurriculumStructureDeleteService $deleteService
     ) {}
 
@@ -65,10 +69,20 @@ class CurriculumController extends Controller
                 ->where('status', 'ACTIVE')
                 ->orderByDesc('starts_on')
                 ->get(['id', 'name', 'code']),
+            'approvalWorkflows' => ApprovalWorkflow::query()
+                ->where('university_id', $university->id)
+                ->where('applies_to', 'CURRICULUM')
+                ->where('status', 'ACTIVE')
+                ->whereHas('stages', fn ($query) =>
+                    $query->where('status', 'ACTIVE')
+                )
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']),
             'permissions' => [
                 'create' => $request->user()->hasPermission('curriculum.create'),
                 'update' => $request->user()->hasPermission('curriculum.update'),
                 'disable' => $request->user()->hasPermission('curriculum.disable'),
+                'submitApproval' => $request->user()->hasPermission('approval_request.submit'),
             ],
         ]);
     }
@@ -145,6 +159,28 @@ class CurriculumController extends Controller
                 'success',
                 'Draft Curriculum and its complete structure deleted successfully.'
             );
+    }
+
+
+    public function submitForApproval(
+        SubmitCurriculumApprovalRequest $request,
+        Curriculum $curriculum
+    ): RedirectResponse {
+        $workflow = ApprovalWorkflow::query()
+            ->findOrFail(
+                (int) $request->validated('approval_workflow_id')
+            );
+
+        $this->approvalRequestService->submitCurriculum(
+            $curriculum,
+            $workflow,
+            $request->user()->id
+        );
+
+        return back()->with(
+            'success',
+            'Curriculum submitted for academic approval.'
+        );
     }
 
 }

@@ -1,4 +1,38 @@
 
+## 2026-08-22 — Phase 5B UI Corrections
+
+- Fixed Curriculum list table header alignment by restoring the Approval column header between Status and Actions.
+- Fixed Course / Paper Mapping display so Course / Paper shows the subject/course name and Course Code shows the course code.
+- Added a conservative Course Master legacy data repair for rows accidentally stored with `name` and `code` reversed.
+- No approval workflow or database behavior changed in this UI correction.
+
+## 2026-08-22 — Phase 5B Academic Approval Execution
+
+- Added generic approval requests and snapshotted approval request stages.
+- Added Curriculum approval_status lifecycle.
+- Added Validate Structure -> Submit for Approval flow.
+- Added Curriculum lock while submitted/under approval.
+- Added role-based Approval Inbox using active/effective User Role assignments.
+- Added Approve, Return and Reject decisions with stage remarks.
+- Multi-level approval advances sequentially.
+- Final approval automatically activates Curriculum.
+- Return/Reject unlocks DRAFT Curriculum for correction/resubmission.
+- Added Approval History.
+- Added approval request permission family and Super Admin grants.
+- Gate 5 now requires QA before starting Admissions.
+
+## 2026-08-22 — Phase 5A Academic Approval Workflow Setup
+
+- Started Governance Approval Workflow according to controlled SRS.
+- Added generic approval workflow and ordered stage tables.
+- Added Role Master based approver configuration; no Dean/Director/Registrar hard-coding.
+- Added Academic Approval -> Workflow Setup navigation.
+- Added workflow create, stage add and active/inactive controls.
+- Added approval_workflow permission family and Super Admin grants.
+- Added audit events for workflow/stage setup.
+- Phase 5 remains IN PROGRESS; Curriculum submission/decision/publish is Phase 5B.
+- Admissions must not start before Gate 5 PASS.
+
 ## 2026-08-22 — Curriculum Delete Action UI Fix
 
 - Fixed Curriculum list action rendering so `Delete` is actually shown for DRAFT Curricula.

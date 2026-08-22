@@ -5,6 +5,7 @@ import {
     CalendarRange,
     ChevronRight,
     GraduationCap,
+    GitBranch,
     KeyRound,
     Landmark,
     LayoutGrid,
@@ -169,6 +170,25 @@ const platformItems: TreeNavItem[] = [
             },
         ],
     },
+    {
+        title: 'Academic Approval',
+        icon: GitBranch,
+        children: [
+            {
+                title: 'Approval Inbox',
+                href: '/admin/academic-approval/inbox',
+                icon: ShieldCheck,
+                permission: 'approval_request.view',
+            },
+            {
+                title: 'Workflow Setup',
+                href: '/admin/academic-approval/workflows',
+                icon: GitBranch,
+                permission: 'approval_workflow.view',
+            },
+        ],
+    },
+
 ];
 
 

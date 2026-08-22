@@ -30,6 +30,19 @@ class CurriculumService
 
     public function update(Curriculum $curriculum, array $data, int $actorId): Curriculum
     {
+        if (
+            $curriculum->lifecycle_status !== 'DRAFT' ||
+            in_array(
+                $curriculum->approval_status ?? 'NOT_SUBMITTED',
+                ['SUBMITTED', 'UNDER_APPROVAL', 'APPROVED'],
+                true
+            )
+        ) {
+            throw ValidationException::withMessages([
+                'curriculum' =>
+                    'Curriculum header is locked while it is under approval, approved, active or retired.',
+            ]);
+        }
         $this->validateOwnership($curriculum->university_id, $data);
         $this->validateUniqueness($curriculum->university_id, $data, $curriculum->id);
 
