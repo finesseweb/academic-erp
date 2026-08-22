@@ -1,0 +1,150 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\CloneCurriculumStructureRequest;
+use App\Http\Requests\StoreCurriculumRequest;
+use App\Http\Requests\UpdateCurriculumRequest;
+use App\Models\AcademicSession;
+use App\Models\Curriculum;
+use App\Models\ProgramTemplate;
+use App\Models\University;
+use App\Services\CurriculumCloneService;
+use App\Services\CurriculumService;
+use App\Services\CurriculumStructureDeleteService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class CurriculumController extends Controller
+{
+    public function __construct(
+        private readonly CurriculumService $service,
+        private readonly CurriculumCloneService $cloneService,
+        private readonly CurriculumStructureDeleteService $deleteService
+    ) {}
+
+    public function index(Request $request): Response
+    {
+        abort_unless($request->user()->hasPermission('curriculum.view'), 403);
+
+        $university = University::query()->firstOrFail();
+        $search = trim((string) $request->query('search', ''));
+        $status = strtoupper((string) $request->query('status', ''));
+
+        $curricula = Curriculum::query()
+            ->with([
+                'programTemplate:id,name,code',
+                'academicSession:id,name,code',
+            ])
+            ->where('university_id', $university->id)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%")
+                        ->orWhere('version', 'like', "%{$search}%");
+                });
+            })
+            ->when(in_array($status, ['DRAFT', 'ACTIVE', 'RETIRED'], true), fn ($query) => $query->where('lifecycle_status', $status))
+            ->orderByDesc('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return Inertia::render('admin/curricula/index', [
+            'curricula' => $curricula,
+            'filters' => ['search' => $search, 'status' => $status],
+            'programTemplates' => ProgramTemplate::query()
+                ->where('university_id', $university->id)
+                ->where('status', 'ACTIVE')
+                ->orderBy('display_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']),
+            'academicSessions' => AcademicSession::query()
+                ->where('university_id', $university->id)
+                ->where('status', 'ACTIVE')
+                ->orderByDesc('starts_on')
+                ->get(['id', 'name', 'code']),
+            'permissions' => [
+                'create' => $request->user()->hasPermission('curriculum.create'),
+                'update' => $request->user()->hasPermission('curriculum.update'),
+                'disable' => $request->user()->hasPermission('curriculum.disable'),
+            ],
+        ]);
+    }
+
+    public function store(StoreCurriculumRequest $request): RedirectResponse
+    {
+        $university = University::query()->firstOrFail();
+        $this->service->create($university, $request->validated(), $request->user()->id);
+
+        return back()->with('success', 'Curriculum header created successfully.');
+    }
+
+    public function update(UpdateCurriculumRequest $request, Curriculum $curriculum): RedirectResponse
+    {
+        $this->service->update($curriculum, $request->validated(), $request->user()->id);
+
+        return back()->with('success', 'Curriculum header updated successfully.');
+    }
+
+    public function retire(Request $request, Curriculum $curriculum): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('curriculum.disable'), 403);
+        $this->service->retire($curriculum, $request->user()->id);
+
+        return back()->with('success', 'Curriculum retired successfully.');
+    }
+
+    public function restore(Request $request, Curriculum $curriculum): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('curriculum.disable'), 403);
+
+        $this->service->restore($curriculum, $request->user()->id);
+
+        return back()->with('success', 'Curriculum restored successfully.');
+    }
+
+
+    public function cloneStructure(
+        CloneCurriculumStructureRequest $request,
+        Curriculum $curriculum
+    ): RedirectResponse {
+        $target = $this->cloneService->cloneEntireCurriculum(
+            $curriculum,
+            $request->validated(),
+            $request->user()->id
+        );
+
+        return redirect()
+            ->route('curricula.structure.terms', $target)
+            ->with(
+                'success',
+                'Curriculum and complete structure cloned successfully as a new Draft.'
+            );
+    }
+
+
+    public function destroy(
+        Request $request,
+        Curriculum $curriculum
+    ): RedirectResponse {
+        abort_unless(
+            $request->user()->hasPermission('curriculum.update'),
+            403
+        );
+
+        $this->deleteService->deleteCurriculum(
+            $curriculum,
+            $request->user()->id
+        );
+
+        return redirect()
+            ->route('curricula.index')
+            ->with(
+                'success',
+                'Draft Curriculum and its complete structure deleted successfully.'
+            );
+    }
+
+}

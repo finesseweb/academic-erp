@@ -240,3 +240,119 @@ A page is not complete until:
 - permissions are reflected in UI and enforced by Laravel
 - no raw backend/internal error is shown to the user
 - shared components are reused rather than duplicated
+
+### Hierarchical Sidebar Tree Standard
+For the authenticated ERP navigation:
+- represent nested navigation with clear but restrained tree connector lines
+- use accordion behavior so only one sibling branch at the same depth is expanded
+- automatically expand ancestors of the current route
+- distinguish active leaf state from expanded parent state
+- use short expand/collapse and chevron transitions only; no decorative or delayed motion
+- respect `prefers-reduced-motion`
+- use semantic theme tokens for lines, text, active/hover/focus/expanded states
+- never add a sidebar item merely for visual completeness; navigation follows implemented, approved hierarchy only
+
+
+### Master Table Visual Consistency — 2026-08-22
+- Curriculum Header and Terms / Semesters follow the established Permission Catalog table treatment.
+- Use shared `Card`, `Button`, `Input`, and `Select` components where applicable.
+- Table header: `border-b bg-muted/50 text-left`.
+- Row: `border-b transition-colors last:border-0 hover:bg-muted/40`.
+- Standard table cell spacing: `px-4 py-4`.
+- ACTIVE uses the existing emerald status pill.
+- INACTIVE and RETIRED use the existing muted status pill.
+- DRAFT uses an amber working-state pill.
+- Row actions use compact `size="sm"` ghost Buttons with icon + visible text.
+- Destructive lifecycle actions use destructive text while retaining the same compact action layout.
+- New academic modules must reuse this established table/action language instead of introducing one-off styling.
+
+
+### Curriculum Slots Phase 1 UI — 2026-08-22
+- Use the same Permission Catalog table language already adopted by Curriculum Header and Terms / Semesters.
+- Active = emerald status pill; Inactive = muted status pill.
+- Edit = Pencil icon + text; Set Inactive = Circle-X destructive text; Set Active = Rotate-Ccw + text.
+- Slot creation/editing uses shared `Button`, `Card`, `Input`, and `Select`.
+- Slot page is contextual to a selected Term / Semester; do not add a context-free sidebar leaf.
+
+
+### Curriculum Slots Phase 2 UI — 2026-08-22
+- Continue the Permission Catalog table/action language already adopted by Curriculum pages.
+- Use existing shared Select controls for Course Category, Course Type and Selection Rule.
+- Min/Max inputs are shown only when `Choice` is selected.
+- Mandatory/Choice is displayed as readable text in the table; Choice also shows the Min-Max selection range.
+- Do not introduce Slot Credit into the form.
+
+
+### Course / Paper Mapping UI — 2026-08-22
+- Mapping page follows the Permission Catalog table/action language already used by Curriculum pages.
+- Slot row exposes compact `Courses` contextual action.
+- Active mapping = emerald status pill; Inactive = muted pill.
+- Status action uses compact icon + text ghost Button.
+- Add Mapping uses shared Select and Button components.
+- No context-free Course Mapping sidebar item.
+
+
+### Mapping Display Order UI — 2026-08-22
+- Mapping order is edited inline in the existing Course / Paper Mapping table.
+- Use the same compact table typography and spacing as the Permission Catalog reference.
+- Read-only curricula display the order value without an editable control.
+- No drag-and-drop library is introduced for this milestone.
+
+
+### Mapping Context UI — 2026-08-22
+Mapping form order is Discipline -> optional Specialization -> Course / Subject. Discipline is limited to Program Template selections; Specialization is dependent and optional.
+
+
+### Course Mapping Edit Action — 2026-08-22
+DRAFT mapping rows use the standard compact Pencil + Edit action. The same mapping dialog opens prefilled with current values.
+
+
+### Curriculum-Wide Validation Placement — 2026-08-22
+Curriculum-wide actions belong in the Manage Structure header. Slot/Course Mapping pages must expose only contextual actions for that Slot. Therefore Validate Structure is shown on Manage Structure and removed from Course / Paper Mapping.
+
+
+### Curriculum Slot Credits UI — 2026-08-22
+- Credits appear in the existing Curriculum Slot create/edit dialog.
+- Use the existing Input component and table typography.
+- Credits also appear as a compact column in the Slot table and as read-only Slot context on Course / Paper Mapping.
+- No separate sidebar item is created for Slot Credit Binding.
+
+
+### Terms / Semesters Action Layout — 2026-08-22
+- Section actions are grouped on the right side of the Terms / Semesters card header.
+- Order: `Validate Structure` then `Add Term / Semester`.
+- `Slots` remains the first contextual action in each Term row.
+- Navigation actions such as `Slots` must not disappear just because the Curriculum is read-only.
+
+
+### Credit Summary UI — 2026-08-22
+- Credit Summary is shown at Curriculum Manage Structure level.
+- Show Curriculum Required Credits and Maximum Credits first.
+- Show Term/Semester Required and Maximum totals below.
+- Keep it read-only; Credits are edited only through Curriculum Slots.
+
+
+### Curriculum Sidebar Simplification — 2026-08-22
+- Remove redundant `Curriculum Header` child.
+- `Curriculum` itself opens `/admin/curricula`.
+- All Curriculum header and structure workflow stays inside the Curriculum module.
+
+
+### Clone Actions — 2026-08-22
+- Curriculum list: `Clone Structure`.
+- Terms table: compact `Copy + Clone Semester`.
+- Slots table: compact `Copy + Clone Slot`.
+- Clone actions reuse existing action typography/icons and do not create sidebar items.
+- Confirmation/configuration uses the same modal language and spacing as existing Curriculum/Structure forms.
+
+
+### Entire Curriculum Delete — 2026-08-22
+- Show `Trash2 + Delete` only for DRAFT Curriculum with update permission.
+- Use destructive text styling consistent with existing actions.
+- Require the user to type the exact Curriculum Code before submitting permanent deletion.
+- Never show Delete for ACTIVE/RETIRED Curriculum.
+- After assignment functionality exists, hide Delete for assigned Curriculum as well.
+
+
+### Curriculum List Delete Visibility — 2026-08-22
+For a DRAFT Curriculum with `curriculum.update`, the Actions area must show `Trash2 + Delete` alongside Structure / Clone / Edit. ACTIVE and RETIRED rows must not show Delete.

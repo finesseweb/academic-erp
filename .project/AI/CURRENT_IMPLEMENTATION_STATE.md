@@ -145,11 +145,12 @@ Codex must reconcile this file at the beginning of every `next` run and update i
 - Academic masters batch verification: 92 tests / 539 assertions, TypeScript, ESLint, Prettier, Pint, route inspection, local MySQL migrations and Vite production build passed
 - Course Types: VERIFY_REPOSITORY
 - Course / Paper Master: VERIFY_REPOSITORY
-- Curriculum Header: VERIFY_REPOSITORY
+- Curriculum Header: IMPLEMENTED_IN_REPLACEMENT_PACKAGE — permission repair + hasPermission authorization fix included; repository run/migration validation pending
 - Curriculum Manage Structure:
-  - Terms / Semesters: VERIFY_REPOSITORY
+  - Terms / Semesters: IMPLEMENTED_IN_REPLACEMENT_PACKAGE — repository migration/build validation pending
   - Slot Category / Slot Name / Display Order: VERIFY_REPOSITORY
-  - Slot Course Type / Credit / Selection Rules: VERIFY_REPOSITORY
+  - Slot Course Type / Selection Rules: IMPLEMENTED_IN_REPLACEMENT_PACKAGE — repository migration/build validation pending
+  - Slot Credit: NOT IMPLEMENTED / NOT PART OF CURRENT SLOT DESIGN
   - Course Mapping: VERIFY_REPOSITORY
   - Mapping Display Order: VERIFY_REPOSITORY
   - Credit Summary: VERIFY_REPOSITORY
@@ -178,10 +179,152 @@ After every `next` milestone:
 - Course Categories: IMPLEMENTED.
 - Course Types: IMPLEMENTED.
 - Course / Subject Master: IMPLEMENTED.
-- Next academic milestone: Curriculum / Course Mapping.
+- Current academic milestone: Curriculum Header.
+- Current Curriculum Manage Structure milestone: Terms / Semesters.
+- Next eligible Curriculum milestone after Terms / Semesters validation: Curriculum Slots — Course Category, Slot Name and Display Order first.
 - Course / Subject Master is University-scoped and reusable.
 - Fields: Course Category, Course Type, Course / Subject Name, Course Code, Description, Display Order, Status.
 - Controller authorization follows the ERP's custom `hasPermission()` pattern.
 - University scope follows the existing Academic Master pattern using `University::firstOrFail()`.
 - Create/update/status lifecycle uses `AcademicMasterService`.
 - Course Master intentionally does not directly bind Program Template, Discipline, Specialization, semester/term, credits, or L-T-P/contact hours. Those belong to Curriculum / Course Mapping.
+
+## Application Navigation Architecture — 2026-08-22
+- Hierarchy-based collapsible sidebar: IMPLEMENTED IN REPLACEMENT PACKAGE
+- Flat University/Admin master links regrouped into:
+  - Institution Setup
+  - User & Access Management
+  - Academic Setup
+  - College Management when College scope applies
+- Academic Setup contains nested Degree Structure, Program Setup, and Course Setup branches.
+- Navigation filtering remains driven by backend-issued effective permission codes.
+- Parent branches are hidden automatically when no permitted child remains.
+- Current Laravel route URLs remain unchanged.
+- Active child routes automatically open their ancestor branches.
+- Backend authorization remains authoritative; sidebar visibility is not an authorization boundary.
+- Premium tree/accordion interaction: IMPLEMENTED IN REPLACEMENT PACKAGE
+  - Child relationships use semantic tree connector lines.
+  - Only one sibling branch at each depth remains open.
+  - Current-route ancestors auto-open after navigation/refresh.
+  - Expand/collapse uses restrained grid/opacity motion and chevron rotation with reduced-motion support.
+  - Styling consumes semantic sidebar/theme tokens only and introduces no hard-coded theme colors.
+  - No extra/future hierarchy modules were added.
+
+- Curriculum sidebar path: `Academic Setup -> Curriculum -> Curriculum Header`.
+- Access management sidebar label: `Access Management`.
+
+- Terms / Semesters implementation rule: contextual to a selected Curriculum Header; DRAFT-only mutation; ACTIVE/RETIRED versions remain read-only; existing `curriculum.view/update` permissions reused.
+
+
+## Curriculum Structure Update — 2026-08-22
+- Curriculum Header: implemented.
+- Terms / Semesters: implemented.
+- Curriculum Slots Phase 1: implemented with Course Category, Slot Name and Display Order.
+- Slot-level Credits are not introduced.
+- Course / Paper Mapping remains a later milestone.
+- Copy / Clone Structure is approved as the future reuse pattern when a new Curriculum/version needs an existing structure; source and target records remain independent.
+
+
+- Curriculum Slots Phase 2: implemented with Course Type, Mandatory/Choice, Minimum Selection and Maximum Selection.
+- Choice selection counts are enforced only for Choice Slots.
+- Mandatory Slots store no Min/Max selection counts.
+- Next Curriculum milestone: Course / Paper Mapping.
+
+
+## Course / Paper Mapping Update — 2026-08-22
+- Course / Paper Mapping: IMPLEMENTED_IN_REPLACEMENT_PACKAGE — repository migration/build validation pending.
+- Reuses existing Course / Subject Master.
+- Enforces same University, ACTIVE Course, matching Course Category and matching Course Type.
+- No Mapping Display Order or Credit in this milestone.
+- Next Curriculum milestone: Mapping Display Order.
+
+
+## Mapping Display Order Update — 2026-08-22
+- Mapping Display Order: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- New mappings receive the next Slot-relative order automatically.
+- Reordering one mapping normalizes the selected Slot to continuous order values.
+- Next work must respect the frozen sequence; Credit has still not been introduced.
+
+
+## Discipline/Specialization-Aware Mapping — 2026-08-22
+Course / Paper Mapping now assigns required Program Template Discipline and optional Specialization context while keeping Course Master independent.
+
+
+## Course Mapping Edit — 2026-08-22
+Existing Course / Paper Mapping is editable while Curriculum is DRAFT. Discipline, optional Specialization and Course / Subject can be corrected. ACTIVE/RETIRED remain read-only.
+
+
+## Curriculum Validation Phase 1 — 2026-08-22
+Implemented read-only non-credit Curriculum Structure Validation for Terms, Slots, Choice rules, Course Mappings, ordering, Program Template Discipline and optional Specialization context. Credit validation remains deferred.
+
+
+## Validation Phase 1 Fix — 2026-08-22
+Validation UI compile blocker fixed. Validate Structure is available independently of edit lifecycle, while Map/Edit remain lifecycle-protected. Validator schema names now match implemented Terms and Slots.
+
+
+## Curriculum Validation Placement — 2026-08-22
+Validate Structure is now exposed at Curriculum Manage Structure level, not inside a Slot's Course Mapping page. Scope remains the complete Curriculum.
+
+
+## Curriculum Slot Credits — 2026-08-22
+- Slot Credit Binding: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Credits are stored on `curriculum_slots`.
+- Course Master remains reusable and does not receive curriculum-specific Credits.
+- Course Mapping does not duplicate Credits.
+- Phase 1 non-credit validation remains available as an interim structural diagnostic.
+- Next: Credit Summary, then final credit-aware validation, then Copy / Clone Structure.
+
+
+## Blank Screen UI Fix — 2026-08-22
+Curriculum Manage Structure blank-screen regression fixed by restoring the missing `ShieldCheck` import used by the Curriculum-level Validate Structure button. No domain behavior changed.
+
+
+## Credit Summary — 2026-08-22
+- Credit Summary: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Derived from active Curriculum Slots; no duplicate summary table.
+- Mandatory Slot contributes one Slot Credit.
+- Choice Slot Required = Slot Credit × Min Selection.
+- Choice Slot Maximum = Slot Credit × Max Selection.
+- Next: final Credit-aware Curriculum Validation.
+
+
+## Final Credit-aware Curriculum Validation — 2026-08-22
+- Final Credit-aware Validation: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Existing structural validation remains active.
+- Active Slots are checked for missing/invalid Credits.
+- Credit Summary remains derived and read-only.
+- Next: Copy / Clone Structure.
+
+
+## Copy / Clone Structure — 2026-08-22
+- Clone Entire Curriculum Structure: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Clone Semester: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Clone Slot: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- All clones create independent Terms/Slots/Mappings with new IDs.
+- Complete clone includes Slot Credits and Course Mapping academic context.
+
+
+## Curriculum Delete Safety — 2026-08-22
+- Fixed CurriculumTerm `slots()` Eloquent relationship required by Slots page.
+- DRAFT Term delete: implemented.
+- DRAFT Slot delete: implemented.
+- DRAFT Course Mapping delete: implemented.
+- Future Student Group assignment lock is mandatory and centralized/documented.
+
+
+## Cross-Version Partial Clone — 2026-08-22
+- Clone Semester supports same or another compatible DRAFT Curriculum version.
+- Clone Slot supports same or another compatible DRAFT Curriculum version.
+- Semester target does not need a Semester beforehand; clone creates it.
+- Slot target requires an existing Semester.
+- Target compatibility: same University + same Program Template + DRAFT.
+- Source may be DRAFT/ACTIVE/RETIRED.
+
+
+## Entire Curriculum Safe Delete — 2026-08-22
+- Entire DRAFT Curriculum delete: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Deletes complete owned hierarchy: Curriculum -> Terms -> Slots -> Course/Paper Mappings.
+- UI requires typing the exact Curriculum Code.
+- Backend blocks delete unless lifecycle is DRAFT.
+- Student Group/Cohort assignment lock remains a mandatory guard to connect when the canonical assignment module/table is implemented.
+- Audit event: `CURRICULUM_DELETED`.

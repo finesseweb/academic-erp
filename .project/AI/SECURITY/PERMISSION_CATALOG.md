@@ -215,3 +215,22 @@ These permission identifiers are documentation-level until the corresponding bac
 - `course.disable` — change Course / Subject active/inactive status.
 
 Controller authorization uses the project's custom `hasPermission()` mechanism.
+
+## Curriculum Header
+- `curriculum.view`
+- `curriculum.create`
+- `curriculum.update`
+- `curriculum.disable`
+
+Repository implementation note (2026-08-22): Curriculum Header persists and enforces the `curriculum.*` family at University scope. `curriculum.disable` retires the header rather than hard-deleting academic history. College delegation is disabled.
+
+## Curriculum Header permissions — implemented 2026-08-22
+
+- `curriculum.view` — view Curriculum Header and permit its sidebar leaf.
+- `curriculum.create` — create Curriculum Headers.
+- `curriculum.update` — update Curriculum Headers.
+- `curriculum.disable` — retire Curriculum Headers; sensitive lifecycle action.
+
+Controller/Form Request authorization uses the project's custom `hasPermission()` mechanism.
+These permissions are University-scoped, non-College-delegable and initially granted to
+the protected global `SUPER_ADMIN` system role by migration.

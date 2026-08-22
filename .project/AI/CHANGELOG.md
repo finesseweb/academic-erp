@@ -1,10 +1,248 @@
 
+## 2026-08-22 — Curriculum Delete Action UI Fix
+
+- Fixed Curriculum list action rendering so `Delete` is actually shown for DRAFT Curricula.
+- Delete remains hidden for ACTIVE and RETIRED Curricula.
+- Existing backend DRAFT safety, typed Curriculum Code confirmation and complete hierarchy deletion remain unchanged.
+- No migration.
+
+## 2026-08-22 — Entire Curriculum Safe Delete
+
+- Added permanent delete for DRAFT Curriculum.
+- Entire delete removes Course/Paper Mappings, Slots, Terms and then Curriculum in one DB transaction.
+- Added strong typed-code confirmation in Curriculum UI.
+- Delete is never shown for ACTIVE/RETIRED Curriculum.
+- Backend independently enforces DRAFT lifecycle safety.
+- Added `CURRICULUM_DELETED` audit event including deleted child counts.
+- Preserved centralized future Student Group/Cohort assignment lock; no fake assignment table introduced.
+- No database migration.
+
+## 2026-08-22 — Professional Cross-Version Semester / Slot Clone
+
+- Clone Semester can target same or another compatible DRAFT Curriculum version.
+- Clone Slot can target same or another compatible DRAFT Curriculum version.
+- Semester clone creates its Semester in target.
+- Slot clone requires an existing target Semester.
+- Cross-version target restricted to same University + same Program Template.
+- Source may be DRAFT/ACTIVE/RETIRED; target must be DRAFT.
+- No migration.
+
+## 2026-08-22 — Slots Relationship Fix + Safe Delete Rules
+
+- Fixed `CurriculumTerm::slots()` relationship causing RelationNotFoundException.
+- Added DRAFT-only Delete for Terms, Slots and Course/Paper Mappings.
+- Term deletion removes its Slots and their mappings.
+- Slot deletion removes its mappings.
+- Added delete audit events.
+- Documented mandatory future lock after Student Group/Cohort assignment.
+- No fake assignment table was introduced; the future guard point is centralized in CurriculumStructureDeleteService.
+
+## 2026-08-22 — Complete Curriculum / Semester / Slot Clone
+
+- Added complete Curriculum Structure Clone.
+- Complete clone requires final source validation and creates a new DRAFT Curriculum.
+- Complete clone copies Terms, Slots, Credits, selection rules, Course Mappings, Discipline/Specialization and display order with new IDs.
+- Added DRAFT-only Clone Semester convenience action.
+- Added DRAFT-only Clone Slot action with same/other Term target inside the same Curriculum.
+- Credit Summary is intentionally not copied because it is derived from cloned Slot Credits.
+- Added clone audit events.
+- No new database migration.
+
+## 2026-08-22 — Final Credit-aware Validation + Curriculum Sidebar Simplification
+
+- Extended Curriculum-wide `Validate Structure` with Slot Credit validation.
+- Active Slot without Credits fails with `SLOT_CREDITS_MISSING`.
+- Invalid/non-numeric/negative Credit fails with `SLOT_CREDITS_INVALID`.
+- Existing structural, mapping, Discipline/Specialization and Choice validation remains.
+- Updated validation wording from Phase 1/non-credit to final Credit-aware validation.
+- Removed redundant `Curriculum Header` submenu item.
+- `Curriculum` is now the direct clickable sidebar item for `/admin/curricula`.
+- Next implementation: Copy / Clone Structure.
+
+## 2026-08-22 — Curriculum Credit Summary
+
+- Added derived Credit Summary at Curriculum Manage Structure level.
+- Mandatory Slot contributes its Slot Credit once.
+- Choice Slot Required Credits = Slot Credit × Minimum Selection.
+- Choice Slot Maximum Credits = Slot Credit × Maximum Selection.
+- Added Term/Semester and Curriculum Required/Maximum totals.
+- Reports active Slots missing Credits.
+- No summary table added; totals remain derived from canonical Slot data.
+- Next implementation: final Credit-aware Curriculum Validation.
+- Copy / Clone remains deferred until final validation.
+
+## 2026-08-22 — Terms Slots Action and Validation Placement Fix
+
+- Restored the missing `Slots` navigation action on every Term / Semester row.
+- `Slots` remains visible as a view/navigation action even when edit actions are unavailable.
+- Moved `Validate Structure` from the page-level Curriculum identity header into the Terms / Semesters action bar.
+- Positioned `Validate Structure` immediately left of `Add Term / Semester`.
+- No Curriculum business rules, Credit logic, validation rules, routes or database schema changed.
+
+## 2026-08-22 — Credit Binding Blank Screen Fix
+
+- Fixed missing `ShieldCheck` Lucide import on Curriculum Manage Structure / Terms page.
+- The missing import caused the page render to fail after moving Curriculum-wide Validation to the Manage Structure header.
+- No Curriculum data model, Credit logic, validation logic, routes or database schema changed.
+- Credit remains bound to Curriculum Slot.
+- Next implementation remains Credit Summary.
+
+## 2026-08-22 — Curriculum Slot Credit Binding
+
+- Restored Credits to Curriculum Slots according to the original University ERP hierarchy.
+- Added `curriculum_slots.credits` as decimal curriculum/version-specific data.
+- New/edited Slots require Credits; existing historical rows migrate safely with nullable DB field.
+- Credit is not added to reusable Course Master or duplicated on Course Mapping.
+- Slot table/form and Course Mapping context display Credits consistently.
+- Updated execution order to Credit Binding -> Credit Summary -> Final Credit-aware Validation -> Copy / Clone.
+- Clone remains deferred to avoid later rework.
+
+## 2026-08-22 — Curriculum Validation Moved to Curriculum Level
+
+- Moved `Validate Structure` from Slot-scoped Course / Paper Mapping UI to Curriculum `Manage Structure`.
+- Validation still checks the complete selected Curriculum.
+- Course Mapping UI now contains only mapping-specific actions.
+- Validation remains read-only and uses `curriculum.view`.
+- No validation rules, Credit logic or database schema changed.
+
+## 2026-08-22 — Curriculum Validation Phase 1 UI/Schema Fix
+
+- Fixed invalid adjacent JSX that prevented Course / Paper Mapping from compiling.
+- Wrapped Validate Structure and Map Course/Paper in the standard action container.
+- Validate Structure is now a read-only visible action; mapping changes remain DRAFT-only.
+- Added the validation result modal.
+- Corrected validator schema to `curriculum_terms.sequence_no` and `curriculum_slots.selection_mode`.
+- Reused `curriculum.view` authorization.
+- No Credit/Credit Summary behavior added.
+
+## 2026-08-22 — DRAFT Course Mapping Edit
+
+- Added DRAFT-only Edit action for Course / Paper Mapping.
+- Edit can correct Discipline, optional Specialization and Course / Subject.
+- Reuses all Program Template Discipline/Specialization and Slot Course compatibility validation.
+- Added `CURRICULUM_COURSE_MAPPING_UPDATED` audit event.
+- Existing rows showing missing Discipline/Specialization context can now be repaired.
+- Course Master remains unchanged.
+- ACTIVE/RETIRED Curriculum mappings remain read-only.
+
+## 2026-08-22 — Discipline / Specialization Aware Course Mapping
+
+- Added Program Template Discipline and optional Specialization context to Curriculum Course Mapping.
+- Kept Course Master independent, exactly as documented.
+- Reused `program_template_disciplines` and `program_template_discipline_specializations`.
+- Backend validates Program Template membership, same-University, active state and specialization parent relationship.
+- Preserved Slot Category/Type compatibility, Mapping Display Order, permissions and DRAFT-only editing.
+- No Credit introduced.
+
+## 2026-08-22 — Curriculum Mapping Display Order
+
+- Added Slot-relative `display_order` to Course / Paper Mapping.
+- Existing mappings are backfilled in stable Slot/ID order during migration.
+- New mappings automatically receive the next available order.
+- Reordering one mapped Course/Paper re-sequences the selected Slot continuously.
+- Added `CURRICULUM_COURSE_MAPPING_ORDER_CHANGED` audit event.
+- Preserved DRAFT-only editing and existing Permission Catalog table/action styling.
+- Did not introduce Credit, L-T-P/contact hours, credit totals or Structure Validation.
+
+## 2026-08-22 — Curriculum Course / Paper Mapping
+
+- Implemented Course / Paper Mapping under a selected Curriculum Slot.
+- Added `curriculum_course_mappings` linking reusable Course / Subject Master records to Slots.
+- Enforced same-University, ACTIVE Course, matching Course Category and matching Course Type.
+- Prevented duplicate Course mapping inside the same Slot.
+- Reused existing `curriculum.view` / `curriculum.update`; no new permission family.
+- Preserved DRAFT-only editing and read-only ACTIVE/RETIRED curricula.
+- Added `CURRICULUM_COURSE_MAPPED` and `CURRICULUM_COURSE_MAPPING_STATUS_CHANGED`.
+- Added contextual `Courses` action to Slot rows.
+- Did not add Mapping Display Order, Credit, L-T-P/contact hours, totals or Structure Validation.
+- Next milestone: Mapping Display Order.
+
+## 2026-08-22 — Curriculum Slots Phase 2
+
+- Completed Slot academic behavior with Course Type, Mandatory/Choice, Minimum Selection and Maximum Selection.
+- Reused the existing University Course Type master; no duplicate Course Type master was introduced.
+- Choice Slots require Min/Max and enforce Maximum >= Minimum.
+- Mandatory Slots clear Min/Max because every mapped course in the Slot is required.
+- Explicitly kept Credit out of Curriculum Slots.
+- Added migration columns/indexes without rebuilding the Phase 1 Slot table.
+- Preserved existing `curriculum.view` / `curriculum.update` authorization, DRAFT-only editing, audit behavior and Permission Catalog UI consistency.
+- Next milestone is Course / Paper Mapping.
+
+## 2026-08-22 — Curriculum Slots Phase 1
+
+- Implemented Curriculum Slots Phase 1 under a selected Term / Semester.
+- Added `curriculum_slots` with Course Category, Slot Name, Display Order and ACTIVE/INACTIVE status.
+- Reused existing University Course Category master by foreign key; no global Slot Master was introduced.
+- Enforced same-University ACTIVE Course Category selection.
+- Enforced unique Display Order within each Term / Semester.
+- Reused `curriculum.view` and `curriculum.update`; no new permission family.
+- Preserved DRAFT-only structure editing and historical read-only behavior for ACTIVE/RETIRED curricula.
+- Added audit events `CURRICULUM_SLOT_CREATED`, `CURRICULUM_SLOT_UPDATED`, `CURRICULUM_SLOT_STATUS_CHANGED`.
+- Added contextual `Slots` action to each Term / Semester row.
+- Explicitly excluded Credits, Course Type, selection rules and Course / Paper Mapping from Slot Phase 1.
+- Approved Copy / Clone Structure as the future reuse pattern: copy structure into independent target records rather than sharing Slot IDs across curriculum versions.
+
+## 2026-08-22 — Curriculum Table and Action Visual Consistency
+
+- Aligned Curriculum Header and Terms / Semesters with the existing Permission Catalog table treatment.
+- Standardized table header, row borders/hover, cell spacing and shared Card/Button controls.
+- Standardized ACTIVE to the existing emerald badge and INACTIVE/RETIRED to muted badges.
+- Kept DRAFT as an amber working-state badge.
+- Standardized row actions to compact icon + text ghost buttons.
+- Preserved existing routes, permissions, DatePicker behavior, lifecycle logic and database design.
+
+## 2026-08-22 — Curriculum Manage Structure: Terms / Semesters
+
+- Implemented the first Curriculum Manage Structure child milestone: Terms / Semesters.
+- Added `curriculum_terms`, scoped to one versioned Curriculum Header.
+- Added required unique sequence and curriculum-specific Term / Semester name.
+- Reused existing `curriculum.view` and `curriculum.update` permissions; no new permission family introduced.
+- Added contextual `Manage Structure` action on Curriculum Header instead of a context-free sidebar route.
+- Enforced DRAFT-only structure changes; ACTIVE and RETIRED curriculum versions remain read-only to preserve historical structures.
+- Added create, update and ACTIVE/INACTIVE lifecycle without hard delete.
+- Added `CURRICULUM_TERM_CREATED`, `CURRICULUM_TERM_UPDATED`, and `CURRICULUM_TERM_STATUS_CHANGED` audit events.
+- Did not implement Slots, Credits, Course Mapping, totals, validation, or Academic Calendar dates.
+- Next eligible Curriculum milestone: Curriculum Slots — Course Category, Slot Name and Display Order.
+
+## 2026-08-22 — Curriculum Header Authorization and Navigation Fix
+
+- Corrected Curriculum authorization to the ERP-standard `hasPermission()` mechanism.
+- Added a non-destructive repair migration to register/activate `curriculum.*` permissions and grant them to active protected `SUPER_ADMIN`.
+- Corrected Curriculum audit actor mapping to `audit_logs.actor_user_id`.
+- Corrected Academic Session ordering to use the documented `starts_on` column.
+- Changed sidebar label from `User & Access Management` to `Access Management`.
+- Changed Curriculum from a direct leaf to the documented tree `Academic Setup -> Curriculum -> Curriculum Header`.
+- Kept Terms/Semesters, Slots, Course Mapping and later Curriculum structure hidden until their approved milestone.
+- Removed one-off embedded input CSS and kept Curriculum UI on semantic project theme tokens.
+
+## 2026-08-22 — Curriculum Header Implementation Started
+
+- Added `curricula` schema for University-owned versioned Curriculum Headers.
+- Linked each header to one active same-University Program Template and Academic Session.
+- Added unique University curriculum code and Program + Session + Version protection.
+- Added DRAFT / ACTIVE / RETIRED lifecycle without hard deletion.
+- Added `curriculum.view/create/update/disable` permissions, non-College-delegable, initially granted to Super Admin.
+- Added controller, Form Requests, service layer, model, Inertia page, routes and hierarchical sidebar entry.
+- Added `CURRICULUM_CREATED`, `CURRICULUM_UPDATED`, and `CURRICULUM_RETIRED` audit writes.
+- Explicitly deferred Terms/Semesters, Slots, Course Mapping and credit validation to Curriculum Manage Structure.
+
+
 ## 2026-08-20 — NEXT batch precedence conflict removed
 - Removed remaining contradictory frozen-workflow wording that forced every `next` command to one milestone.
 - `PROJECT_CONSTITUTION.md` now explicitly treats `next N` / `nextN` as approval for N sequential milestones in one run.
 - `PAGE_IMPLEMENTATION_REGISTRY.md` now supports multi-milestone advancement for approved batches.
 - Added precedence wording so generic singular approval rules cannot override a numeric batch command.
 # Project Changelog
+
+## 2026-08-22 — Premium Hierarchical Sidebar Tree Interaction
+
+- Refined the approved hierarchical sidebar into a visible tree with semantic connector lines.
+- Added controlled accordion behavior so only one sibling branch at each depth remains expanded.
+- Preserved automatic expansion of the active route's ancestor branch after navigation/refresh.
+- Added restrained expand/collapse opacity/height motion and chevron rotation with reduced-motion support.
+- Kept all styling theme-safe through semantic sidebar tokens; no hard-coded theme colors were introduced.
+- Added no new ERP modules, routes, permissions or database changes; navigation remains limited to the implemented documented hierarchy.
+- Updated navigation decision, hierarchy, implementation state, UI/UX and theming documentation.
 
 ## 2026-08-21 — Program Template Many-to-Many Academic Structure
 
@@ -209,3 +447,23 @@
 - Corrected controller authorization to use existing ERP `hasPermission()` behavior rather than Laravel Gate `can()`.
 - Kept Course Master independent from Program/Discipline/Specialization and curriculum-specific term, credit and L-T-P values.
 - Marked Curriculum / Course Mapping as the next academic implementation milestone.
+
+## 2026-08-22 — Hierarchical Sidebar Navigation
+
+- Replaced the flat authenticated ERP navigation design with a hierarchy-based collapsible tree.
+- Grouped University Profile, Affiliated Colleges and Authorized Signatories under Institution Setup.
+- Grouped Users, Roles, Permissions and Audit Logs under User & Access Management.
+- Grouped current academic masters under Academic Setup, with Degree Structure, Program Setup and Course Setup sub-branches.
+- Grouped College Users, College Roles and College Access Audit under College Management when College scope exists.
+- Preserved all current Laravel route URLs and existing backend permission codes.
+- Added recursive permission filtering so empty parent branches disappear automatically.
+- Added active-route ancestor expansion so the current page remains discoverable inside the tree.
+- Documented the navigation rule in the frozen hierarchy and added decision record `006_HIERARCHICAL_SIDEBAR_NAVIGATION.md`.
+
+
+## 2026-08-22 — Curriculum Validation Phase 1
+- Added read-only `Validate Structure`.
+- Validates Terms, active Slots, Choice min/max, active Course Mapping, continuous ordering, Course compatibility, Program Template Discipline and optional Specialization context.
+- Old mappings missing Discipline are reported as errors and can be repaired using DRAFT Edit Mapping.
+- No Credit/Credit Summary/L-T-P validation added.
+- Copy / Clone Structure remains next.

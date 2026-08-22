@@ -77,3 +77,15 @@ Key rules:
 - Course code is unique within a University.
 - Category and Type are required.
 - Program/Discipline/Specialization, term, credits and L-T-P are not stored directly in this master.
+
+- `curricula` — University-owned versioned Curriculum Header linked to Program Template and Academic Session; lifecycle DRAFT/ACTIVE/RETIRED. See `TABLE_SPECS/curricula.md`.
+
+- `curriculum_terms` — ordered Terms / Semesters for one versioned Curriculum Header. See `TABLE_SPECS/curriculum_terms.md`.
+
+| Curriculum slot | `curriculum_slots` | Curriculum Structure | Curriculum Term child | `id` | (`curriculum_term_id`, `display_order`) | `curriculum_terms.id`, `course_categories.id` | `TABLE_SPECS/curriculum_slots.md` |
+
+- `curriculum_slots` Phase 2 adds Course Type and Mandatory/Choice selection rules; no Slot Credit is stored.
+
+- `curriculum_course_mappings` — maps reusable Course / Subject Master records to curriculum-specific Slots; mapping order is deferred. See `TABLE_SPECS/curriculum_course_mappings.md`.
+
+- `curriculum_slots.credits` — canonical curriculum/version-specific Slot Credit. Credit Summary is derived later.

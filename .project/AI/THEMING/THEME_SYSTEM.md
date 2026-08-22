@@ -139,3 +139,11 @@ Pages use semantic classes/tokens only. The ThemeProvider applies the active the
 - `THEME_INSTITUTION_DEFAULT_CHANGED`
 - `THEME_PREFERENCE_CHANGED`
 - `THEME_GLOBAL_POLICY_CHANGED`
+
+## Sidebar Tree Token Rule
+The hierarchical sidebar is a shared themed component.
+- Tree connector lines use semantic sidebar/border tokens.
+- Expanded-parent backgrounds/text use semantic sidebar accent tokens.
+- Active leaf, hover, focus and disabled states use existing semantic component/theme tokens.
+- No theme-specific hex, RGB, inline style color or one-off Tailwind palette color may be introduced in the sidebar tree.
+- Motion is theme-independent and follows `UI_UX_GUIDELINES.md`; reduced-motion preferences must be respected.

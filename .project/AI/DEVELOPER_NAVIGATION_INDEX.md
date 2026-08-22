@@ -40,3 +40,10 @@ Read:
 
 ## Rule
 Never guess a folder, page flow or authorization pattern when the documentation already defines it.
+
+### How should the ERP sidebar/navigation be structured?
+Read:
+- `MASTER_DEVELOPMENT_HIERARCHY.md` — Sidebar Navigation Presentation Rule
+- `DECISIONS/006_HIERARCHICAL_SIDEBAR_NAVIGATION.md`
+- `UI_UX_GUIDELINES.md` — Hierarchical Sidebar Tree Standard
+- `THEMING/THEME_SYSTEM.md` — Sidebar Tree Token Rule

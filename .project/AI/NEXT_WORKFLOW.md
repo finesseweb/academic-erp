@@ -147,3 +147,92 @@ Before implementing each selected milestone, read:
 - `LARAVEL_BACKEND_STANDARD.md`
 
 Each milestone must follow the same React/Laravel folder and page-flow conventions as existing modules. Do not create a new custom folder pattern for each page.
+
+
+## Curriculum Structure Update — 2026-08-22
+- Curriculum Header: implemented.
+- Terms / Semesters: implemented.
+- Curriculum Slots Phase 1: implemented with Course Category, Slot Name and Display Order.
+- Slot-level Credits are not introduced.
+- Course / Paper Mapping remains a later milestone.
+- Copy / Clone Structure is approved as the future reuse pattern when a new Curriculum/version needs an existing structure; source and target records remain independent.
+
+
+## Current Curriculum Continuation — 2026-08-22
+Curriculum Header -> Terms / Semesters -> Slots Phase 1 -> Slots Phase 2 are implemented.
+
+Next eligible implementation:
+`Course / Paper Mapping`
+
+Do not insert Slot Credit before Course / Paper Mapping. Copy / Clone remains an approved future reuse capability and is implemented only when its milestone is reached.
+
+
+## Curriculum Course / Paper Mapping Update — 2026-08-22
+Course / Paper Mapping is implemented.
+
+Next eligible implementation:
+`Mapping Display Order`
+
+Do not introduce Credit, credit totals or Structure Validation before their frozen milestones.
+
+
+## Mapping Display Order Update — 2026-08-22
+Mapping Display Order is implemented.
+
+Do not introduce Semester Credit Totals or Curriculum Total Credits until the documented Credit definition stage exists.
+
+Next implementation should be chosen from the remaining frozen Curriculum sequence without inventing Credit placement.
+
+
+## Mapping Context Correction — 2026-08-22
+Course Mapping is now aligned with the Program Template many-to-many Discipline/Specialization model. Continue only from the frozen documentation.
+
+
+## Next after Validation Phase 1 — 2026-08-22
+Implement Copy / Clone Structure using the validated Curriculum structure. Do not introduce Credit fields during Clone.
+
+
+## Credit-before-Clone Order — 2026-08-22
+User-approved implementation order:
+`Slot Credit Binding -> Credit Summary -> Final Credit-aware Curriculum Validation -> Copy / Clone Structure`
+
+Do not implement Clone before Credit Summary and final credit-aware validation are complete.
+
+
+## After Credit Summary — 2026-08-22
+Next implementation:
+`Final Credit-aware Curriculum Validation`
+
+After it passes:
+`Copy / Clone Structure`
+
+
+## Next Workflow — 2026-08-22
+Credit Binding, Credit Summary and final Credit-aware Curriculum Validation are complete.
+
+NEXT:
+`Copy / Clone Structure`
+
+Clone must include Terms, Slots, Slot Credits, selection rules, Course Mapping, Discipline/Specialization context and Mapping Display Order.
+
+
+## Clone Structure Completion — 2026-08-22
+Complete Curriculum Clone, Semester Clone and Slot Clone are implemented.
+
+Do not add another clone layer unless a future documented workflow requires it.
+Continue with the next frozen University Academic Setup milestone after Curriculum.
+
+
+## Assignment Lock Rule — 2026-08-22
+When Curriculum -> Student Group/Cohort Assignment is implemented, connect its canonical assignment table to `CurriculumStructureDeleteService::assertDraftAndUnassigned()` and hide destructive actions for assigned Curricula.
+
+
+## Frozen Clone Hierarchy — 2026-08-22
+Entire Structure = whole Curriculum.
+Semester Clone = selected Semester + all descendants.
+Slot Clone = selected Slot + all descendants.
+Partial clone may target another compatible DRAFT Curriculum version.
+
+
+## Delete Guard for Future Assignment Module — 2026-08-22
+When Student Group/Cohort Curriculum Assignment is implemented, its canonical existence check must be connected to the centralized `CurriculumStructureDeleteService::assertDraftAndUnassigned()` before assignment goes live. This single guard protects Curriculum, Term, Slot and Mapping hard-delete operations.

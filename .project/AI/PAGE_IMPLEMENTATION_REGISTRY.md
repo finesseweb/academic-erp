@@ -123,3 +123,9 @@ On `next` / `next N` / `nextN`:
 - UI pattern: shared `AcademicMasterPage`
 - Permission gate: `course.view`
 - Next dependent implementation: Curriculum / Course Mapping
+
+| Curriculum Header | University Admin | `/admin/curricula` | `curriculum.view` | IMPLEMENTED_IN_REPLACEMENT_PACKAGE | 2026-08-22 |
+
+| Curriculum Manage Structure — Terms / Semesters | University Admin | `/admin/curricula/{curriculum}/structure/terms` | `curriculum.view` / `curriculum.update` | IMPLEMENTED_IN_REPLACEMENT_PACKAGE | 2026-08-22 |
+
+| Course / Paper Mapping | University Admin | `/admin/curricula/{curriculum}/structure/terms/{term}/slots/{slot}/course-mappings` | `curriculum.view` / `curriculum.update` | IMPLEMENTED_IN_REPLACEMENT_PACKAGE | 2026-08-22 |

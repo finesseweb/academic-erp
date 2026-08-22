@@ -76,7 +76,6 @@ Handled through College-scoped roles:
        - Slot Name
        - Display Order
        - Course Type
-       - Credit
        - Mandatory / Choice
        - Minimum Selection
        - Maximum Selection
@@ -310,3 +309,134 @@ Execute milestones in the order above unless a PAGE_SPEC explicitly defines a pr
 - Display Order is persistent.
 - Course Master may provide defaults, but Curriculum Structure stores official curriculum-specific values.
 - Curriculum versions preserve historical structures.
+
+## Sidebar Navigation Presentation Rule
+The frozen development hierarchy above also governs the authenticated ERP sidebar presentation.
+
+Navigation must be grouped by business hierarchy instead of exposing every page as a top-level menu item.
+The sidebar is a collapsible tree and must remain permission-aware.
+
+Current grouping baseline:
+- Dashboard
+- Institution Setup
+  - University Profile
+  - Affiliated Colleges
+  - Authorized Signatories
+- User & Access Management
+  - Users
+  - Roles
+  - Permissions
+  - Audit Logs
+- Academic Setup
+  - Academic Sessions
+  - Degree Structure
+    - Degree Levels
+    - Degrees
+    - Disciplines
+  - Program Setup
+    - Program Templates
+  - Course Setup
+    - Course Categories
+    - Course Types
+    - Course / Subject Master
+- College Management
+  - College Users
+  - College Roles
+  - College Access Audit
+
+Rules:
+- Existing Laravel route URLs do not need to change merely to reflect this navigation tree.
+- A parent node is visible only when at least one permitted child is visible.
+- A child page remains protected by its existing backend permission; sidebar filtering is presentation only and never replaces backend authorization.
+- College Management is shown only when the authenticated user has a College scope and at least one delegated College navigation permission.
+- New modules must be added under the matching frozen hierarchy section instead of becoming unrelated top-level links.
+- Use a third navigation level only when it improves clarity; avoid deep trees for simple modules.
+- Render nested relationships with restrained tree connector lines using semantic theme borders.
+- Accordion behavior is required: only one sibling branch at the same navigation depth remains open.
+- The branch containing the current route automatically opens after navigation or refresh.
+- Expand/collapse motion must be short, subtle, theme-safe and reduced-motion aware.
+- Navigation presentation must not introduce modules that have not reached their approved implementation milestone.
+
+### Curriculum Manage Structure Implementation Note — 2026-08-22
+- Curriculum Header remains the entry point.
+- Terms / Semesters are implemented contextually under a selected Curriculum Header.
+- Curriculum structure may be mutated only while the Curriculum Header is `DRAFT`.
+- `ACTIVE` and `RETIRED` versions are read-only so Curriculum versions preserve historical structures.
+- Next frozen item is Curriculum Slots, beginning with Course Category, Slot Name and persistent Display Order.
+
+
+## Curriculum Structure Update — 2026-08-22
+- Curriculum Header: implemented.
+- Terms / Semesters: implemented.
+- Curriculum Slots Phase 1: implemented with Course Category, Slot Name and Display Order.
+- Slot-level Credits are not introduced.
+- Course / Paper Mapping remains a later milestone.
+- Copy / Clone Structure is approved as the future reuse pattern when a new Curriculum/version needs an existing structure; source and target records remain independent.
+
+
+### Curriculum Slots Phase 2 — 2026-08-22
+- Course Type, Mandatory/Choice, Minimum Selection and Maximum Selection are implemented.
+- Slot Credit is explicitly not part of this milestone.
+- Mandatory Slots do not store Min/Max counts.
+- Choice Slots require Min/Max counts and `Maximum >= Minimum`.
+- Course Category and Course Type reuse existing University masters.
+- Next frozen milestone: Course / Paper Mapping.
+
+
+### Course / Paper Mapping — 2026-08-22
+- Implemented after Curriculum Slots Phase 2.
+- Reuses existing Course / Subject Master; no duplicate Course master.
+- Context is Curriculum -> Term/Semester -> Slot.
+- Same-University, ACTIVE, Course Category and Course Type compatibility is enforced.
+- Mapping Display Order is deliberately deferred to the next milestone.
+- Credit is not introduced in this mapping milestone.
+
+
+### Mapping Display Order — 2026-08-22
+- Implemented after Course / Paper Mapping.
+- Order is scoped to a Curriculum Slot and controls mapped-course presentation.
+- Reordering preserves a continuous Slot-local sequence.
+- Credit remains outside this milestone.
+
+
+### Course Mapping Academic Context — 2026-08-22
+Program Template -> Discipline -> optional Specialization is reused in Curriculum Course Mapping. No duplicate Discipline/Specialization ownership is added to Course Master.
+
+
+### Curriculum Validation Phase 1 — 2026-08-22
+Non-credit structural validation is implemented after Course Mapping/Display Order. The source University ERP hierarchy still reserves Credit Summary before final full Curriculum Validation; therefore this is explicitly Phase 1 validation, not final credit validation.
+
+
+### Credit / Clone Execution Order — 2026-08-22
+The implementation order is corrected to avoid rebuilding Clone:
+1. Curriculum Slot Credits
+2. Credit Summary
+3. Final Credit-aware Curriculum Validation
+4. Copy / Clone Structure
+
+Credits follow the original University ERP hierarchy under Curriculum Slots. Copy / Clone remains approved but is deferred until the complete credit-aware structure is ready.
+
+
+### Credit Summary — 2026-08-22
+Implemented after Curriculum Slot Credits and before final Curriculum Validation, matching the University ERP hierarchy. Clone remains after final validation.
+
+
+### Final Credit-aware Validation — 2026-08-22
+Completed after Credit Summary. Copy / Clone Structure is now the next implementation.
+
+
+### Copy / Clone Structure — 2026-08-22
+Implemented after Slot Credits, Credit Summary and final Credit-aware Curriculum Validation to avoid rework.
+Supports complete Curriculum clone plus Semester and Slot convenience clones.
+
+
+### Curriculum Assignment Safety Rule — 2026-08-22
+Curriculum structural records may be hard-deleted only during DRAFT setup and before Student Group/Cohort assignment. Once operationally assigned, preserve history and use Curriculum versioning/cloning for structural change.
+
+
+### Curriculum Reuse / Clone Rule — 2026-08-22
+Full and granular cross-version reuse is supported. Partial clone target must remain within the same University and Program Template and must be DRAFT.
+
+
+### Final Curriculum Delete Safety — 2026-08-22
+Hard delete is a setup-correction feature only. Entire Curriculum, Term, Slot and Mapping deletion are allowed only before operational assignment and while the target Curriculum is DRAFT. ACTIVE/RETIRED or assigned academic history must never be hard-deleted.

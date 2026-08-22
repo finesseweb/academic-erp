@@ -35,3 +35,12 @@ Theme priority: permitted User Preference -> Affiliated College Default -> Unive
 
 ## Acceptance Direction
 The University administration foundation is complete only when authentication, RBAC enforcement, role management, user scope assignment, University/Affiliated College management, audit and documented theme controls operate consistently.
+
+
+## Curriculum Structure Update — 2026-08-22
+- Curriculum Header: implemented.
+- Terms / Semesters: implemented.
+- Curriculum Slots Phase 1: implemented with Course Category, Slot Name and Display Order.
+- Slot-level Credits are not introduced.
+- Course / Paper Mapping remains a later milestone.
+- Copy / Clone Structure is approved as the future reuse pattern when a new Curriculum/version needs an existing structure; source and target records remain independent.

@@ -125,3 +125,38 @@ Term / Semester + curriculum-specific academic values
 ```
 
 This keeps Course / Subject Master reusable across curricula and prevents curriculum-specific values from being permanently stored on the master.
+
+## Curriculum Header Relationships — 2026-08-22
+| Child FK | Parent | Cardinality | Required | Delete | Meaning |
+|---|---|---|---|---|---|
+| `curricula.university_id` | `universities.id` | many-to-one | Yes | RESTRICT | University owner |
+| `curricula.program_template_id` | `program_templates.id` | many-to-one | Yes | RESTRICT | Program blueprint being versioned |
+| `curricula.academic_session_id` | `academic_sessions.id` | many-to-one | Yes | RESTRICT | Session governing the curriculum version |
+| `curricula.created_by` | `users.id` | many-to-one | No | SET NULL | Creating actor |
+| `curricula.updated_by` | `users.id` | many-to-one | No | SET NULL | Last updating actor |
+
+## Curriculum Terms Relationships — 2026-08-22
+
+| Child FK | Parent | Cardinality | Required | Delete | Meaning |
+|---|---|---|---|---|---|
+| `curriculum_terms.curriculum_id` | `curricula.id` | many-to-one | Yes | RESTRICT | Versioned Curriculum Header owning the ordered Term / Semester |
+| `curriculum_terms.created_by` | `users.id` | many-to-one | No | SET NULL | Creating actor |
+| `curriculum_terms.updated_by` | `users.id` | many-to-one | No | SET NULL | Last updating actor |
+
+
+| `curriculum_slots.curriculum_term_id` | `curriculum_terms.id` | many-to-one | Yes | Yes | RESTRICT | Ordered Slot belongs to one Curriculum Term / Semester |
+| `curriculum_slots.course_category_id` | `course_categories.id` | many-to-one | Yes | Yes | RESTRICT | Reuses University Course Category master without sharing Slot identity |
+
+| `curriculum_slots.course_type_id` | `course_types.id` | many-to-one | Yes* | Yes | RESTRICT | Reuses University Course Type master as Slot mapping constraint |
+
+*Existing Phase 1 rows may be null immediately after migration until edited; Phase 2 create/update requires Course Type.
+
+## Curriculum Course / Paper Mapping Relationships — 2026-08-22
+
+| Child FK | Parent | Cardinality | Required | Canonical | Delete | Meaning |
+|---|---|---|---|---|---|---|
+| `curriculum_course_mappings.curriculum_slot_id` | `curriculum_slots.id` | many-to-one | Yes | Yes | RESTRICT | Mapping belongs to one curriculum-specific Slot |
+| `curriculum_course_mappings.course_id` | `courses.id` | many-to-one | Yes | Yes | RESTRICT | Reuses University Course / Subject Master |
+
+| `curriculum_course_mappings.discipline_id` | `academic_disciplines.id` | many-to-one | New mappings: Yes | RESTRICT | Program Template Discipline context |
+| `curriculum_course_mappings.specialization_id` | `academic_disciplines.id` | many-to-one | No | RESTRICT | Optional Program Template Specialization context |
