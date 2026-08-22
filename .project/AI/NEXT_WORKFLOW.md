@@ -249,3 +249,23 @@ Do not start Admissions yet.
 First test Gate 5 end-to-end:
 Workflow Setup -> Submit -> Role Inbox -> Approve/Return/Reject -> Multi-level advance -> Final Activation -> History -> Permission checks.
 After Gate 5 is PASS, next SRS phase is Admissions & Seat Management.
+
+
+## Phase 5 Validation-Gate QA — 2026-08-22
+Before Gate 5 PASS, verify:
+1. Draft Curriculum without validation does not expose enabled Submit.
+2. Validate Structure PASS records checkpoint and exposes Submit.
+3. Edit Header/Term/Slot/Credit/Mapping after PASS makes Submit unavailable.
+4. Re-validation restores Submit.
+5. Direct ACTIVE selection/update is impossible.
+6. Submit locks structure.
+7. HOD -> Dean -> Registrar/current configured stages advance correctly.
+8. Final approval activates Curriculum.
+9. Return/Reject unlocks DRAFT correction workflow.
+10. Restore route works for retired Curriculum.
+
+Admissions remains blocked until these checks PASS.
+
+
+## Test Cleanup Maintenance Rule — 2026-08-22
+As each new module is implemented, add its operational foreign-key/reference checks to TestDataCleanupService before permitting related cleanup. Test cleanup must never silently bypass downstream production-style dependencies.

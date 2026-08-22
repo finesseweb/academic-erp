@@ -8,6 +8,186 @@ use Illuminate\Support\Facades\DB;
 
 class CurriculumStructureValidationService
 {
+
+public function validateAndRecord(
+    Curriculum $curriculum,
+    int $actorId
+): array {
+    $result = $this->validate($curriculum);
+
+    $hash = $result['valid']
+        ? $this->fingerprint($curriculum)
+        : null;
+
+    DB::transaction(function () use (
+        $curriculum,
+        $actorId,
+        $result,
+        $hash
+    ) {
+        DB::table('curricula')
+            ->where('id', $curriculum->id)
+            ->update([
+                'structure_validation_hash' => $hash,
+                'structure_validated_at' =>
+                    $result['valid'] ? now() : null,
+                'structure_validated_by' =>
+                    $result['valid'] ? $actorId : null,
+            ]);
+
+        DB::table('audit_logs')->insert([
+            'event' => 'CURRICULUM_STRUCTURE_VALIDATED',
+            'resource_type' => 'curriculum',
+            'resource_id' => $curriculum->id,
+            'before' => null,
+            'after' => json_encode([
+                'valid' => $result['valid'],
+                'errors' => $result['errors'],
+                'warnings' => $result['warnings'],
+                'structure_validation_hash' => $hash,
+            ]),
+            'actor_user_id' => $actorId,
+            'ip_address' => request()->ip(),
+            'created_at' => now(),
+        ]);
+    });
+
+    return [
+        ...$result,
+        'recorded' => $result['valid'],
+        'validated_at' =>
+            $result['valid'] ? now()->toIso8601String() : null,
+    ];
+}
+
+public function hasCurrentValidCheckpoint(
+    Curriculum $curriculum
+): bool {
+    if (
+        empty($curriculum->structure_validation_hash) ||
+        empty($curriculum->structure_validated_at)
+    ) {
+        return false;
+    }
+
+    return hash_equals(
+        (string) $curriculum->structure_validation_hash,
+        $this->fingerprint($curriculum)
+    );
+}
+
+public function fingerprint(Curriculum $curriculum): string
+{
+    /*
+     * Fingerprint only business structure/header data. Validation
+     * metadata itself is intentionally excluded so recording a PASS
+     * does not invalidate its own checkpoint.
+     */
+    $payload = [
+        'curriculum' => [
+            'id' => (int) $curriculum->id,
+            'university_id' => (int) $curriculum->university_id,
+            'program_template_id' =>
+                (int) $curriculum->program_template_id,
+            'academic_session_id' =>
+                (int) $curriculum->academic_session_id,
+            'code' => (string) $curriculum->code,
+            'name' => (string) $curriculum->name,
+            'version' => (string) $curriculum->version,
+            'effective_from' =>
+                $curriculum->effective_from?->format('Y-m-d')
+                ?? (string) ($curriculum->effective_from ?? ''),
+            'effective_to' =>
+                $curriculum->effective_to?->format('Y-m-d')
+                ?? (string) ($curriculum->effective_to ?? ''),
+        ],
+        'terms' => DB::table('curriculum_terms')
+            ->where('curriculum_id', $curriculum->id)
+            ->orderBy('sequence_no')
+            ->orderBy('id')
+            ->get([
+                'id',
+                'sequence_no',
+                'name',
+                'status',
+                'updated_at',
+            ])
+            ->map(fn ($row) => (array) $row)
+            ->all(),
+        'slots' => DB::table('curriculum_slots as slot')
+            ->join(
+                'curriculum_terms as term',
+                'term.id',
+                '=',
+                'slot.curriculum_term_id'
+            )
+            ->where('term.curriculum_id', $curriculum->id)
+            ->orderBy('term.sequence_no')
+            ->orderBy('slot.display_order')
+            ->orderBy('slot.id')
+            ->get([
+                'slot.id',
+                'slot.curriculum_term_id',
+                'slot.course_category_id',
+                'slot.course_type_id',
+                'slot.credits',
+                'slot.name',
+                'slot.display_order',
+                'slot.selection_mode',
+                'slot.min_selection',
+                'slot.max_selection',
+                'slot.status',
+                'slot.updated_at',
+            ])
+            ->map(fn ($row) => (array) $row)
+            ->all(),
+        'mappings' => DB::table(
+            'curriculum_course_mappings as mapping'
+        )
+            ->join(
+                'curriculum_slots as slot',
+                'slot.id',
+                '=',
+                'mapping.curriculum_slot_id'
+            )
+            ->join(
+                'curriculum_terms as term',
+                'term.id',
+                '=',
+                'slot.curriculum_term_id'
+            )
+            ->where('term.curriculum_id', $curriculum->id)
+            ->orderBy('term.sequence_no')
+            ->orderBy('slot.display_order')
+            ->orderByRaw(
+                'COALESCE(mapping.display_order, 65535)'
+            )
+            ->orderBy('mapping.id')
+            ->get([
+                'mapping.id',
+                'mapping.curriculum_slot_id',
+                'mapping.course_id',
+                'mapping.discipline_id',
+                'mapping.specialization_id',
+                'mapping.display_order',
+                'mapping.status',
+                'mapping.updated_at',
+            ])
+            ->map(fn ($row) => (array) $row)
+            ->all(),
+    ];
+
+    return hash(
+        'sha256',
+        json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE |
+            JSON_UNESCAPED_SLASHES |
+            JSON_PRESERVE_ZERO_FRACTION
+        )
+    );
+}
+
     public function validate(Curriculum $curriculum): array
     {
         $issues = collect();

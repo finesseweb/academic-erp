@@ -15,6 +15,7 @@ use App\Services\CurriculumCloneService;
 use App\Services\ApprovalRequestService;
 use App\Services\CurriculumService;
 use App\Services\CurriculumStructureDeleteService;
+use App\Services\CurriculumStructureValidationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,7 +27,8 @@ class CurriculumController extends Controller
         private readonly CurriculumService $service,
         private readonly CurriculumCloneService $cloneService,
         private readonly ApprovalRequestService $approvalRequestService,
-        private readonly CurriculumStructureDeleteService $deleteService
+        private readonly CurriculumStructureDeleteService $deleteService,
+        private readonly CurriculumStructureValidationService $structureValidationService
     ) {}
 
     public function index(Request $request): Response
@@ -54,6 +56,67 @@ class CurriculumController extends Controller
             ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString();
+
+        $canSubmitApproval =
+            $request->user()->hasPermission('approval_request.submit');
+
+        $hasActiveApprovalWorkflow = ApprovalWorkflow::query()
+            ->where('university_id', $university->id)
+            ->where('applies_to', 'CURRICULUM')
+            ->where('status', 'ACTIVE')
+            ->whereHas(
+                'stages',
+                fn ($query) => $query->where('status', 'ACTIVE')
+            )
+            ->exists();
+
+        $curricula->getCollection()->transform(
+            function (Curriculum $curriculum) use (
+                $canSubmitApproval,
+                $hasActiveApprovalWorkflow
+            ) {
+                $validationCurrent =
+                    $this->structureValidationService
+                        ->hasCurrentValidCheckpoint($curriculum);
+
+                $approvalEligible = in_array(
+                    $curriculum->approval_status ?? 'NOT_SUBMITTED',
+                    ['NOT_SUBMITTED', 'RETURNED', 'REJECTED'],
+                    true
+                );
+
+                $curriculum->setAttribute(
+                    'structure_validation_current',
+                    $validationCurrent
+                );
+
+                $curriculum->setAttribute(
+                    'can_submit_for_approval',
+                    $canSubmitApproval &&
+                    $hasActiveApprovalWorkflow &&
+                    $curriculum->lifecycle_status === 'DRAFT' &&
+                    $approvalEligible &&
+                    $validationCurrent
+                );
+
+                $curriculum->setAttribute(
+                    'submit_approval_hint',
+                    ! $canSubmitApproval
+                        ? 'Submit approval permission is required.'
+                        : (
+                            ! $hasActiveApprovalWorkflow
+                                ? 'Configure an active approval workflow first.'
+                                : (
+                                    ! $validationCurrent
+                                        ? 'Validate Structure first.'
+                                        : null
+                                )
+                        )
+                );
+
+                return $curriculum;
+            }
+        );
 
         return Inertia::render('admin/curricula/index', [
             'curricula' => $curricula,

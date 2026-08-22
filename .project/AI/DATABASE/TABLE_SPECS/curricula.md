@@ -30,3 +30,17 @@ Curriculum headers are not hard-deleted. Retirement uses `RETIRED`. Activation/l
 
 ## Change History
 - 2026-08-22: Curriculum Header implementation started and schema fixed for the header milestone.
+
+
+## Structure Validation Checkpoint — 2026-08-22
+Added approval-gate metadata:
+- `structure_validation_hash` — nullable SHA-256 fingerprint of the last PASSed Curriculum header/structure.
+- `structure_validated_at` — timestamp of the last current PASS.
+- `structure_validated_by` — nullable FK to `users`; validator actor.
+
+These columns do not replace live validation. They prove that the user explicitly validated the same structure that is being submitted.
+
+Lifecycle integrity:
+- create always starts `DRAFT`
+- direct form/API update cannot promote Curriculum to `ACTIVE`
+- final approval controls activation

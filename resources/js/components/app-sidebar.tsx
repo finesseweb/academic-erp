@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpenCheck,
+    Database,
     Building2,
     CalendarRange,
     ChevronRight,
@@ -185,6 +186,19 @@ const platformItems: TreeNavItem[] = [
                 href: '/admin/academic-approval/workflows',
                 icon: GitBranch,
                 permission: 'approval_workflow.view',
+            },
+        ],
+    },
+
+    {
+        title: 'System Maintenance',
+        icon: Database,
+        children: [
+            {
+                title: 'Test Data Cleanup',
+                href: '/admin/system-maintenance/test-data-cleanup',
+                icon: Database,
+                permission: 'test_data_cleanup.manage',
             },
         ],
     },

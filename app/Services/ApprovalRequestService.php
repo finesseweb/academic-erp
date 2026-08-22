@@ -63,13 +63,27 @@ class ApprovalRequestService
             ]);
         }
 
+        if (
+            ! $this->validationService
+                ->hasCurrentValidCheckpoint($curriculum)
+        ) {
+            throw ValidationException::withMessages([
+                'curriculum' =>
+                    'Run Validate Structure and obtain a current PASS before submitting this Curriculum for approval.',
+            ]);
+        }
+
+        /*
+         * Re-run live validation as a final race-condition guard.
+         * This does not replace the required recorded checkpoint.
+         */
         $validation = $this->validationService
             ->validate($curriculum);
 
         if (! $validation['valid']) {
             throw ValidationException::withMessages([
                 'curriculum' =>
-                    'Validate Structure must pass before the Curriculum can be submitted for approval.',
+                    'The Curriculum structure is no longer valid. Validate Structure again before submission.',
             ]);
         }
 

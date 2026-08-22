@@ -448,3 +448,14 @@ Phase 5A starts with reusable Workflow Setup and Role-based ordered stages. Phas
 
 ### Phase 5B Governance Approval Execution — 2026-08-22
 Curriculum is now connected to the generic approval engine. Final approval is the only new path in this phase that automatically changes a submitted Curriculum from DRAFT to ACTIVE. Gate 5 requires QA before Admissions.
+
+
+### Governance Validation Gate — 2026-08-22
+The final Curriculum sequence is frozen as:
+`Build Structure -> Validate Structure PASS -> Submit for Approval -> Configured Approval Stages -> Final Approval -> ACTIVE`.
+
+A validation PASS is tied to the exact submitted structure using a stored fingerprint. Any relevant change requires re-validation. Direct DRAFT -> ACTIVE form mutation is prohibited.
+
+
+### Development/Test Cleanup Rule — 2026-08-22
+Testing convenience must not weaken normal business deletion rules. Test cleanup is an explicitly permissioned, environment-controlled maintenance path with dependency checks. Production business data continues to follow normal lifecycle/history rules.

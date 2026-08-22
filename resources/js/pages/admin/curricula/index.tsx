@@ -1,6 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { BookOpenCheck, CircleX, Copy, Pencil, Plus, RotateCcw, Search, Send, Settings2, Trash2, X } from 'lucide-react';
+import { BookOpenCheck, CircleX, Copy, Pencil, Plus, RotateCcw, Search, Send, Settings2, Trash2, MoreHorizontal, X } from 'lucide-react';
 import { FormEvent, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,6 +31,10 @@ type Curriculum = {
         | 'RETURNED'
         | 'REJECTED'
         | 'APPROVED';
+    structure_validation_current: boolean;
+    can_submit_for_approval: boolean;
+    submit_approval_hint?: string | null;
+    structure_validated_at?: string | null;
     description: string | null;
     program_template: Option;
     academic_session: Option;
@@ -78,6 +83,11 @@ export default function CurriculumIndex({
     const [cloning, setCloning] = useState<Curriculum | null>(null);
     const [submittingApproval, setSubmittingApproval] =
         useState<Curriculum | null>(null);
+    const [moreMenu, setMoreMenu] = useState<{
+        item: Curriculum;
+        top: number;
+        right: number;
+    } | null>(null);
     const approvalForm = useForm({
         approval_workflow_id: '',
     });
@@ -154,6 +164,26 @@ export default function CurriculumIndex({
                 preserveScroll: true,
                 onSuccess: () => setCloning(null),
             },
+        );
+    };
+
+    const openMoreMenu = (
+        item: Curriculum,
+        element: HTMLButtonElement,
+    ) => {
+        const rect = element.getBoundingClientRect();
+
+        setMoreMenu((current) =>
+            current?.item.id === item.id
+                ? null
+                : {
+                      item,
+                      top: rect.bottom + 6,
+                      right: Math.max(
+                          12,
+                          window.innerWidth - rect.right,
+                      ),
+                  },
         );
     };
 
@@ -364,7 +394,7 @@ export default function CurriculumIndex({
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <div className="flex justify-end gap-2">
+                                                <div className="flex items-center justify-end gap-1">
                                                     <Button
                                                         type="button"
                                                         size="sm"
@@ -378,20 +408,6 @@ export default function CurriculumIndex({
                                                         <Settings2 className="size-4" />
                                                         Structure
                                                     </Button>
-
-                                                    {permissions.create && (
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() =>
-                                                                openClone(item)
-                                                            }
-                                                        >
-                                                            <Copy className="size-4" />
-                                                            Clone Structure
-                                                        </Button>
-                                                    )}
 
                                                     {permissions.update &&
                                                         item.lifecycle_status ===
@@ -416,65 +432,25 @@ export default function CurriculumIndex({
                                                             </Button>
                                                         )}
 
-
-                                                    {permissions.update &&
-                                                        item.lifecycle_status ===
-                                                            'DRAFT' &&
-                                                        ![
-                                                            'SUBMITTED',
-                                                            'UNDER_APPROVAL',
-                                                            'APPROVED',
-                                                        ].includes(
-                                                            item.approval_status,
-                                                        ) && (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() =>
-                                                                    deleteCurriculum(
-                                                                        item,
-                                                                    )
-                                                                }
-                                                                className="text-destructive hover:text-destructive"
-                                                            >
-                                                                <Trash2 className="size-4" />
-                                                                Delete
-                                                            </Button>
-                                                        )}
-
-                                                    {permissions.disable &&
-                                                        item.lifecycle_status !==
-                                                            'RETIRED' && (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() =>
-                                                                    retire(item)
-                                                                }
-                                                                className="text-destructive hover:text-destructive"
-                                                            >
-                                                                <CircleX className="size-4" />
-                                                                Retire
-                                                            </Button>
-                                                        )}
-
-                                                    {permissions.disable &&
-                                                        item.lifecycle_status ===
-                                                            'RETIRED' && (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() =>
-                                                                    restore(item)
-                                                                }
-                                                            >
-                                                                <RotateCcw className="size-4" />
-                                                                Restore
-                                                            </Button>
-                                                        )}
+                                                                                                        <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        aria-haspopup="menu"
+                                                        aria-expanded={
+                                                            moreMenu?.item.id ===
+                                                            item.id
+                                                        }
+                                                        onClick={(event) =>
+                                                            openMoreMenu(
+                                                                item,
+                                                                event.currentTarget,
+                                                            )
+                                                        }
+                                                    >
+                                                        <MoreHorizontal className="size-4" />
+                                                        More
+                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -511,6 +487,147 @@ export default function CurriculumIndex({
                     )}
                 </Card>
             </div>
+
+            {moreMenu &&
+                typeof document !== 'undefined' &&
+                createPortal(
+                    <>
+                        <button
+                            type="button"
+                            aria-label="Close actions menu"
+                            className="fixed inset-0 z-[90] cursor-default bg-transparent"
+                            onClick={() => setMoreMenu(null)}
+                        />
+
+                        <div
+                            role="menu"
+                            className="fixed z-[100] w-60 rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
+                            style={{
+                                top: moreMenu.top,
+                                right: moreMenu.right,
+                            }}
+                        >
+                            {moreMenu.item.can_submit_for_approval && (
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                    onClick={() => {
+                                        const item = moreMenu.item;
+                                        setMoreMenu(null);
+                                        openSubmitApproval(item);
+                                    }}
+                                >
+                                    <Send className="size-4" />
+                                    Submit for Approval
+                                </button>
+                            )}
+
+                            {!moreMenu.item.can_submit_for_approval &&
+                                moreMenu.item.lifecycle_status ===
+                                    'DRAFT' &&
+                                [
+                                    'NOT_SUBMITTED',
+                                    'RETURNED',
+                                    'REJECTED',
+                                ].includes(
+                                    moreMenu.item.approval_status,
+                                ) &&
+                                moreMenu.item.submit_approval_hint && (
+                                    <div className="flex items-start gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground">
+                                        <Settings2 className="mt-0.5 size-4 shrink-0" />
+                                        <span>
+                                            {
+                                                moreMenu.item
+                                                    .submit_approval_hint
+                                            }
+                                        </span>
+                                    </div>
+                                )}
+
+                            {permissions.create && (
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                    onClick={() => {
+                                        const item = moreMenu.item;
+                                        setMoreMenu(null);
+                                        openClone(item);
+                                    }}
+                                >
+                                    <Copy className="size-4" />
+                                    Clone Structure
+                                </button>
+                            )}
+
+                            {permissions.update &&
+                                moreMenu.item.lifecycle_status ===
+                                    'DRAFT' &&
+                                ![
+                                    'SUBMITTED',
+                                    'UNDER_APPROVAL',
+                                    'APPROVED',
+                                ].includes(
+                                    moreMenu.item.approval_status,
+                                ) && (
+                                    <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                                        onClick={() => {
+                                            const item =
+                                                moreMenu.item;
+                                            setMoreMenu(null);
+                                            deleteCurriculum(item);
+                                        }}
+                                    >
+                                        <Trash2 className="size-4" />
+                                        Delete
+                                    </button>
+                                )}
+
+                            {permissions.disable &&
+                                moreMenu.item.lifecycle_status !==
+                                    'RETIRED' && (
+                                    <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                                        onClick={() => {
+                                            const item =
+                                                moreMenu.item;
+                                            setMoreMenu(null);
+                                            retire(item);
+                                        }}
+                                    >
+                                        <CircleX className="size-4" />
+                                        Retire
+                                    </button>
+                                )}
+
+                            {permissions.disable &&
+                                moreMenu.item.lifecycle_status ===
+                                    'RETIRED' && (
+                                    <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                        onClick={() => {
+                                            const item =
+                                                moreMenu.item;
+                                            setMoreMenu(null);
+                                            restore(item);
+                                        }}
+                                    >
+                                        <RotateCcw className="size-4" />
+                                        Restore
+                                    </button>
+                                )}
+                        </div>
+                    </>,
+                    document.body,
+                )}
 
             {submittingApproval && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
@@ -832,7 +949,20 @@ export default function CurriculumIndex({
                             <Field label="Curriculum Code" error={form.errors.code}><input value={form.data.code} onChange={e => form.setData('code', e.target.value.toUpperCase())} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={50} /></Field>
                             <Field label="Curriculum Name" error={form.errors.name}><input value={form.data.name} onChange={e => form.setData('name', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={160} /></Field>
                             <Field label="Version" error={form.errors.version}><input value={form.data.version} onChange={e => form.setData('version', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={30} /></Field>
-                            <Field label="Lifecycle Status" error={form.errors.lifecycle_status}><select value={form.data.lifecycle_status} onChange={e => form.setData('lifecycle_status', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="DRAFT">Draft</option><option value="ACTIVE">Active</option><option value="RETIRED">Retired</option></select></Field>
+                            <Field label="Lifecycle Status" error={form.errors.lifecycle_status}>
+                                <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                                    {editing
+                                        ? editing.lifecycle_status === 'DRAFT'
+                                            ? 'Draft'
+                                            : editing.lifecycle_status === 'ACTIVE'
+                                              ? 'Active'
+                                              : 'Retired'
+                                        : 'Draft'}
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Lifecycle is controlled by Academic Approval and Retire/Restore actions.
+                                </p>
+                            </Field>
                             <Field label="Effective From" error={form.errors.effective_from}>
                                 <DatePicker
                                     id={`curriculum-effective-from-${editing?.id ?? 'new'}`}

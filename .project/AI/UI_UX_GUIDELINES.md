@@ -356,3 +356,39 @@ Curriculum-wide actions belong in the Manage Structure header. Slot/Course Mappi
 
 ### Curriculum List Delete Visibility — 2026-08-22
 For a DRAFT Curriculum with `curriculum.update`, the Actions area must show `Trash2 + Delete` alongside Structure / Clone / Edit. ACTIVE and RETIRED rows must not show Delete.
+
+
+### Curriculum Row Actions — Final Compact Standard (2026-08-22)
+Curriculum list must not render every lifecycle action as horizontal text.
+
+Visible:
+- `Structure`
+- `Edit` when editable
+
+`More` menu:
+- `Submit for Approval` only after a current recorded Structure Validation PASS
+- `Clone Structure`
+- `Delete`
+- `Retire`
+- `Restore` when applicable
+
+If the user has submit permission and the Curriculum is otherwise eligible but validation is missing/stale, show a non-actionable `Validate Structure First` hint in the More menu instead of an enabled Submit action.
+
+Laravel remains authoritative for validation, permissions and lifecycle restrictions.
+
+
+### Curriculum More Menu Portal Fix — 2026-08-22
+The Curriculum `More` menu must render through a document-body portal with fixed positioning. It must never expand the table row, create internal table scrolling, or be clipped by a Card/table overflow container. Clicking outside closes the menu.
+
+The row remains compact:
+`Structure | Edit | More`.
+
+Submit readiness is supplied authoritatively by Laravel as `can_submit_for_approval`; the frontend must not reconstruct the complete business rule independently.
+
+
+### Test Data Cleanup UI — 2026-08-22
+- Never expose a raw DB console or arbitrary table truncate UI.
+- Show test entities in a normal ERP table with dependency counts.
+- Destructive action uses `Eraser` icon + destructive styling.
+- Require exact entity code confirmation.
+- Disable action when environment safety or downstream-reference checks fail.

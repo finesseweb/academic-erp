@@ -243,3 +243,11 @@ the protected global `SUPER_ADMIN` system role by migration.
 - `approval_workflow.disable`
 
 Approver identities are never authorized by hard-coded role names. Workflow stages reference configured Role Master records.
+
+
+## System Maintenance — Test Data Cleanup
+- `test_data_cleanup.manage`
+  - sensitive: yes
+  - college delegable: no
+  - purpose: view and execute controlled test-data cleanup tools
+  - never grants raw SQL/database access

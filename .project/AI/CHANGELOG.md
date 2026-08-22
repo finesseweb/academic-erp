@@ -1,4 +1,54 @@
 
+## 2026-08-22 — Test Data Cleanup Config Bootstrap Fix
+
+- Fixed Laravel bootstrap error `Target class [env] does not exist`.
+- Removed `app()->environment()` from `config/test-data-cleanup.php`.
+- Environment detection now reads `APP_ENV` through `env()` while config is loading.
+- No database/schema change.
+
+## 2026-08-22 — Menu-wise Test Data Cleanup Center
+
+- Expanded Test Data Cleanup into a menu-wise maintenance center.
+- Added Curriculum `Reset Approval` for repeated approval testing without deleting structure.
+- Added controlled cleanup sections for Courses, Course Categories, Course Types, Program Templates, Disciplines/Specializations and Academic Sessions.
+- Course cleanup removes test Curriculum Mappings but blocks operational Course references.
+- Parent academic masters remain blocked until dependent records are cleaned first.
+- Existing sensitive permission and environment protection remain unchanged.
+
+## 2026-08-22 — Controlled Test Data Cleanup Module
+
+- Added one sensitive permission: `test_data_cleanup.manage`.
+- Added `System Maintenance -> Test Data Cleanup` sidebar page.
+- Added dependency-aware Curriculum test cleanup for dummy DRAFT/ACTIVE/APPROVED data.
+- Cleanup removes Curriculum structure and Curriculum approval execution test history, while preserving reusable master data.
+- Cleanup blocks if known downstream operational references exist.
+- Exact Curriculum Code confirmation is mandatory.
+- Production requires explicit TEST_DATA_CLEANUP_ENABLED opt-in.
+- Added permanent `TEST_CURRICULUM_DATA_CLEANED` audit event.
+- No raw database/truncate console was introduced.
+
+## 2026-08-22 — Professional More Menu + Submit Readiness Fix
+
+- Replaced row-contained `<details>` action menu with a document-body portal/fixed menu.
+- Menu no longer clips inside the Curriculum card or causes table scrolling.
+- Added authoritative Laravel `can_submit_for_approval` and `submit_approval_hint` per Curriculum.
+- Submit availability now uses permission + active workflow + DRAFT lifecycle + eligible approval status + current Validation PASS.
+- Added user-facing readiness reason when Submit is unavailable.
+- No database migration added in this correction.
+
+## 2026-08-22 — Professional Curriculum Validation Gate + Compact Action Menu
+
+- Added persistent Structure Validation checkpoint with SHA-256 structure fingerprint.
+- Submit for Approval now requires the same current structure to have passed validation.
+- Header/Term/Slot/Credit/Mapping changes automatically stale the checkpoint.
+- Backend re-checks both checkpoint and live structure validation on submit.
+- Curriculum list now keeps only Structure + Edit visible and moves Submit/Clone/Delete/Retire/Restore into More.
+- Added `Validate Structure First` menu hint when submission is otherwise eligible.
+- Removed direct lifecycle promotion from Curriculum create/update; final approval owns ACTIVE.
+- Audits successful/failed validation attempts with `CURRICULUM_STRUCTURE_VALIDATED`.
+- Fixed missing `curricula.restore` route in the user-provided route file.
+- Added migration `2026_08_22_194000_add_curriculum_structure_validation_checkpoint.php`.
+
 ## 2026-08-22 — Phase 5B UI Corrections
 
 - Fixed Curriculum list table header alignment by restoring the Approval column header between Status and Actions.

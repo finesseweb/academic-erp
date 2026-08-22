@@ -628,7 +628,10 @@ class CurriculumStructureController extends Controller
         );
 
         return response()->json(
-            $this->structureValidationService->validate($curriculum)
+            $this->structureValidationService->validateAndRecord(
+                $curriculum,
+                $request->user()->id
+            )
         );
     }
 

@@ -348,3 +348,37 @@ Status: IN PROGRESS
 - Approve advances level; final approval activates Curriculum.
 - Return/Reject unlock DRAFT Curriculum for correction and resubmission.
 - Approval history is displayed.
+
+
+## Curriculum Validation Gate + Compact Actions — 2026-08-22
+- Persistent fingerprinted Structure Validation checkpoint: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Submit for Approval requires a recorded current PASS.
+- Structural/header changes automatically make the prior checkpoint stale by fingerprint mismatch.
+- Backend re-checks checkpoint and live validation at submission.
+- Curriculum table primary actions frozen to `Structure` + `Edit`; lifecycle/secondary actions moved to `More`.
+- Direct Curriculum form promotion to ACTIVE is blocked; final approval owns activation.
+- User route review found and fixed missing `curricula.restore` route.
+- Migration/build/repository QA: PENDING.
+
+
+## Curriculum More Menu / Submit Readiness Fix — 2026-08-22
+- More menu now uses a body portal/fixed overlay and no longer changes table scroll/row height.
+- Submit readiness is now computed on the server and exposed per Curriculum.
+- More menu shows Submit when Laravel says the Curriculum is approval-ready.
+- When unavailable, Laravel supplies the reason/hint.
+
+
+## Controlled Test Data Cleanup — 2026-08-22
+- Added `test_data_cleanup.manage` sensitive permission.
+- Added `System Maintenance -> Test Data Cleanup`.
+- Curriculum test cleanup can remove DRAFT/ACTIVE/APPROVED dummy Curriculum data plus structure and approval execution history.
+- Cleanup is blocked when downstream operational references exist.
+- Master setup data is preserved.
+- Production execution requires explicit TEST_DATA_CLEANUP_ENABLED opt-in.
+
+
+## Test Data Cleanup Center Expansion — 2026-08-22
+- Curriculum Reset Approval implemented for repeated approval testing.
+- Menu-wise cleanup sections added for Curriculum, Courses, Course Categories, Course Types, Program Templates, Disciplines and Academic Sessions.
+- Course cleanup can remove Curriculum Mapping test dependencies but blocks operational Course usage.
+- Higher-level masters require zero dependent records before cleanup.

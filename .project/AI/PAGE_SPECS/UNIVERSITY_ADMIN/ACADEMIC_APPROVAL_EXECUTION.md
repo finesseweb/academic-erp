@@ -70,3 +70,38 @@ Before Gate 5 is formally marked PASS, run migration/build and test:
 - final activation
 - permission-denied cases
 - audit history
+
+
+## Validation Gate — Final Rule (2026-08-22)
+`Submit for Approval` is not merely permission/status driven.
+
+Submission requires a **recorded current Structure Validation PASS**:
+1. User runs `Validate Structure`.
+2. Laravel validates the complete implemented Curriculum structure.
+3. On PASS, Laravel records `structure_validation_hash`, `structure_validated_at` and `structure_validated_by`.
+4. The Curriculum list shows `Submit for Approval` only while that fingerprint still matches the current Curriculum/header/Terms/Slots/Mappings.
+5. If Curriculum Header, Term/Semester, Slot, Credits, selection rules or Course Mapping data changes, the fingerprint changes automatically and the previous PASS becomes stale.
+6. A stale/missing validation checkpoint hides Submit and shows `Validate Structure First`.
+7. Laravel re-checks the checkpoint and runs live validation again when submission is posted.
+
+This is a backend business rule, not a UI-only rule.
+
+## Curriculum List Action Layout — Final Rule (2026-08-22)
+To keep the Curriculum table compact and consistent:
+- visible primary actions: `Structure`, `Edit`
+- `More` menu:
+  - `Submit for Approval` — only after current Validation PASS
+  - `Clone Structure`
+  - `Delete`
+  - `Retire`
+  - `Restore` when applicable
+
+`Edit` is hidden when approval/lifecycle locks make the Curriculum read-only.
+
+## Activation Integrity
+Users must not directly select `ACTIVE` from Curriculum create/edit forms.
+- New Curriculum is always created as `DRAFT / NOT_SUBMITTED`.
+- Header update cannot directly change lifecycle or approval status.
+- `ACTIVE` is reached by final Academic Approval.
+- `RETIRED` / restore are controlled lifecycle actions.
+

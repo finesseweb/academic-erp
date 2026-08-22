@@ -15,9 +15,16 @@ class CurriculumService
         $this->validateUniqueness($university->id, $data);
 
         return DB::transaction(function () use ($university, $data, $actorId) {
+            unset(
+                $data['lifecycle_status'],
+                $data['approval_status']
+            );
+
             $curriculum = Curriculum::create([
                 ...$data,
                 'university_id' => $university->id,
+                'lifecycle_status' => 'DRAFT',
+                'approval_status' => 'NOT_SUBMITTED',
                 'created_by' => $actorId,
                 'updated_by' => $actorId,
             ]);
@@ -47,6 +54,11 @@ class CurriculumService
         $this->validateUniqueness($curriculum->university_id, $data, $curriculum->id);
 
         return DB::transaction(function () use ($curriculum, $data, $actorId) {
+            unset(
+                $data['lifecycle_status'],
+                $data['approval_status']
+            );
+
             $before = $curriculum->toArray();
             $curriculum->fill([...$data, 'updated_by' => $actorId])->save();
             $curriculum->refresh();

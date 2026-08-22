@@ -127,3 +127,26 @@ The validator is read-only.
 
 ## Next Implementation
 Copy / Clone Structure.
+
+
+## Approval Checkpoint Upgrade — 2026-08-22
+
+The validator remains **read-only with respect to academic structure**: it never edits Terms, Slots, Credits or Course Mappings.
+
+For Phase 5 governance, a successful validation now writes only validation metadata on the Curriculum:
+- `structure_validation_hash`
+- `structure_validated_at`
+- `structure_validated_by`
+
+This metadata is an approval-readiness checkpoint, not an academic structure mutation.
+
+### Stale Validation Rule
+The checkpoint fingerprint covers the Curriculum header and implemented structural children. Any relevant structural/header change makes the stored hash different from the current fingerprint. Therefore:
+- previous PASS becomes stale automatically
+- `Submit for Approval` disappears/is unavailable
+- user must run `Validate Structure` again
+
+Submission requires a current recorded PASS and Laravel performs one additional live validation before creating the approval request.
+
+Audit event:
+`CURRICULUM_STRUCTURE_VALIDATED`

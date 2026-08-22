@@ -26,6 +26,7 @@ use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\UniversityController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserRoleController;
+use App\Http\Controllers\TestDataCleanupController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -72,6 +73,11 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('admin/permissions', [PermissionController::class, 'index'])->name('permissions.index');
     Route::redirect('super-admin/permissions', '/admin/permissions');
     Route::get('admin/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+    Route::get('admin/system-maintenance/test-data-cleanup', [TestDataCleanupController::class, 'index'])->name('test-data-cleanup.index');
+    Route::delete('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}', [TestDataCleanupController::class, 'destroyCurriculum'])->name('test-data-cleanup.curricula.destroy');
+    Route::post('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}/reset-approval', [TestDataCleanupController::class, 'resetCurriculumApproval'])->name('test-data-cleanup.curricula.reset-approval');
+    Route::delete('admin/system-maintenance/test-data-cleanup/{type}/{id}', [TestDataCleanupController::class, 'destroyMaster'])->name('test-data-cleanup.master.destroy');
+
     Route::get('admin/academic-sessions', [AcademicSessionController::class, 'index'])->name('academic-sessions.index');
     Route::post('admin/academic-sessions', [AcademicSessionController::class, 'store'])->name('academic-sessions.store');
     Route::patch('admin/academic-sessions/{academicSession}', [AcademicSessionController::class, 'update'])->name('academic-sessions.update');
@@ -118,6 +124,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('admin/curricula/{curriculum}/clone-structure', [CurriculumController::class, 'cloneStructure'])->name('curricula.clone-structure');
     Route::post('admin/curricula/{curriculum}/submit-for-approval', [CurriculumController::class, 'submitForApproval'])->name('curricula.submit-approval');
     Route::patch('admin/curricula/{curriculum}/retire', [CurriculumController::class, 'retire'])->name('curricula.retire');
+    Route::patch('admin/curricula/{curriculum}/restore', [CurriculumController::class, 'restore'])->name('curricula.restore');
     Route::get('admin/curricula/{curriculum}/structure/terms', [CurriculumStructureController::class, 'terms'])->name('curricula.structure.terms');
     Route::get('admin/curricula/{curriculum}/clone-targets/{targetCurriculum}/terms', [CurriculumStructureController::class, 'cloneTargetTerms'])->name('curricula.clone-target-terms');
     Route::post('admin/curricula/{curriculum}/structure/terms', [CurriculumStructureController::class, 'storeTerm'])->name('curricula.structure.terms.store');
