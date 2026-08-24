@@ -18,6 +18,8 @@
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
+composer.json
+composer.lock
 Homestead.yaml
 npm-debug.log
 yarn-error.log
