@@ -392,3 +392,14 @@ Submit readiness is supplied authoritatively by Laravel as `can_submit_for_appro
 - Destructive action uses `Eraser` icon + destructive styling.
 - Require exact entity code confirmation.
 - Disable action when environment safety or downstream-reference checks fail.
+
+## Scalable configuration menus
+
+For a master record with multiple growing configuration subsections, do not place every subsection as a separate table-row button.
+
+Use:
+`Configure → subsection menu`
+
+Keep independent lifecycle actions such as Edit, Validate, Retire or Approval separate when they operate on the parent record as a whole.
+
+Academic Policies is the reference implementation of this pattern.

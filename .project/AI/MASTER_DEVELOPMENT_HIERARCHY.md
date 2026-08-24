@@ -164,7 +164,19 @@ Handled through College-scoped roles:
 - Course Registration
 - Elective Selection
 - Major / Minor Selection
+- Credit Transfer & Exemption [PLANNED — implement only after Student Academic Lifecycle foundation]
+  - Credit Transfer Request
+  - Credit Exemption Request
+  - Supporting Documents
+  - Academic Equivalence / Verification
+  - Approval Workflow
+  - Approved / Rejected Decision
+  - Credit Recognition
 - Credit Ledger
+  - Earned Credits
+  - Transferred Credits
+  - Exempted / Recognized Credits
+  - Credit Category Summary
 - Academic Status
 - Year Back / Detention
 - Re-admission
@@ -459,3 +471,170 @@ A validation PASS is tied to the exact submitted structure using a stored finger
 
 ### Development/Test Cleanup Rule — 2026-08-22
 Testing convenience must not weaken normal business deletion rules. Test cleanup is an explicitly permissioned, environment-controlled maintenance path with dependency checks. Production business data continues to follow normal lifecycle/history rules.
+
+## ATTENDANCE CONDONATION & SPECIAL EXEMPTION — PLANNED CONTROLLED WORKFLOW
+
+This workflow is **PLANNED** for the future Attendance / Examination implementation. Academic Policy Phase 2 only defines whether these processes are permitted and their limits; it does not process student requests.
+
+```text
+14. ATTENDANCE
+├── Attendance Entry
+├── Attendance Correction
+│   ├── Correction Request
+│   ├── Approval / Rejection
+│   └── Correction History
+├── Attendance Calculation
+│   ├── Course-wise
+│   ├── Term-wise
+│   └── Overall
+├── Attendance Percentage
+├── Short Attendance
+│
+├── Attendance Condonation [PLANNED]
+│   ├── Read Applicable Academic Policy
+│   ├── Check Condonation Allowed
+│   ├── Check Minimum Attendance / Maximum Shortage
+│   ├── Condonation Request
+│   ├── Academic Verification
+│   ├── Approval / Rejection
+│   └── Condonation History
+│
+├── Medical / Special Attendance Exemption [PLANNED]
+│   ├── Read Applicable Academic Policy
+│   ├── Check Special Exemption Allowed
+│   ├── Exemption Request
+│   ├── Supporting Documents
+│   ├── Academic Verification
+│   ├── Approval / Rejection
+│   └── Exemption History
+│
+├── Final Attendance Eligibility
+│   ├── Normal Attendance Satisfied
+│   ├── Approved Condonation Applied
+│   └── Approved Special Exemption Applied
+│
+└── Examination Eligibility Integration [PLANNED]
+    └── If policy says attendance is required for exam eligibility,
+        Examination must consume the final Attendance Eligibility result.
+```
+
+### Mandatory relationship
+
+```text
+Academic Policy Attendance Rule
+        ↓
+Actual Student Attendance
+        ↓
+Shortage Evaluation
+        ↓
+Normal Pass OR Condonation OR Special Exemption
+        ↓
+Final Attendance Eligibility
+        ↓
+Examination Eligibility
+```
+
+**Rule:** Condonation and medical/special exemption never alter raw attendance. They create approved eligibility decisions with full history and audit trail.
+
+## ACADEMIC POLICY PHASE 3 — ASSESSMENT / EXAMINATION RULES
+
+Implemented policy configuration:
+
+```text
+Academic Policy
+├── Credit / Completion Policy       [IMPLEMENTED]
+├── Attendance Policy                [IMPLEMENTED]
+├── Assessment / Examination Rules   [IMPLEMENTED]
+│   ├── Minimum Overall Pass %
+│   ├── Separate Component Pass Required
+│   ├── Absence Result Rule
+│   ├── Grace Marks Permission + Maximum
+│   ├── Supplementary Exam Permission
+│   └── Improvement Exam Permission
+├── Grading Rules                     [NEXT POLICY PHASE]
+└── Promotion / Progression Rules     [PLANNED]
+```
+
+Assessment component definitions are not hard-coded here. Future Internal Assessment / Examination setup owns configurable components and their marks/weightage. Academic Policy supplies governing rules consumed by those modules.
+
+## ACADEMIC POLICY PHASE 4 — GRADING RULES
+```text
+Academic Policy
+├── Credit / Completion       [IMPLEMENTED]
+├── Attendance                [IMPLEMENTED]
+├── Assessment / Examination  [IMPLEMENTED]
+├── Grading Rules             [IMPLEMENTED]
+│   ├── Grading Basis
+│   ├── Dynamic Grade Bands
+│   ├── Grade Point Scale
+│   ├── SGPA / CGPA Controls
+│   └── Rounding
+└── Promotion / Progression   [NEXT]
+```
+
+## ACADEMIC POLICY PHASE 5 — PROMOTION / PROGRESSION
+
+```text
+Academic Policy
+├── Credit / Completion       [IMPLEMENTED]
+├── Attendance                [IMPLEMENTED]
+├── Assessment / Examination  [IMPLEMENTED]
+├── Grading                   [IMPLEMENTED]
+└── Promotion / Progression   [IMPLEMENTED]
+    ├── Evaluation Level
+    ├── Minimum Credits / SGPA / CGPA
+    ├── Backlog Limit
+    ├── Mandatory Course Passing
+    ├── Carry Forward / ATKT Permission
+    ├── Maximum Attempts
+    ├── Detention
+    ├── Year Back
+    └── Re-admission
+```
+
+Future student processing remains under Student Academic Lifecycle / Result & Progression. Policy only defines governing rules.
+
+## PHASE 5 CORRECTION — MULTIPLE PROGRESSION RULE SETS
+
+The earlier single Promotion / Progression record is superseded.
+
+Canonical structure:
+
+```text
+Promotion / Progression Policy
+├── Default / All Stages Rule [optional, max 1]
+└── Specific Rule Sets [0..N]
+    ├── Curriculum
+    ├── Source Term(s) [1..N]
+    ├── Progress To Term
+    ├── Evaluation Mode
+    │   ├── COMBINED
+    │   └── EACH_TERM
+    ├── Credit / SGPA / CGPA thresholds
+    ├── Backlog / Mandatory Course controls
+    ├── Carry Forward / ATKT
+    ├── Attempts
+    ├── Detention
+    ├── Year Back
+    └── Re-admission
+```
+
+Specific mapped rule overrides the Default rule at the matching progression checkpoint.
+
+## ACADEMIC POLICY LIFECYCLE CLOSED
+
+Academic Policy now follows the mandatory governance chain:
+
+```text
+Policy Header
+→ Configure Rule Sections
+→ Validate
+→ Submit
+→ Approval Workflow
+→ ACTIVE
+→ Amendment / New Version when change is required
+→ Revalidate
+→ Reapprove
+```
+
+Direct editing of approved policy is prohibited.

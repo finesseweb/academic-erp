@@ -2,6 +2,13 @@
 
 use App\Http\Controllers\AcademicDisciplineController;
 use App\Http\Controllers\AcademicSessionController;
+use App\Http\Controllers\AcademicPolicyController;
+use App\Http\Controllers\AcademicPolicyApprovalController;
+use App\Http\Controllers\AcademicPolicyCreditCompletionRuleController;
+use App\Http\Controllers\AcademicPolicyAttendanceRuleController;
+use App\Http\Controllers\AcademicPolicyAssessmentExamRuleController;
+use App\Http\Controllers\AcademicPolicyGradingRuleController;
+use App\Http\Controllers\AcademicPolicyProgressionRuleController;
 use App\Http\Controllers\ApprovalWorkflowController;
 use App\Http\Controllers\ApprovalRequestController;
 use App\Http\Controllers\CurriculumController;
@@ -76,6 +83,8 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('admin/system-maintenance/test-data-cleanup', [TestDataCleanupController::class, 'index'])->name('test-data-cleanup.index');
     Route::delete('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}', [TestDataCleanupController::class, 'destroyCurriculum'])->name('test-data-cleanup.curricula.destroy');
     Route::post('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}/reset-approval', [TestDataCleanupController::class, 'resetCurriculumApproval'])->name('test-data-cleanup.curricula.reset-approval');
+    Route::delete('admin/system-maintenance/test-data-cleanup/academic-policies/{academicPolicy}', [TestDataCleanupController::class, 'destroyAcademicPolicy'])->name('test-data-cleanup.academic-policies.destroy');
+    Route::post('admin/system-maintenance/test-data-cleanup/academic-policies/{academicPolicy}/reset-approval', [TestDataCleanupController::class, 'resetAcademicPolicyApproval'])->name('test-data-cleanup.academic-policies.reset-approval');
     Route::delete('admin/system-maintenance/test-data-cleanup/{type}/{id}', [TestDataCleanupController::class, 'destroyMaster'])->name('test-data-cleanup.master.destroy');
 
     Route::get('admin/academic-sessions', [AcademicSessionController::class, 'index'])->name('academic-sessions.index');
@@ -111,6 +120,25 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/admin/courses', [CourseController::class, 'store'])->name('courses.store');
     Route::patch('/admin/courses/{course}', [CourseController::class, 'update'])->name('courses.update');
     Route::patch('/admin/courses/{course}/status', [CourseController::class, 'updateStatus'])->name('courses.status');
+    Route::get('admin/academic-policies', [AcademicPolicyController::class, 'index'])->name('academic-policies.index');
+    Route::post('admin/academic-policies', [AcademicPolicyController::class, 'store'])->name('academic-policies.store');
+    Route::patch('admin/academic-policies/{academicPolicy}', [AcademicPolicyController::class, 'update'])->name('academic-policies.update');
+    Route::post('admin/academic-policies/{academicPolicy}/validate', [AcademicPolicyController::class, 'validatePolicy'])->name('academic-policies.validate');
+    Route::post('admin/academic-policies/{academicPolicy}/submit-for-approval', [AcademicPolicyController::class, 'submitForApproval'])->name('academic-policies.submit-approval');
+    Route::post('admin/academic-policies/{academicPolicy}/amend', [AcademicPolicyController::class, 'amend'])->name('academic-policies.amend');
+    Route::post('admin/academic-policies/{academicPolicy}/clone-full', [AcademicPolicyController::class, 'cloneFullPolicy'])->name('academic-policies.clone-full');
+    Route::get('admin/academic-policies/approval-inbox', [AcademicPolicyApprovalController::class, 'index'])->name('academic-policies.approval-inbox');
+    Route::post('admin/academic-policies/approval-inbox/{approvalRequest}/decision', [AcademicPolicyApprovalController::class, 'decide'])->name('academic-policies.approval-inbox.decision');
+    Route::get('admin/academic-policies/{academicPolicy}/credit-completion', [AcademicPolicyCreditCompletionRuleController::class, 'edit'])->name('academic-policies.credit-completion.edit');
+    Route::put('admin/academic-policies/{academicPolicy}/credit-completion', [AcademicPolicyCreditCompletionRuleController::class, 'update'])->name('academic-policies.credit-completion.update');
+    Route::get('admin/academic-policies/{academicPolicy}/attendance', [AcademicPolicyAttendanceRuleController::class, 'edit'])->name('academic-policies.attendance.edit');
+    Route::put('admin/academic-policies/{academicPolicy}/attendance', [AcademicPolicyAttendanceRuleController::class, 'update'])->name('academic-policies.attendance.update');
+    Route::get('admin/academic-policies/{academicPolicy}/assessment-examination', [AcademicPolicyAssessmentExamRuleController::class, 'edit'])->name('academic-policies.assessment-examination.edit');
+    Route::put('admin/academic-policies/{academicPolicy}/assessment-examination', [AcademicPolicyAssessmentExamRuleController::class, 'update'])->name('academic-policies.assessment-examination.update');
+    Route::get('admin/academic-policies/{academicPolicy}/grading', [AcademicPolicyGradingRuleController::class, 'edit'])->name('academic-policies.grading.edit');
+    Route::put('admin/academic-policies/{academicPolicy}/grading', [AcademicPolicyGradingRuleController::class, 'update'])->name('academic-policies.grading.update');
+    Route::get('admin/academic-policies/{academicPolicy}/progression', [AcademicPolicyProgressionRuleController::class, 'edit'])->name('academic-policies.progression.edit');
+    Route::put('admin/academic-policies/{academicPolicy}/progression', [AcademicPolicyProgressionRuleController::class, 'update'])->name('academic-policies.progression.update');
     Route::get('admin/academic-approval/inbox', [ApprovalRequestController::class, 'index'])->name('approval-requests.index');
     Route::post('admin/academic-approval/requests/{approvalRequest}/decision', [ApprovalRequestController::class, 'decide'])->name('approval-requests.decide');
     Route::get('admin/academic-approval/workflows', [ApprovalWorkflowController::class, 'index'])->name('approval-workflows.index');
@@ -122,6 +150,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('admin/curricula/{curriculum}', [CurriculumController::class, 'update'])->name('curricula.update');
     Route::delete('admin/curricula/{curriculum}', [CurriculumController::class, 'destroy'])->name('curricula.destroy');
     Route::post('admin/curricula/{curriculum}/clone-structure', [CurriculumController::class, 'cloneStructure'])->name('curricula.clone-structure');
+    Route::post('admin/curricula/{curriculum}/amend', [CurriculumController::class, 'amend'])->name('curricula.amend');
     Route::post('admin/curricula/{curriculum}/submit-for-approval', [CurriculumController::class, 'submitForApproval'])->name('curricula.submit-approval');
     Route::patch('admin/curricula/{curriculum}/retire', [CurriculumController::class, 'retire'])->name('curricula.retire');
     Route::patch('admin/curricula/{curriculum}/restore', [CurriculumController::class, 'restore'])->name('curricula.restore');

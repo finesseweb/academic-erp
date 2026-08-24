@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AcademicPolicy;
 use App\Models\Curriculum;
 use App\Models\University;
 use App\Services\TestDataCleanupService;
@@ -54,6 +55,16 @@ class TestDataCleanupController extends Controller
             })
             ->values();
 
+        $academicPolicies = AcademicPolicy::query()
+            ->where('university_id', $university->id)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (AcademicPolicy $policy) =>
+                $this->service
+                    ->academicPolicyCleanupPreview($policy)
+            )
+            ->values();
+
         return Inertia::render(
             'admin/system-maintenance/test-data-cleanup',
             [
@@ -61,6 +72,7 @@ class TestDataCleanupController extends Controller
                     (bool) config('test-data-cleanup.enabled'),
                 'environment' => app()->environment(),
                 'curricula' => $curricula,
+                'academicPolicies' => $academicPolicies,
                 'entities' =>
                     $this->service
                         ->listMaintenanceEntities($university->id),
@@ -107,6 +119,48 @@ class TestDataCleanupController extends Controller
         return back()->with(
             'success',
             'Selected test Curriculum and dependent test structure were cleaned successfully.'
+        );
+    }
+
+    public function resetAcademicPolicyApproval(
+        Request $request,
+        AcademicPolicy $academicPolicy
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+        $this->confirmCode(
+            $request,
+            (string) $academicPolicy->code
+        );
+
+        $this->service->resetAcademicPolicyApproval(
+            $academicPolicy,
+            $request->user()->id
+        );
+
+        return back()->with(
+            'success',
+            'Test Academic Policy approval state reset to DRAFT / NOT_SUBMITTED.'
+        );
+    }
+
+    public function destroyAcademicPolicy(
+        Request $request,
+        AcademicPolicy $academicPolicy
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+        $this->confirmCode(
+            $request,
+            (string) $academicPolicy->code
+        );
+
+        $this->service->cleanupAcademicPolicy(
+            $academicPolicy,
+            $request->user()->id
+        );
+
+        return back()->with(
+            'success',
+            'Selected Academic Policy test version chain and dependent policy configuration were cleaned successfully.'
         );
     }
 

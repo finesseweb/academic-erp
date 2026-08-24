@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AcademicPolicy;
 use App\Models\Curriculum;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,21 @@ class TestDataCleanupService
         ['students', 'curriculum_id'],
         ['admissions', 'curriculum_id'],
         ['admission_applications', 'curriculum_id'],
+        ['academic_policies', 'curriculum_id'],
+        ['academic_policy_progression_rule_sets', 'curriculum_id'],
+    ];
+
+    private const ACADEMIC_POLICY_DOWNSTREAM_REFERENCES = [
+        ['course_offerings', 'academic_policy_id'],
+        ['student_academic_records', 'academic_policy_id'],
+        ['student_academic_statuses', 'academic_policy_id'],
+        ['student_results', 'academic_policy_id'],
+        ['results', 'academic_policy_id'],
+        ['semester_results', 'academic_policy_id'],
+        ['grade_cards', 'academic_policy_id'],
+        ['transcripts', 'academic_policy_id'],
+        ['student_progression_decisions', 'academic_policy_id'],
+        ['student_attendance_eligibilities', 'academic_policy_id'],
     ];
 
     public function curriculumCleanupPreview(Curriculum $curriculum): array
@@ -226,6 +242,338 @@ class TestDataCleanupService
         });
     }
 
+
+    public function academicPolicyCleanupPreview(
+        AcademicPolicy $policy
+    ): array {
+        $chainIds = $this->academicPolicyChainIds($policy->id);
+
+        $approvalRequestIds = Schema::hasTable('approval_requests')
+            ? DB::table('approval_requests')
+                ->where('subject_type', 'ACADEMIC_POLICY')
+                ->whereIn('subject_id', $chainIds)
+                ->pluck('id')
+            : collect();
+
+        $ruleSetIds = Schema::hasTable(
+            'academic_policy_progression_rule_sets'
+        )
+            ? DB::table('academic_policy_progression_rule_sets')
+                ->whereIn('academic_policy_id', $chainIds)
+                ->pluck('id')
+            : collect();
+
+        $downstream = $this->downstreamReferencesForIds(
+            $chainIds,
+            self::ACADEMIC_POLICY_DOWNSTREAM_REFERENCES
+        );
+
+        return [
+            'id' => $policy->id,
+            'code' => $policy->code,
+            'name' => $policy->name,
+            'version' => $policy->version,
+            'lifecycle_status' => $policy->lifecycle_status,
+            'approval_status' =>
+                $policy->approval_status ?? 'NOT_SUBMITTED',
+            'is_current_version' =>
+                (bool) ($policy->is_current_version ?? false),
+            'scope_type' => $policy->scope_type,
+            'chain_versions' => $chainIds->count(),
+            'approval_requests' => $approvalRequestIds->count(),
+            'approval_request_stages' =>
+                Schema::hasTable('approval_request_stages')
+                    ? DB::table('approval_request_stages')
+                        ->whereIn(
+                            'approval_request_id',
+                            $approvalRequestIds
+                        )
+                        ->count()
+                    : 0,
+            'credit_completion_rules' =>
+                $this->countWhereIn(
+                    'academic_policy_credit_completion_rules',
+                    'academic_policy_id',
+                    $chainIds
+                ),
+            'credit_category_requirements' =>
+                $this->countWhereIn(
+                    'academic_policy_credit_category_requirements',
+                    'academic_policy_id',
+                    $chainIds
+                ),
+            'attendance_rules' =>
+                $this->countWhereIn(
+                    'academic_policy_attendance_rules',
+                    'academic_policy_id',
+                    $chainIds
+                ),
+            'assessment_exam_rules' =>
+                $this->countWhereIn(
+                    'academic_policy_assessment_exam_rules',
+                    'academic_policy_id',
+                    $chainIds
+                ),
+            'grading_rules' =>
+                $this->countWhereIn(
+                    'academic_policy_grading_rules',
+                    'academic_policy_id',
+                    $chainIds
+                ),
+            'grade_bands' =>
+                $this->countWhereIn(
+                    'academic_policy_grade_bands',
+                    'academic_policy_id',
+                    $chainIds
+                ),
+            'progression_rule_sets' => $ruleSetIds->count(),
+            'progression_rule_terms' =>
+                $this->countWhereIn(
+                    'academic_policy_progression_rule_terms',
+                    'progression_rule_set_id',
+                    $ruleSetIds
+                ),
+            'downstream_references' => $downstream,
+            'can_cleanup' => count($downstream) === 0,
+            'can_reset_approval' =>
+                count($downstream) === 0 &&
+                $chainIds->count() === 1,
+        ];
+    }
+
+    public function resetAcademicPolicyApproval(
+        AcademicPolicy $policy,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        $preview = $this->academicPolicyCleanupPreview($policy);
+
+        if (count($preview['downstream_references']) > 0) {
+            throw ValidationException::withMessages([
+                'academic_policy' =>
+                    'This Academic Policy already has downstream operational references. Approval reset is blocked.',
+            ]);
+        }
+
+        if ((int) $preview['chain_versions'] > 1) {
+            throw ValidationException::withMessages([
+                'academic_policy' =>
+                    'Approval reset is blocked for a version chain. Clean the complete test policy chain instead, or reset a standalone test policy.',
+            ]);
+        }
+
+        return DB::transaction(function () use (
+            $policy,
+            $preview,
+            $actorId
+        ) {
+            $requestIds = Schema::hasTable('approval_requests')
+                ? DB::table('approval_requests')
+                    ->where('subject_type', 'ACADEMIC_POLICY')
+                    ->where('subject_id', $policy->id)
+                    ->pluck('id')
+                : collect();
+
+            if (
+                Schema::hasTable('approval_request_stages') &&
+                $requestIds->isNotEmpty()
+            ) {
+                DB::table('approval_request_stages')
+                    ->whereIn('approval_request_id', $requestIds)
+                    ->delete();
+            }
+
+            if (
+                Schema::hasTable('approval_requests') &&
+                $requestIds->isNotEmpty()
+            ) {
+                DB::table('approval_requests')
+                    ->whereIn('id', $requestIds)
+                    ->delete();
+            }
+
+            DB::table('academic_policies')
+                ->where('id', $policy->id)
+                ->update([
+                    'lifecycle_status' => 'DRAFT',
+                    'approval_status' => 'NOT_SUBMITTED',
+                    'is_current_version' => false,
+                    'superseded_by_id' => null,
+                    'validation_hash' => null,
+                    'validated_at' => null,
+                    'validated_by' => null,
+                    'updated_by' => $actorId,
+                    'updated_at' => now(),
+                ]);
+
+            $this->audit(
+                'TEST_ACADEMIC_POLICY_APPROVAL_RESET',
+                'test_data_cleanup',
+                $policy->id,
+                [
+                    'policy' => $policy->toArray(),
+                    'removed_approval_requests' =>
+                        $preview['approval_requests'],
+                    'removed_approval_request_stages' =>
+                        $preview['approval_request_stages'],
+                ],
+                $actorId
+            );
+
+            return $preview;
+        });
+    }
+
+    public function cleanupAcademicPolicy(
+        AcademicPolicy $policy,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        $preview = $this->academicPolicyCleanupPreview($policy);
+
+        if (count($preview['downstream_references']) > 0) {
+            throw ValidationException::withMessages([
+                'academic_policy' =>
+                    'This Academic Policy version chain is referenced by operational data and cannot be removed by Test Data Cleanup.',
+            ]);
+        }
+
+        return DB::transaction(function () use (
+            $policy,
+            $preview,
+            $actorId
+        ) {
+            $chainIds = $this->academicPolicyChainIds($policy->id);
+
+            $requestIds = Schema::hasTable('approval_requests')
+                ? DB::table('approval_requests')
+                    ->where('subject_type', 'ACADEMIC_POLICY')
+                    ->whereIn('subject_id', $chainIds)
+                    ->pluck('id')
+                : collect();
+
+            if (
+                Schema::hasTable('approval_request_stages') &&
+                $requestIds->isNotEmpty()
+            ) {
+                DB::table('approval_request_stages')
+                    ->whereIn('approval_request_id', $requestIds)
+                    ->delete();
+            }
+
+            if (
+                Schema::hasTable('approval_requests') &&
+                $requestIds->isNotEmpty()
+            ) {
+                DB::table('approval_requests')
+                    ->whereIn('id', $requestIds)
+                    ->delete();
+            }
+
+            $ruleSetIds = Schema::hasTable(
+                'academic_policy_progression_rule_sets'
+            )
+                ? DB::table(
+                    'academic_policy_progression_rule_sets'
+                )
+                    ->whereIn('academic_policy_id', $chainIds)
+                    ->pluck('id')
+                : collect();
+
+            if (
+                Schema::hasTable(
+                    'academic_policy_progression_rule_terms'
+                ) &&
+                $ruleSetIds->isNotEmpty()
+            ) {
+                DB::table(
+                    'academic_policy_progression_rule_terms'
+                )
+                    ->whereIn(
+                        'progression_rule_set_id',
+                        $ruleSetIds
+                    )
+                    ->delete();
+            }
+
+            $this->deleteWhereIn(
+                'academic_policy_progression_rule_sets',
+                'academic_policy_id',
+                $chainIds
+            );
+            $this->deleteWhereIn(
+                'academic_policy_progression_rules',
+                'academic_policy_id',
+                $chainIds
+            );
+            $this->deleteWhereIn(
+                'academic_policy_grade_bands',
+                'academic_policy_id',
+                $chainIds
+            );
+            $this->deleteWhereIn(
+                'academic_policy_grading_rules',
+                'academic_policy_id',
+                $chainIds
+            );
+            $this->deleteWhereIn(
+                'academic_policy_assessment_exam_rules',
+                'academic_policy_id',
+                $chainIds
+            );
+            $this->deleteWhereIn(
+                'academic_policy_attendance_rules',
+                'academic_policy_id',
+                $chainIds
+            );
+            $this->deleteWhereIn(
+                'academic_policy_credit_category_requirements',
+                'academic_policy_id',
+                $chainIds
+            );
+            $this->deleteWhereIn(
+                'academic_policy_credit_completion_rules',
+                'academic_policy_id',
+                $chainIds
+            );
+
+            // Break the self-version links before deleting the complete
+            // test chain so FK order cannot leave a circular dependency.
+            DB::table('academic_policies')
+                ->whereIn('id', $chainIds)
+                ->update([
+                    'parent_policy_id' => null,
+                    'superseded_by_id' => null,
+                    'updated_at' => now(),
+                ]);
+
+            $before = DB::table('academic_policies')
+                ->whereIn('id', $chainIds)
+                ->get()
+                ->map(fn ($row) => (array) $row)
+                ->all();
+
+            DB::table('academic_policies')
+                ->whereIn('id', $chainIds)
+                ->delete();
+
+            $this->audit(
+                'TEST_ACADEMIC_POLICY_CHAIN_CLEANED',
+                'test_data_cleanup',
+                $policy->id,
+                [
+                    'policies' => $before,
+                    'deleted_counts' => $preview,
+                ],
+                $actorId
+            );
+
+            return $preview;
+        });
+    }
+
     public function listMaintenanceEntities(
         int $universityId
     ): array {
@@ -241,6 +589,12 @@ class TestDataCleanupService
                             'course_category_id',
                             $id
                         ),
+                        'academic_policy_requirements' =>
+                            $this->countIfExists(
+                                'academic_policy_credit_category_requirements',
+                                'course_category_id',
+                                $id
+                            ),
                     ]
                 ),
             'course_types' =>
@@ -271,6 +625,12 @@ class TestDataCleanupService
                                 'program_template_id',
                                 $id
                             ),
+                        'academic_policies' =>
+                            $this->countIfExists(
+                                'academic_policies',
+                                'program_template_id',
+                                $id
+                            ),
                     ]
                 ),
             'disciplines' =>
@@ -298,6 +658,12 @@ class TestDataCleanupService
                             'academic_session_id',
                             $id
                         ),
+                        'academic_policies' =>
+                            $this->countIfExists(
+                                'academic_policies',
+                                'academic_session_id',
+                                $id
+                            ),
                     ]
                 ),
         ];
@@ -326,6 +692,10 @@ class TestDataCleanupService
                     $universityId,
                     [
                         ['courses', 'course_category_id'],
+                        [
+                            'academic_policy_credit_category_requirements',
+                            'course_category_id',
+                        ],
                     ],
                     $actorId
                 ),
@@ -352,6 +722,7 @@ class TestDataCleanupService
                             'program_template_disciplines',
                             'program_template_id',
                         ],
+                        ['academic_policies', 'program_template_id'],
                     ],
                     $actorId
                 ),
@@ -369,6 +740,7 @@ class TestDataCleanupService
                     $universityId,
                     [
                         ['curricula', 'academic_session_id'],
+                        ['academic_policies', 'academic_session_id'],
                     ],
                     $actorId
                 ),
@@ -653,6 +1025,119 @@ class TestDataCleanupService
                     ->orWhere('specialization_id', $id);
             })
             ->count();
+    }
+
+
+    private function academicPolicyChainIds(int $policyId): Collection
+    {
+        if (! Schema::hasTable('academic_policies')) {
+            return collect([$policyId]);
+        }
+
+        $rootId = $policyId;
+
+        while (true) {
+            $parentId = DB::table('academic_policies')
+                ->where('id', $rootId)
+                ->value('parent_policy_id');
+
+            if (! $parentId) {
+                break;
+            }
+
+            $rootId = (int) $parentId;
+        }
+
+        $ids = collect([$rootId]);
+        $frontier = collect([$rootId]);
+
+        while ($frontier->isNotEmpty()) {
+            $children = DB::table('academic_policies')
+                ->whereIn('parent_policy_id', $frontier)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->reject(fn ($id) => $ids->contains($id))
+                ->values();
+
+            if ($children->isEmpty()) {
+                break;
+            }
+
+            $ids = $ids->merge($children)->unique()->values();
+            $frontier = $children;
+        }
+
+        return $ids;
+    }
+
+    private function countWhereIn(
+        string $table,
+        string $column,
+        Collection $ids
+    ): int {
+        if (
+            $ids->isEmpty() ||
+            ! Schema::hasTable($table) ||
+            ! Schema::hasColumn($table, $column)
+        ) {
+            return 0;
+        }
+
+        return DB::table($table)
+            ->whereIn($column, $ids)
+            ->count();
+    }
+
+    private function deleteWhereIn(
+        string $table,
+        string $column,
+        Collection $ids
+    ): void {
+        if (
+            $ids->isEmpty() ||
+            ! Schema::hasTable($table) ||
+            ! Schema::hasColumn($table, $column)
+        ) {
+            return;
+        }
+
+        DB::table($table)
+            ->whereIn($column, $ids)
+            ->delete();
+    }
+
+    private function downstreamReferencesForIds(
+        Collection $ids,
+        array $references
+    ): array {
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $found = [];
+
+        foreach ($references as [$table, $column]) {
+            if (
+                ! Schema::hasTable($table) ||
+                ! Schema::hasColumn($table, $column)
+            ) {
+                continue;
+            }
+
+            $count = DB::table($table)
+                ->whereIn($column, $ids)
+                ->count();
+
+            if ($count > 0) {
+                $found[] = [
+                    'table' => $table,
+                    'column' => $column,
+                    'count' => $count,
+                ];
+            }
+        }
+
+        return $found;
     }
 
     private function countIfExists(

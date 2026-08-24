@@ -40,6 +40,31 @@ type Curriculum = {
     academic_session_name: string | null;
 };
 
+type AcademicPolicy = {
+    id: number;
+    code: string;
+    name: string;
+    version: string;
+    lifecycle_status: string;
+    approval_status: string;
+    is_current_version: boolean;
+    scope_type: string;
+    chain_versions: number;
+    approval_requests: number;
+    approval_request_stages: number;
+    credit_completion_rules: number;
+    credit_category_requirements: number;
+    attendance_rules: number;
+    assessment_exam_rules: number;
+    grading_rules: number;
+    grade_bands: number;
+    progression_rule_sets: number;
+    progression_rule_terms: number;
+    downstream_references: Ref[];
+    can_cleanup: boolean;
+    can_reset_approval: boolean;
+};
+
 type Entity = {
     id: number;
     code: string;
@@ -55,6 +80,7 @@ type Props = {
     enabled: boolean;
     environment: string;
     curricula: Curriculum[];
+    academicPolicies: AcademicPolicy[];
     entities: {
         courses: Entity[];
         course_categories: Entity[];
@@ -67,6 +93,7 @@ type Props = {
 
 type TabKey =
     | 'curriculum'
+    | 'academic_policies'
     | 'courses'
     | 'course_categories'
     | 'course_types'
@@ -75,8 +102,13 @@ type TabKey =
     | 'academic_sessions';
 
 type ActionTarget = {
-    mode: 'reset_approval' | 'cleanup_curriculum' | 'cleanup_master';
-    type?: Exclude<TabKey, 'curriculum'>;
+    mode:
+        | 'reset_approval'
+        | 'cleanup_curriculum'
+        | 'reset_policy_approval'
+        | 'cleanup_academic_policy'
+        | 'cleanup_master';
+    type?: Exclude<TabKey, 'curriculum' | 'academic_policies'>;
     id: number;
     code: string;
     name: string;
@@ -84,6 +116,7 @@ type ActionTarget = {
 
 const tabs: { key: TabKey; label: string }[] = [
     { key: 'curriculum', label: 'Curriculum' },
+    { key: 'academic_policies', label: 'Academic Policies' },
     { key: 'courses', label: 'Courses' },
     { key: 'course_categories', label: 'Course Categories' },
     { key: 'course_types', label: 'Course Types' },
@@ -96,6 +129,7 @@ export default function TestDataCleanup({
     enabled,
     environment,
     curricula,
+    academicPolicies,
     entities,
 }: Props) {
     const [tab, setTab] = useState<TabKey>('curriculum');
@@ -106,7 +140,7 @@ export default function TestDataCleanup({
     });
 
     const currentEntities = useMemo(
-        () => (tab === 'curriculum' ? [] : entities[tab]),
+        () => (tab === 'curriculum' || tab === 'academic_policies' ? [] : entities[tab]),
         [tab, entities],
     );
 
@@ -135,6 +169,28 @@ export default function TestDataCleanup({
         if (target.mode === 'cleanup_curriculum') {
             form.delete(
                 `/admin/system-maintenance/test-data-cleanup/curricula/${target.id}`,
+                {
+                    preserveScroll: true,
+                    onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
+
+        if (target.mode === 'reset_policy_approval') {
+            form.post(
+                `/admin/system-maintenance/test-data-cleanup/academic-policies/${target.id}/reset-approval`,
+                {
+                    preserveScroll: true,
+                    onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
+
+        if (target.mode === 'cleanup_academic_policy') {
+            form.delete(
+                `/admin/system-maintenance/test-data-cleanup/academic-policies/${target.id}`,
                 {
                     preserveScroll: true,
                     onSuccess: () => setTarget(null),
@@ -343,6 +399,110 @@ export default function TestDataCleanup({
                             </div>
                         </CardContent>
                     </Card>
+                ) : tab === 'academic_policies' ? (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <BookOpenCheck className="size-5" />
+                                Academic Policy Test Data
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                                Cleanup is version-chain aware. A clean action removes the complete test policy version chain only when no downstream operational reference exists.
+                            </p>
+                        </CardHeader>
+
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead className="border-b bg-muted/50 text-left">
+                                        <tr>
+                                            <th className="px-4 py-3">Academic Policy</th>
+                                            <th className="px-4 py-3">Status</th>
+                                            <th className="px-4 py-3">Dependencies</th>
+                                            <th className="px-4 py-3">Safety</th>
+                                            <th className="px-4 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {academicPolicies.map((item) => (
+                                            <tr key={item.id} className="border-b last:border-0">
+                                                <td className="px-4 py-4">
+                                                    <div className="font-medium">{item.name}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {item.code} · V{item.version} · {item.scope_type.replaceAll('_', ' ')}
+                                                    </div>
+                                                    <div className="mt-1 text-xs text-muted-foreground">
+                                                        Version chain: {item.chain_versions}
+                                                        {item.is_current_version ? ' · Current' : ''}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    <div>{item.lifecycle_status}</div>
+                                                    <div className="text-xs text-muted-foreground">{item.approval_status}</div>
+                                                </td>
+                                                <td className="px-4 py-4 text-xs">
+                                                    Approvals {item.approval_requests} · Credit {item.credit_completion_rules + item.credit_category_requirements} · Attendance {item.attendance_rules} · Assessment {item.assessment_exam_rules} · Grading {item.grading_rules + item.grade_bands} · Progression {item.progression_rule_sets}
+                                                </td>
+                                                <td className="px-4 py-4 text-xs">
+                                                    {item.downstream_references.length > 0
+                                                        ? 'Blocked: operational references exist'
+                                                        : item.chain_versions > 1
+                                                          ? 'Ready: complete version chain cleanup'
+                                                          : 'Ready for test cleanup'}
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    <div className="flex justify-end gap-1">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            disabled={!enabled || !item.can_reset_approval}
+                                                            onClick={() =>
+                                                                openAction({
+                                                                    mode: 'reset_policy_approval',
+                                                                    id: item.id,
+                                                                    code: item.code,
+                                                                    name: `${item.name} · V${item.version}`,
+                                                                })
+                                                            }
+                                                        >
+                                                            <RotateCcw className="size-4" />
+                                                            Reset Approval
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="text-destructive hover:text-destructive"
+                                                            disabled={!enabled || !item.can_cleanup}
+                                                            onClick={() =>
+                                                                openAction({
+                                                                    mode: 'cleanup_academic_policy',
+                                                                    id: item.id,
+                                                                    code: item.code,
+                                                                    name: `${item.name} · V${item.version}`,
+                                                                })
+                                                            }
+                                                        >
+                                                            <Eraser className="size-4" />
+                                                            {item.chain_versions > 1 ? 'Clean Chain' : 'Clean'}
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {!academicPolicies.length && (
+                                            <tr>
+                                                <td colSpan={5} className="px-6 py-14 text-center text-muted-foreground">
+                                                    No Academic Policy test data found.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
                 ) : (
                     <Card>
                         <CardHeader>
@@ -455,7 +615,7 @@ export default function TestDataCleanup({
                                                                             type:
                                                                                 tab as Exclude<
                                                                                     TabKey,
-                                                                                    'curriculum'
+                                                                                    'curriculum' | 'academic_policies'
                                                                                 >,
                                                                             id:
                                                                                 item.id,
@@ -489,7 +649,8 @@ export default function TestDataCleanup({
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <AlertTriangle className="size-5 text-destructive" />
-                                {target.mode === 'reset_approval'
+                                {target.mode === 'reset_approval' ||
+                                target.mode === 'reset_policy_approval'
                                     ? 'Reset Test Approval'
                                     : 'Clean Test Data'}
                             </CardTitle>
@@ -512,7 +673,11 @@ export default function TestDataCleanup({
                                 <p className="text-sm text-muted-foreground">
                                     {target.mode === 'reset_approval'
                                         ? 'Approval requests/history for this test Curriculum will be removed and the Curriculum will return to DRAFT / NOT_SUBMITTED. Structure is preserved.'
-                                        : 'The selected test record will be permanently removed. Dependency checks are enforced by Laravel.'}
+                                        : target.mode === 'reset_policy_approval'
+                                          ? 'Approval requests/history for this standalone test Academic Policy will be removed and the Policy will return to DRAFT / NOT_SUBMITTED. Configured policy rules are preserved.'
+                                          : target.mode === 'cleanup_academic_policy'
+                                            ? 'The complete Academic Policy test version chain and its policy-rule children will be permanently removed. Cleanup is blocked if operational references exist.'
+                                            : 'The selected test record will be permanently removed. Dependency checks are enforced by Laravel.'}
                                 </p>
 
                                 <div className="space-y-2">
@@ -559,6 +724,11 @@ export default function TestDataCleanup({
                                             }
                                         </p>
                                     )}
+                                    {form.errors.academic_policy && (
+                                        <p className="text-xs text-destructive">
+                                            {form.errors.academic_policy}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="flex justify-end gap-2 border-t pt-4">
@@ -574,8 +744,8 @@ export default function TestDataCleanup({
                                     <Button
                                         type="submit"
                                         variant={
-                                            target.mode ===
-                                            'reset_approval'
+                                            target.mode === 'reset_approval' ||
+                                            target.mode === 'reset_policy_approval'
                                                 ? 'default'
                                                 : 'destructive'
                                         }
@@ -586,10 +756,12 @@ export default function TestDataCleanup({
                                                 target.code
                                         }
                                     >
-                                        {target.mode ===
-                                        'reset_approval'
+                                        {target.mode === 'reset_approval' ||
+                                        target.mode === 'reset_policy_approval'
                                             ? 'Reset Approval'
-                                            : 'Permanently Clean'}
+                                            : target.mode === 'cleanup_academic_policy'
+                                              ? 'Permanently Clean Policy Chain'
+                                              : 'Permanently Clean'}
                                     </Button>
                                 </div>
                             </form>

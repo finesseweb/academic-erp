@@ -17,7 +17,7 @@ class StoreApprovalWorkflowRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:150'],
             'code' => ['required', 'string', 'max:80', 'regex:/^[A-Za-z0-9_-]+$/'],
-            'applies_to' => ['required', Rule::in(['CURRICULUM'])],
+            'applies_to' => ['required', Rule::in(['CURRICULUM', 'ACADEMIC_POLICY'])],
             'description' => ['nullable', 'string', 'max:2000'],
         ];
     }

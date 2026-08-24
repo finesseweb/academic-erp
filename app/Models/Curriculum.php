@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Curriculum extends Model
 {
     protected $fillable = [
+        'parent_curriculum_id',
         'university_id',
         'program_template_id',
         'academic_session_id',
@@ -19,6 +20,9 @@ class Curriculum extends Model
         'effective_to',
         'lifecycle_status',
         'approval_status',
+        'revision_type',
+        'revision_reason',
+        'revision_effective_from',
         'structure_validation_hash',
         'structure_validated_at',
         'structure_validated_by',
@@ -32,7 +36,33 @@ class Curriculum extends Model
         return [
             'effective_from' => 'date',
             'effective_to' => 'date',
+            'revision_effective_from' => 'date',
         ];
+    }
+
+
+    public function parentCurriculum(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_curriculum_id');
+    }
+
+    public function amendments(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_curriculum_id');
+    }
+
+    public function hasApprovedSuccessor(): bool
+    {
+        return $this->amendments()
+            ->where('approval_status', 'APPROVED')
+            ->exists();
+    }
+
+    public function isCurrentApprovedVersion(): bool
+    {
+        return $this->lifecycle_status === 'ACTIVE'
+            && ($this->approval_status ?? 'NOT_SUBMITTED') === 'APPROVED'
+            && ! $this->hasApprovedSuccessor();
     }
 
     public function university(): BelongsTo

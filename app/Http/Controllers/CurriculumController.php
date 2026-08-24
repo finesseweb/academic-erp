@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CloneCurriculumStructureRequest;
 use App\Http\Requests\StoreCurriculumRequest;
+use App\Http\Requests\StoreCurriculumAmendmentRequest;
 use App\Http\Requests\SubmitCurriculumApprovalRequest;
 use App\Http\Requests\UpdateCurriculumRequest;
 use App\Models\AcademicSession;
@@ -12,6 +13,7 @@ use App\Models\Curriculum;
 use App\Models\ProgramTemplate;
 use App\Models\University;
 use App\Services\CurriculumCloneService;
+use App\Services\CurriculumAmendmentService;
 use App\Services\ApprovalRequestService;
 use App\Services\CurriculumService;
 use App\Services\CurriculumStructureDeleteService;
@@ -26,6 +28,7 @@ class CurriculumController extends Controller
     public function __construct(
         private readonly CurriculumService $service,
         private readonly CurriculumCloneService $cloneService,
+        private readonly CurriculumAmendmentService $amendmentService,
         private readonly ApprovalRequestService $approvalRequestService,
         private readonly CurriculumStructureDeleteService $deleteService,
         private readonly CurriculumStructureValidationService $structureValidationService
@@ -43,6 +46,13 @@ class CurriculumController extends Controller
             ->with([
                 'programTemplate:id,name,code',
                 'academicSession:id,name,code',
+                'parentCurriculum:id,code,version',
+            ])
+            ->withExists([
+                'amendments as has_approved_successor' => fn ($query) =>
+                    $query->where('approval_status', 'APPROVED'),
+                'amendments as has_open_amendment' => fn ($query) =>
+                    $query->where('lifecycle_status', '!=', 'RETIRED'),
             ])
             ->where('university_id', $university->id)
             ->when($search !== '', function ($query) use ($search) {
@@ -70,10 +80,13 @@ class CurriculumController extends Controller
             )
             ->exists();
 
+        $canAmend = $request->user()->hasPermission('curriculum.update');
+
         $curricula->getCollection()->transform(
             function (Curriculum $curriculum) use (
                 $canSubmitApproval,
-                $hasActiveApprovalWorkflow
+                $hasActiveApprovalWorkflow,
+                $canAmend
             ) {
                 $validationCurrent =
                     $this->structureValidationService
@@ -88,6 +101,43 @@ class CurriculumController extends Controller
                 $curriculum->setAttribute(
                     'structure_validation_current',
                     $validationCurrent
+                );
+
+                $approvedActive =
+                    $curriculum->lifecycle_status === 'ACTIVE' &&
+                    ($curriculum->approval_status ?? 'NOT_SUBMITTED') === 'APPROVED';
+
+                $hasApprovedSuccessor =
+                    (bool) $curriculum->getAttribute('has_approved_successor');
+                $hasOpenAmendment =
+                    (bool) $curriculum->getAttribute('has_open_amendment');
+                $isCurrentVersion = $approvedActive && ! $hasApprovedSuccessor;
+
+                $curriculum->setAttribute(
+                    'is_current_version',
+                    $isCurrentVersion
+                );
+                $curriculum->setAttribute(
+                    'is_previous_version',
+                    $approvedActive && $hasApprovedSuccessor
+                );
+                $curriculum->setAttribute(
+                    'can_amend',
+                    $canAmend && $isCurrentVersion && ! $hasOpenAmendment
+                );
+                $curriculum->setAttribute(
+                    'amendment_hint',
+                    ! $approvedActive
+                        ? null
+                        : (
+                            $hasApprovedSuccessor
+                                ? 'A later approved version exists. Amend the current version instead.'
+                                : (
+                                    $hasOpenAmendment
+                                        ? 'An amendment already exists for this version.'
+                                        : null
+                                )
+                        )
                 );
 
                 $curriculum->setAttribute(
@@ -180,6 +230,25 @@ class CurriculumController extends Controller
         $this->service->restore($curriculum, $request->user()->id);
 
         return back()->with('success', 'Curriculum restored successfully.');
+    }
+
+
+    public function amend(
+        StoreCurriculumAmendmentRequest $request,
+        Curriculum $curriculum
+    ): RedirectResponse {
+        $amendment = $this->amendmentService->create(
+            $curriculum,
+            $request->validated(),
+            $request->user()->id
+        );
+
+        return redirect()
+            ->route('curricula.structure.terms', $amendment)
+            ->with(
+                'success',
+                'Curriculum amendment created as an editable Draft. Make the required changes, Validate Structure, then submit it for approval.'
+            );
     }
 
 

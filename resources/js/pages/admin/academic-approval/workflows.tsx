@@ -18,7 +18,7 @@ type Workflow = {
     id: number;
     name: string;
     code: string;
-    applies_to: 'CURRICULUM';
+    applies_to: 'CURRICULUM' | 'ACADEMIC_POLICY';
     description?: string | null;
     status: 'ACTIVE' | 'INACTIVE';
     stages: Stage[];
@@ -88,9 +88,9 @@ export default function ApprovalWorkflows({ workflows, roles, permissions }: Pro
                     <CardHeader><CardTitle className="flex items-center gap-2"><GitBranch className="size-5" />New Workflow</CardTitle></CardHeader>
                     <CardContent>
                         <form onSubmit={submitWorkflow} className="grid gap-4 md:grid-cols-4">
-                            <div><label className="text-sm font-medium">Workflow Name *</label><Input value={workflowForm.data.name} onChange={e => workflowForm.setData('name', e.target.value)} placeholder="Curriculum Approval" />{workflowForm.errors.name && <p className="text-xs text-destructive">{workflowForm.errors.name}</p>}</div>
-                            <div><label className="text-sm font-medium">Code *</label><Input value={workflowForm.data.code} onChange={e => workflowForm.setData('code', e.target.value)} placeholder="CURRICULUM_APPROVAL" />{workflowForm.errors.code && <p className="text-xs text-destructive">{workflowForm.errors.code}</p>}</div>
-                            <div><label className="text-sm font-medium">Applies To *</label><Select value={workflowForm.data.applies_to} onValueChange={v => workflowForm.setData('applies_to', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="CURRICULUM">Curriculum</SelectItem></SelectContent></Select></div>
+                            <div><label className="text-sm font-medium">Workflow Name *</label><Input value={workflowForm.data.name} onChange={e => workflowForm.setData('name', e.target.value)} placeholder="e.g. Academic Policy Approval" />{workflowForm.errors.name && <p className="text-xs text-destructive">{workflowForm.errors.name}</p>}</div>
+                            <div><label className="text-sm font-medium">Code *</label><Input value={workflowForm.data.code} onChange={e => workflowForm.setData('code', e.target.value)} placeholder="e.g. ACADEMIC_POLICY_APPROVAL" />{workflowForm.errors.code && <p className="text-xs text-destructive">{workflowForm.errors.code}</p>}</div>
+                            <div><label className="text-sm font-medium">Applies To *</label><Select value={workflowForm.data.applies_to} onValueChange={v => workflowForm.setData('applies_to', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="CURRICULUM">Curriculum</SelectItem><SelectItem value="ACADEMIC_POLICY">Academic Policy</SelectItem></SelectContent></Select></div>
                             <div className="flex items-end"><Button type="submit" disabled={workflowForm.processing}><Plus className="size-4" />Create Workflow</Button></div>
                             <div className="md:col-span-4"><label className="text-sm font-medium">Description</label><Input value={workflowForm.data.description} onChange={e => workflowForm.setData('description', e.target.value)} placeholder="Optional workflow purpose" /></div>
                         </form>
@@ -111,7 +111,7 @@ export default function ApprovalWorkflows({ workflows, roles, permissions }: Pro
                                     {workflows.map(workflow => (
                                         <tr key={workflow.id} className="border-b last:border-0 align-top">
                                             <td className="px-4 py-4"><div className="font-medium">{workflow.name}</div><div className="text-xs text-muted-foreground">{workflow.code}</div></td>
-                                            <td className="px-4 py-4">Curriculum</td>
+                                            <td className="px-4 py-4">{workflow.applies_to === 'ACADEMIC_POLICY' ? 'Academic Policy' : 'Curriculum'}</td>
                                             <td className="px-4 py-4">
                                                 {workflow.stages.length === 0 ? <span className="text-muted-foreground">No levels added</span> :
                                                     <div className="space-y-1">{workflow.stages.map(stage => <div key={stage.id} className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full border text-xs">{stage.sequence_no}</span><span>{stage.name}</span><span className="text-xs text-muted-foreground">({stage.approver_role.name})</span></div>)}</div>}

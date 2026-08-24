@@ -42,9 +42,11 @@ Curriculum permissions are University-scoped, are not College-delegable and are 
 granted to the protected global `SUPER_ADMIN` role when the implementation migration runs.
 
 ## Lifecycle
-- No hard delete.
-- `curriculum.disable` retires a Curriculum Header by changing lifecycle to `RETIRED`.
-- Later structure-locking/activation rules are deferred until Manage Structure exists.
+- DRAFT setup records may be hard-deleted only through the implemented guarded delete path before operational assignment.
+- `curriculum.disable` retires an eligible Curriculum Header by changing lifecycle to `RETIRED`.
+- `ACTIVE / APPROVED` Curriculum data is read-only. Approved academic changes use `Amend Curriculum`, never direct edit.
+- Amendment creates a linked DRAFT version in the same Program Template + Academic Session and copies the complete structure.
+- After amendment approval, the new approved version is Current and the source approved version remains Previous history.
 
 ## Audit
 - `CURRICULUM_CREATED`
@@ -73,4 +75,10 @@ The action opens the selected Curriculum Header context at:
 Future Curriculum Structure children are not shown until their approved milestone.
 
 ## Table / Action UI Reference
-Curriculum Header uses the Permission Catalog table language for header background, row spacing, hover state and status pills. Actions remain compact icon + text controls: `Structure`, `Edit`, `Retire` or `Restore`.
+Curriculum Header uses the Permission Catalog table language for header background, row spacing, hover state and status pills. Actions remain compact icon + text controls. Primary actions remain `Structure` and eligible `Edit`; `More` contains lifecycle/governance actions including `Amend Curriculum`, `Clone Structure`, approval, delete/retire/restore as applicable.
+
+
+## Amendment Rule — 2026-08-24
+See `CURRICULUM_AMENDMENT_VERSIONING.md` and decision `007_CURRICULUM_AMENDMENT_VERSIONING.md`.
+
+`Add Curriculum` creates an independent Curriculum header. `Amend Curriculum` creates the next linked version of an already approved Curriculum.

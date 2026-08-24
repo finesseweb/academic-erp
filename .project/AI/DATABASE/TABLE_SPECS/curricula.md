@@ -4,6 +4,7 @@ University-owned versioned Curriculum Header. This table stores only the curricu
 
 ## Core Columns
 - `id`
+- `parent_curriculum_id` — nullable self-FK to the approved version being amended; RESTRICT on delete
 - `university_id` — required University owner; RESTRICT on delete
 - `program_template_id` — required active same-University Program Template; RESTRICT on delete
 - `academic_session_id` — required active same-University Academic Session; RESTRICT on delete
@@ -13,6 +14,10 @@ University-owned versioned Curriculum Header. This table stores only the curricu
 - `effective_from` — optional
 - `effective_to` — optional and cannot precede `effective_from`
 - `lifecycle_status` — `DRAFT|ACTIVE|RETIRED`
+- `approval_status` — approval execution state
+- `revision_type` — nullable controlled amendment classification
+- `revision_reason` — nullable for normal independent curricula; required by amendment creation
+- `revision_effective_from` — optional amendment effective date
 - `description` — optional
 - `created_by`, `updated_by` — nullable actor references; SET NULL on user deletion
 - timestamps
@@ -44,3 +49,22 @@ Lifecycle integrity:
 - create always starts `DRAFT`
 - direct form/API update cannot promote Curriculum to `ACTIVE`
 - final approval controls activation
+
+
+## Amendment / Version Chain — 2026-08-24
+`parent_curriculum_id` creates the approved-version amendment chain.
+
+Rules:
+- root/new Curriculum: `parent_curriculum_id = NULL`
+- amendment: `parent_curriculum_id = source.id`
+- source Program Template and Academic Session are preserved
+- amendment starts `DRAFT / NOT_SUBMITTED` with a cleared structure validation checkpoint
+- complete structure is copied into independent child rows
+- source remains immutable
+- Current/Previous is derived from approved child existence; no `is_current_version` database flag is stored
+
+Index:
+`(parent_curriculum_id, lifecycle_status, approval_status)` supports current/previous and open-amendment checks.
+
+Audit:
+`CURRICULUM_AMENDMENT_CREATED`

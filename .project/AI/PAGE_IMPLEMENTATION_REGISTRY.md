@@ -129,3 +129,25 @@ On `next` / `next N` / `nextN`:
 | Curriculum Manage Structure — Terms / Semesters | University Admin | `/admin/curricula/{curriculum}/structure/terms` | `curriculum.view` / `curriculum.update` | IMPLEMENTED_IN_REPLACEMENT_PACKAGE | 2026-08-22 |
 
 | Course / Paper Mapping | University Admin | `/admin/curricula/{curriculum}/structure/terms/{term}/slots/{slot}/course-mappings` | `curriculum.view` / `curriculum.update` | IMPLEMENTED_IN_REPLACEMENT_PACKAGE | 2026-08-22 |
+
+
+## Curriculum Amendment / Versioning — 2026-08-24
+- Page surface: existing `resources/js/pages/admin/curricula/index.tsx`
+- Action: `More -> Amend Curriculum`
+- Route: `POST /admin/curricula/{curriculum}/amend`
+- Controller: `CurriculumController::amend`
+- Service: `CurriculumAmendmentService`
+- Request: `StoreCurriculumAmendmentRequest`
+- Database: self-linked amendment metadata on `curricula`
+- Status: IMPLEMENTED_IN_REPLACEMENT_PACKAGE; repository apply/QA required
+
+- University Admin / Academic Policies — Phase 1 IMPLEMENTED (package): Header/Master + validation.
+- University Admin / Academic Policy / Credit & Completion — Phase 1 IMPLEMENTED (package).
+- Academic Policy Approval Execution — PENDING integration.
+- University Admin / Academic Policy / Attendance — Phase 2 IMPLEMENTED (package): configurable attendance threshold, calculation level, condonation, exam-eligibility flag, special exemption permission, rounding, validation integration.
+
+| Academic Policy — Assessment / Examination | `/admin/academic-policies/{academicPolicy}/assessment-examination` | `resources/js/pages/admin/academic-policies/assessment-examination.tsx` | IMPLEMENTED — Phase 3 |
+
+| Academic Policy — Grading | `/admin/academic-policies/{academicPolicy}/grading` | `resources/js/pages/admin/academic-policies/grading.tsx` | IMPLEMENTED — Phase 4 |
+
+| Academic Policy — Promotion / Progression | `/admin/academic-policies/{academicPolicy}/progression` | `resources/js/pages/admin/academic-policies/progression.tsx` | IMPLEMENTED — Phase 5 |

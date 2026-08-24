@@ -78,7 +78,7 @@ Key rules:
 - Category and Type are required.
 - Program/Discipline/Specialization, term, credits and L-T-P are not stored directly in this master.
 
-- `curricula` — University-owned versioned Curriculum Header linked to Program Template and Academic Session; lifecycle DRAFT/ACTIVE/RETIRED. See `TABLE_SPECS/curricula.md`.
+- `curricula` — University-owned versioned Curriculum Header linked to Program Template and Academic Session; lifecycle DRAFT/ACTIVE/RETIRED; self-linked amendment/version chain through `parent_curriculum_id`. See `TABLE_SPECS/curricula.md`.
 
 - `curriculum_terms` — ordered Terms / Semesters for one versioned Curriculum Header. See `TABLE_SPECS/curriculum_terms.md`.
 
@@ -89,3 +89,28 @@ Key rules:
 - `curriculum_course_mappings` — maps reusable Course / Subject Master records to curriculum-specific Slots; mapping order is deferred. See `TABLE_SPECS/curriculum_course_mappings.md`.
 
 - `curriculum_slots.credits` — canonical curriculum/version-specific Slot Credit. Credit Summary is derived later.
+
+
+## Curriculum Amendment Schema Update — 2026-08-24
+`curricula` now supports controlled post-approval versioning with `parent_curriculum_id`, `revision_type`, `revision_reason`, and `revision_effective_from`. Current/Previous remains a derived business state rather than a mutable database flag.
+
+## Academic Policies Phase 1
+- `academic_policies` — versioned policy header and scope.
+- `academic_policy_credit_completion_rules` — optional one-to-one general Credit / Completion rule section; contains total-credit/CGPA/duration/transfer/exemption controls only.
+- `academic_policy_credit_category_requirements` — dynamic per-policy Course Category completion thresholds (minimum credits, optional maximum credits, display order). No Major/Minor/etc. columns are hard-coded.
+
+### Academic Policies Phase 2
+- `academic_policy_attendance_rules` — optional one-to-one Attendance Policy section for an Academic Policy version; stores attendance threshold, calculation level, condonation controls, exam-eligibility requirement, special exemption permission, rounding rule, and notes.
+
+### academic_policy_assessment_exam_rules
+One-to-one Assessment / Examination governance configuration for `academic_policies`. Stores general pass/absence/grace/re-attempt permissions. Component-specific structures are intentionally deferred to configurable Assessment Scheme masters.
+
+### academic_policy_grading_rules / academic_policy_grade_bands
+Version-bound grading configuration with dynamic percentage-to-grade bands.
+
+### academic_policy_progression_rules
+One-to-one, version-bound Academic Policy configuration for promotion/progression thresholds and controlled carry-forward/detention/year-back/re-admission permissions.
+
+### academic_policy_progression_rule_sets / academic_policy_progression_rule_terms
+
+Dynamic version-bound progression checkpoints. Multiple source Curriculum Terms can be mapped to one target Term. This replaces legacy `academic_policy_progression_rules`.

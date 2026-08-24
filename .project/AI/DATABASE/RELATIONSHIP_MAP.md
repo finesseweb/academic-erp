@@ -129,6 +129,7 @@ This keeps Course / Subject Master reusable across curricula and prevents curric
 ## Curriculum Header Relationships — 2026-08-22
 | Child FK | Parent | Cardinality | Required | Delete | Meaning |
 |---|---|---|---|---|---|
+| `curricula.parent_curriculum_id` | `curricula.id` | many-to-one self relationship | No | RESTRICT | Source approved Curriculum for an amendment/version link |
 | `curricula.university_id` | `universities.id` | many-to-one | Yes | RESTRICT | University owner |
 | `curricula.program_template_id` | `program_templates.id` | many-to-one | Yes | RESTRICT | Program blueprint being versioned |
 | `curricula.academic_session_id` | `academic_sessions.id` | many-to-one | Yes | RESTRICT | Session governing the curriculum version |
@@ -160,3 +161,57 @@ This keeps Course / Subject Master reusable across curricula and prevents curric
 
 | `curriculum_course_mappings.discipline_id` | `academic_disciplines.id` | many-to-one | New mappings: Yes | RESTRICT | Program Template Discipline context |
 | `curriculum_course_mappings.specialization_id` | `academic_disciplines.id` | many-to-one | No | RESTRICT | Optional Program Template Specialization context |
+
+
+## Curriculum Amendment Join Path — 2026-08-24
+`curricula (approved source) -> curricula.parent_curriculum_id (amendment)`
+
+The chain is intentionally single-successor in application rules. An unapproved child does not replace the current approved parent. An `ACTIVE / APPROVED` child makes its parent a Previous approved version.
+
+## Academic Policy relationships
+`universities -> academic_policies`
+`academic_sessions -> academic_policies`
+`program_templates -> academic_policies` (scope-dependent)
+`curricula -> academic_policies` (scope-dependent)
+`academic_policies -> academic_policies` (parent revision / superseded version)
+`academic_policies -> academic_policy_credit_completion_rules` (1:0..1)
+
+
+## Academic Policy Credit / Completion — Dynamic Category Requirements
+- `academic_policies.id` 1 -> 0..1 `academic_policy_credit_completion_rules.academic_policy_id`
+- `academic_policies.id` 1 -> 0..N `academic_policy_credit_category_requirements.academic_policy_id`
+- `course_categories.id` 1 -> 0..N `academic_policy_credit_category_requirements.course_category_id`
+- Requirement rows use the same University-owned Course Category Master already used by Curriculum Slots.
+- A Course Category may appear only once per Academic Policy version.
+
+## Academic Policy Attendance
+`academic_policies (1) -> (0..1) academic_policy_attendance_rules`
+
+Rules:
+- Attendance Rule belongs to exactly one Academic Policy version.
+- Academic Policy may omit Attendance Rule when attendance regulation is not defined at that scope/version.
+- Attendance Rule changes invalidate the Academic Policy validation checkpoint.
+- Future Attendance/Examination execution must resolve the applicable ACTIVE policy by scope and read this rule; it must not hard-code attendance thresholds.
+
+### Academic Policy Assessment / Examination
+`academic_policies (1) → (0..1) academic_policy_assessment_exam_rules`
+
+The rule is version-bound to its Academic Policy. Future Assessment Scheme / Examination / Result modules consume the resolved applicable policy; they must not duplicate these governance values.
+
+### Academic Policy Grading
+`academic_policies (1) → (0..1) academic_policy_grading_rules`
+`academic_policies (1) → (0..N) academic_policy_grade_bands`
+
+### Academic Policy Promotion / Progression
+`academic_policies (1) → (0..1) academic_policy_progression_rules`
+
+Future Student Academic Lifecycle consumes the resolved applicable rule; the policy table does not hold student decisions.
+
+### Progression Rule Sets
+
+`academic_policies (1) → (0..N) academic_policy_progression_rule_sets`
+
+`academic_policy_progression_rule_sets (N) ↔ (N) curriculum_terms`
+through `academic_policy_progression_rule_terms` for source Terms.
+
+Each specific Rule Set may also reference one `target_curriculum_term_id`.
