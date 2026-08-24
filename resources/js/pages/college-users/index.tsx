@@ -1,5 +1,4 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import type { ReactNode } from 'react';
 import {
     KeyRound,
     Pencil,
@@ -9,9 +8,9 @@ import {
     Shield,
     UsersRound,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogClose,
@@ -21,6 +20,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 type U = {
     id: number;
