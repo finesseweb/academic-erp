@@ -76,3 +76,21 @@ Do not enable on live production data.
 
 ## Future Rule
 As later ERP modules are implemented, their operational references must be added to cleanup guards before the module is allowed to be cleaned.
+
+## Academic Policy lifecycle cleanup awareness
+
+Maintenance/Cleanup must recognize `ACADEMIC_POLICY` approval requests and complete Academic Policy version chains. Cleanup remains test-data-only and must not bypass history/reference safeguards.
+
+## Academic Policies tab — IMPLEMENTED
+
+Maintenance UI now exposes `Academic Policies` alongside Curriculum and Academic Masters.
+
+The tab supports:
+- dependency preview;
+- standalone test approval reset;
+- complete test Policy version-chain cleanup;
+- downstream-reference blocking;
+- exact Policy Code confirmation;
+- audit logging.
+
+The implementation reuses the existing Test Data Cleanup permission/environment guard and does not introduce a separate maintenance design.

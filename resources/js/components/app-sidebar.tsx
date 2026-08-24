@@ -169,6 +169,12 @@ const platformItems: TreeNavItem[] = [
                 href: '/admin/curricula',
                 permission: 'curriculum.view',
             },
+            {
+                title: 'Academic Policies',
+                icon: ScrollText,
+                href: '/admin/academic-policies',
+                permission: 'academic_policy.view',
+            },
         ],
     },
     {

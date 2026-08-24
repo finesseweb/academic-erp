@@ -1,22 +1,21 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import {
-    Check,
-    Clock3,
-    RotateCcw,
-    XCircle,
-} from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { Check, RotateCcw, XCircle } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+type SubjectType = 'CURRICULUM' | 'ACADEMIC_POLICY';
+
 type Pending = {
     id: number;
+    subject_type: SubjectType;
+    subject_id: number;
     submitted_at: string;
-    curriculum_id: number;
-    curriculum_name: string;
-    curriculum_code: string;
-    curriculum_version: string;
+    subject_name: string;
+    subject_code: string;
+    subject_version: string;
     workflow_name: string;
+    workflow_applies_to: SubjectType;
     stage_name: string;
     approver_role_name: string;
 };
@@ -33,14 +32,16 @@ type StageHistory = {
 
 type History = {
     id: number;
+    subject_type: SubjectType;
+    subject_id: number;
     status: string;
     submitted_at: string;
     completed_at: string | null;
-    curriculum_id: number;
-    curriculum_name: string;
-    curriculum_code: string;
-    curriculum_version: string;
+    subject_name: string;
+    subject_code: string;
+    subject_version: string;
     workflow_name: string;
+    workflow_applies_to: SubjectType;
     submitted_by_name: string | null;
     stages: StageHistory[];
 };
@@ -49,6 +50,18 @@ type Props = {
     pending: Pending[];
     history: History[];
     permissions: { decide: boolean };
+};
+
+const subjectLabel = (type: SubjectType) =>
+    type === 'ACADEMIC_POLICY' ? 'Academic Policy' : 'Curriculum';
+
+const reviewSubject = (item: Pending) => {
+    if (item.subject_type === 'ACADEMIC_POLICY') {
+        router.get('/admin/academic-policies');
+        return;
+    }
+
+    router.get(`/admin/curricula/${item.subject_id}/structure/terms`);
 };
 
 export default function AcademicApprovalInbox({
@@ -76,7 +89,7 @@ export default function AcademicApprovalInbox({
         });
     };
 
-    const submitDecision = (event: FormEvent) => {
+    const submitDecision = (event: React.FormEvent) => {
         event.preventDefault();
 
         if (!decisionRequest) {
@@ -102,8 +115,8 @@ export default function AcademicApprovalInbox({
                         Academic Approval
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Review Curriculum requests assigned to your
-                        configured approval roles.
+                        Review Curriculum and Academic Policy requests assigned
+                        to your configured approval roles.
                     </p>
                 </div>
 
@@ -114,26 +127,18 @@ export default function AcademicApprovalInbox({
                     <CardContent className="p-0">
                         {pending.length === 0 ? (
                             <div className="p-8 text-center text-sm text-muted-foreground">
-                                No approval request is currently waiting
-                                for your role.
+                                No approval request is currently waiting for your role.
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead className="border-b bg-muted/50 text-left">
                                         <tr>
-                                            <th className="px-4 py-3">
-                                                Curriculum
-                                            </th>
-                                            <th className="px-4 py-3">
-                                                Workflow
-                                            </th>
-                                            <th className="px-4 py-3">
-                                                Current Level
-                                            </th>
-                                            <th className="px-4 py-3 text-right">
-                                                Actions
-                                            </th>
+                                            <th className="px-4 py-3">Type</th>
+                                            <th className="px-4 py-3">Item</th>
+                                            <th className="px-4 py-3">Workflow</th>
+                                            <th className="px-4 py-3">Current Level</th>
+                                            <th className="px-4 py-3 text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -143,32 +148,26 @@ export default function AcademicApprovalInbox({
                                                 className="border-b last:border-0"
                                             >
                                                 <td className="px-4 py-4">
+                                                    <span className="rounded-full border px-2 py-1 text-xs">
+                                                        {subjectLabel(item.subject_type)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4">
                                                     <div className="font-medium">
-                                                        {
-                                                            item.curriculum_name
-                                                        }
+                                                        {item.subject_name}
                                                     </div>
                                                     <div className="text-xs text-muted-foreground">
-                                                        {
-                                                            item.curriculum_code
-                                                        }{' '}
-                                                        · V
-                                                        {
-                                                            item.curriculum_version
-                                                        }
+                                                        {item.subject_code} · V
+                                                        {item.subject_version}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     {item.workflow_name}
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <div>
-                                                        {item.stage_name}
-                                                    </div>
+                                                    <div>{item.stage_name}</div>
                                                     <div className="text-xs text-muted-foreground">
-                                                        {
-                                                            item.approver_role_name
-                                                        }
+                                                        {item.approver_role_name}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4">
@@ -177,11 +176,7 @@ export default function AcademicApprovalInbox({
                                                             type="button"
                                                             size="sm"
                                                             variant="ghost"
-                                                            onClick={() =>
-                                                                router.get(
-                                                                    `/admin/curricula/${item.curriculum_id}/structure/terms`,
-                                                                )
-                                                            }
+                                                            onClick={() => reviewSubject(item)}
                                                         >
                                                             Review
                                                         </Button>
@@ -193,10 +188,7 @@ export default function AcademicApprovalInbox({
                                                                     size="sm"
                                                                     variant="ghost"
                                                                     onClick={() =>
-                                                                        openDecision(
-                                                                            item,
-                                                                            'APPROVE',
-                                                                        )
+                                                                        openDecision(item, 'APPROVE')
                                                                     }
                                                                 >
                                                                     <Check className="size-4" />
@@ -207,10 +199,7 @@ export default function AcademicApprovalInbox({
                                                                     size="sm"
                                                                     variant="ghost"
                                                                     onClick={() =>
-                                                                        openDecision(
-                                                                            item,
-                                                                            'RETURN',
-                                                                        )
+                                                                        openDecision(item, 'RETURN')
                                                                     }
                                                                 >
                                                                     <RotateCcw className="size-4" />
@@ -222,10 +211,7 @@ export default function AcademicApprovalInbox({
                                                                     variant="ghost"
                                                                     className="text-destructive hover:text-destructive"
                                                                     onClick={() =>
-                                                                        openDecision(
-                                                                            item,
-                                                                            'REJECT',
-                                                                        )
+                                                                        openDecision(item, 'REJECT')
                                                                     }
                                                                 >
                                                                     <XCircle className="size-4" />
@@ -261,12 +247,17 @@ export default function AcademicApprovalInbox({
                                 >
                                     <div className="flex flex-wrap items-start justify-between gap-3">
                                         <div>
-                                            <div className="font-medium">
-                                                {item.curriculum_name}
+                                            <div className="flex items-center gap-2">
+                                                <span className="rounded-full border px-2 py-0.5 text-xs">
+                                                    {subjectLabel(item.subject_type)}
+                                                </span>
+                                                <span className="font-medium">
+                                                    {item.subject_name}
+                                                </span>
                                             </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {item.curriculum_code} · V
-                                                {item.curriculum_version} ·{' '}
+                                            <div className="mt-1 text-xs text-muted-foreground">
+                                                {item.subject_code} · V
+                                                {item.subject_version} ·{' '}
                                                 {item.workflow_name}
                                             </div>
                                         </div>
@@ -288,11 +279,7 @@ export default function AcademicApprovalInbox({
                                                     <div className="font-medium">
                                                         {stage.name}{' '}
                                                         <span className="font-normal text-muted-foreground">
-                                                            (
-                                                            {
-                                                                stage.approver_role_name
-                                                            }
-                                                            )
+                                                            ({stage.approver_role_name})
                                                         </span>
                                                     </div>
                                                     <div className="text-xs text-muted-foreground">
@@ -303,9 +290,7 @@ export default function AcademicApprovalInbox({
                                                     </div>
                                                     {stage.remarks && (
                                                         <div className="mt-1 text-sm">
-                                                            {
-                                                                stage.remarks
-                                                            }
+                                                            {stage.remarks}
                                                         </div>
                                                     )}
                                                 </div>
@@ -324,13 +309,11 @@ export default function AcademicApprovalInbox({
                     <Card className="w-full max-w-lg">
                         <CardHeader>
                             <CardTitle>
-                                {decisionForm.data.decision ===
-                                'APPROVE'
-                                    ? 'Approve Curriculum'
-                                    : decisionForm.data.decision ===
-                                        'RETURN'
+                                {decisionForm.data.decision === 'APPROVE'
+                                    ? `Approve ${subjectLabel(decisionRequest.subject_type)}`
+                                    : decisionForm.data.decision === 'RETURN'
                                       ? 'Return for Correction'
-                                      : 'Reject Curriculum'}
+                                      : `Reject ${subjectLabel(decisionRequest.subject_type)}`}
                             </CardTitle>
                         </CardHeader>
 
@@ -340,8 +323,14 @@ export default function AcademicApprovalInbox({
                                 className="space-y-4"
                             >
                                 <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-                                    {decisionRequest.curriculum_name} ·{' '}
-                                    {decisionRequest.stage_name}
+                                    <div className="font-medium">
+                                        {decisionRequest.subject_name}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {subjectLabel(decisionRequest.subject_type)}
+                                        {' · '}
+                                        {decisionRequest.stage_name}
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">
@@ -349,9 +338,7 @@ export default function AcademicApprovalInbox({
                                         Remarks
                                     </label>
                                     <textarea
-                                        value={
-                                            decisionForm.data.remarks
-                                        }
+                                        value={decisionForm.data.remarks}
                                         onChange={(event) =>
                                             decisionForm.setData(
                                                 'remarks',
@@ -360,18 +347,14 @@ export default function AcademicApprovalInbox({
                                         }
                                         className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                         placeholder={
-                                            decisionForm.data.decision ===
-                                            'APPROVE'
+                                            decisionForm.data.decision === 'APPROVE'
                                                 ? 'Optional approval remarks'
                                                 : 'Explain the correction or reason'
                                         }
                                     />
                                     {decisionForm.errors.remarks && (
                                         <p className="text-xs text-destructive">
-                                            {
-                                                decisionForm.errors
-                                                    .remarks
-                                            }
+                                            {decisionForm.errors.remarks}
                                         </p>
                                     )}
                                 </div>
@@ -388,25 +371,18 @@ export default function AcademicApprovalInbox({
                                     </Button>
                                     <Button
                                         type="submit"
-                                        disabled={
-                                            decisionForm.processing
-                                        }
+                                        disabled={decisionForm.processing}
                                         variant={
-                                            decisionForm.data
-                                                .decision === 'REJECT'
+                                            decisionForm.data.decision === 'REJECT'
                                                 ? 'destructive'
                                                 : 'default'
                                         }
                                     >
                                         {decisionForm.processing
                                             ? 'Saving…'
-                                            : decisionForm.data
-                                                    .decision ===
-                                                'APPROVE'
+                                            : decisionForm.data.decision === 'APPROVE'
                                               ? 'Approve'
-                                              : decisionForm.data
-                                                      .decision ===
-                                                  'RETURN'
+                                              : decisionForm.data.decision === 'RETURN'
                                                 ? 'Return'
                                                 : 'Reject'}
                                     </Button>

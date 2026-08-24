@@ -72,3 +72,13 @@ Current structure:
 
 Only implemented Curriculum children are shown. Terms/Semesters and later Curriculum
 structure pages must not appear until their milestone is implemented.
+
+
+## Academic Policies Navigation Extension — 2026-08-24
+Academic Policies Phase 1 has reached implementation, so the authenticated sidebar now exposes it under `Academic Setup` immediately after `Curriculum`.
+
+Current implemented Academic Setup tail:
+- Curriculum
+- Academic Policies (`/admin/academic-policies`, permission `academic_policy.view`)
+
+Academic Calendar remains absent until its own implementation milestone begins. This preserves the rule that the sidebar must not advertise unimplemented modules.

@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { BookOpenCheck, CircleX, Copy, Pencil, Plus, RotateCcw, Search, Send, Settings2, Trash2, MoreHorizontal, X } from 'lucide-react';
+import { BookOpenCheck, CircleX, Copy, GitBranch, Pencil, Plus, RotateCcw, Search, Send, Settings2, Trash2, MoreHorizontal, X } from 'lucide-react';
 import { FormEvent, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -36,6 +36,15 @@ type Curriculum = {
     submit_approval_hint?: string | null;
     structure_validated_at?: string | null;
     description: string | null;
+    parent_curriculum_id?: number | null;
+    parent_curriculum?: { id: number; code: string; version: string } | null;
+    revision_type?: string | null;
+    revision_reason?: string | null;
+    revision_effective_from?: string | null;
+    is_current_version: boolean;
+    is_previous_version: boolean;
+    can_amend: boolean;
+    amendment_hint?: string | null;
     program_template: Option;
     academic_session: Option;
 };
@@ -57,6 +66,33 @@ type Props = {
         submitApproval: boolean;
     };
 };
+
+const amendmentTypes = [
+    ['CORRECTION', 'Correction'],
+    ['COURSE_REPLACEMENT', 'Course / Subject Replacement'],
+    ['TERM_SEMESTER_CHANGE', 'Term / Semester Change'],
+    ['SLOT_CHANGE', 'Slot Change'],
+    ['CREDIT_CHANGE', 'Credit Change'],
+    ['STRUCTURE_CHANGE', 'Structure Change'],
+    ['OTHER', 'Other'],
+] as const;
+
+const nextVersion = (version: string) => {
+    const match = version.trim().match(/^(.*?)(\d+)(?:\.(\d+))$/);
+
+    if (!match) {
+        return `${version}.1`;
+    }
+
+    const prefix = match[1] ?? '';
+    const major = match[2];
+    const minor = Number(match[3] ?? 0) + 1;
+
+    return `${prefix}${major}.${minor}`;
+};
+
+const amendmentCode = (code: string, version: string) =>
+    `${code}-REV-${version.replace(/[^A-Za-z0-9]+/g, '-')}`.toUpperCase();
 
 const emptyForm = {
     program_template_id: '',
@@ -81,6 +117,7 @@ export default function CurriculumIndex({
     const [editing, setEditing] = useState<Curriculum | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [cloning, setCloning] = useState<Curriculum | null>(null);
+    const [amending, setAmending] = useState<Curriculum | null>(null);
     const [submittingApproval, setSubmittingApproval] =
         useState<Curriculum | null>(null);
     const [moreMenu, setMoreMenu] = useState<{
@@ -99,6 +136,13 @@ export default function CurriculumIndex({
         effective_from: '',
         effective_to: '',
         description: '',
+    });
+    const amendmentForm = useForm({
+        code: '',
+        version: '',
+        revision_type: 'CORRECTION',
+        revision_reason: '',
+        revision_effective_from: '',
     });
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
@@ -165,6 +209,33 @@ export default function CurriculumIndex({
                 onSuccess: () => setCloning(null),
             },
         );
+    };
+
+    const openAmendment = (item: Curriculum) => {
+        const version = nextVersion(item.version);
+
+        setAmending(item);
+        amendmentForm.clearErrors();
+        amendmentForm.setData({
+            code: amendmentCode(item.code, version),
+            version,
+            revision_type: 'CORRECTION',
+            revision_reason: '',
+            revision_effective_from: '',
+        });
+    };
+
+    const submitAmendment = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (!amending) {
+            return;
+        }
+
+        amendmentForm.post(`/admin/curricula/${amending.id}/amend`, {
+            preserveScroll: true,
+            onSuccess: () => setAmending(null),
+        });
     };
 
     const openMoreMenu = (
@@ -356,7 +427,24 @@ export default function CurriculumIndex({
                                             <td className="px-4 py-4"><div className="font-medium">{item.name}</div><div className="text-xs text-muted-foreground">{item.code}</div></td>
                                             <td className="px-4 py-4">{item.program_template.name}<div className="text-xs text-muted-foreground">{item.program_template.code}</div></td>
                                             <td className="px-4 py-4">{item.academic_session.name}</td>
-                                            <td className="px-4 py-4">{item.version}</td>
+                                            <td className="px-4 py-4">
+                                                <div className="font-medium">{item.version}</div>
+                                                {item.is_current_version && (
+                                                    <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                                                        Current
+                                                    </span>
+                                                )}
+                                                {item.is_previous_version && (
+                                                    <span className="mt-1 inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                                        Previous
+                                                    </span>
+                                                )}
+                                                {item.parent_curriculum && (
+                                                    <div className="mt-1 text-[11px] text-muted-foreground">
+                                                        Amendment of v{item.parent_curriculum.version}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-4 text-xs">{item.effective_from || '—'}{item.effective_to ? ` → ${item.effective_to}` : ''}</td>
                                             <td className="px-4 py-4">
                                                 <span
@@ -545,6 +633,30 @@ export default function CurriculumIndex({
                                     </div>
                                 )}
 
+                            {moreMenu.item.can_amend && (
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                    onClick={() => {
+                                        const item = moreMenu.item;
+                                        setMoreMenu(null);
+                                        openAmendment(item);
+                                    }}
+                                >
+                                    <GitBranch className="size-4" />
+                                    Amend Curriculum
+                                </button>
+                            )}
+
+                            {!moreMenu.item.can_amend &&
+                                moreMenu.item.amendment_hint && (
+                                    <div className="flex items-start gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground">
+                                        <GitBranch className="mt-0.5 size-4 shrink-0" />
+                                        <span>{moreMenu.item.amendment_hint}</span>
+                                    </div>
+                                )}
+
                             {permissions.create && (
                                 <button
                                     type="button"
@@ -589,7 +701,8 @@ export default function CurriculumIndex({
 
                             {permissions.disable &&
                                 moreMenu.item.lifecycle_status !==
-                                    'RETIRED' && (
+                                    'RETIRED' &&
+                                !moreMenu.item.is_previous_version && (
                                     <button
                                         type="button"
                                         role="menuitem"
@@ -726,6 +839,183 @@ export default function CurriculumIndex({
                                     {approvalForm.processing
                                         ? 'Submitting…'
                                         : 'Submit for Approval'}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {amending && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+                    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
+                        <div className="flex items-start justify-between border-b p-5">
+                            <div>
+                                <h2 className="text-lg font-semibold">
+                                    Amend Curriculum
+                                </h2>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {amending.name} v{amending.version} remains
+                                    unchanged. A new editable Draft will be
+                                    created in the same Program Template and
+                                    Academic Session with the complete current
+                                    structure copied into it.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setAmending(null)}
+                            >
+                                <X className="size-4" />
+                            </Button>
+                        </div>
+
+                        <form
+                            onSubmit={submitAmendment}
+                            className="grid gap-4 p-5 md:grid-cols-2"
+                        >
+                            <Field
+                                label="New Version"
+                                error={amendmentForm.errors.version}
+                            >
+                                <Input
+                                    value={amendmentForm.data.version}
+                                    onChange={(event) =>
+                                        amendmentForm.setData(
+                                            'version',
+                                            event.target.value,
+                                        )
+                                    }
+                                    maxLength={30}
+                                />
+                            </Field>
+
+                            <Field
+                                label="New Curriculum Code"
+                                error={amendmentForm.errors.code}
+                            >
+                                <Input
+                                    value={amendmentForm.data.code}
+                                    onChange={(event) =>
+                                        amendmentForm.setData(
+                                            'code',
+                                            event.target.value.toUpperCase(),
+                                        )
+                                    }
+                                    maxLength={50}
+                                />
+                            </Field>
+
+                            <Field
+                                label="Amendment Type"
+                                error={amendmentForm.errors.revision_type}
+                            >
+                                <Select
+                                    value={amendmentForm.data.revision_type}
+                                    onValueChange={(value) =>
+                                        amendmentForm.setData(
+                                            'revision_type',
+                                            value,
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {amendmentTypes.map(([value, label]) => (
+                                            <SelectItem key={value} value={value}>
+                                                {label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </Field>
+
+                            <Field
+                                label="Effective From"
+                                error={
+                                    amendmentForm.errors
+                                        .revision_effective_from
+                                }
+                            >
+                                <DatePicker
+                                    id={`curriculum-amendment-effective-${amending.id}`}
+                                    name="revision_effective_from"
+                                    value={
+                                        amendmentForm.data
+                                            .revision_effective_from
+                                    }
+                                    onValueChange={(value) =>
+                                        amendmentForm.setData(
+                                            'revision_effective_from',
+                                            value,
+                                        )
+                                    }
+                                    invalid={Boolean(
+                                        amendmentForm.errors
+                                            .revision_effective_from,
+                                    )}
+                                />
+                            </Field>
+
+                            <div className="md:col-span-2">
+                                <Field
+                                    label="Reason for Amendment"
+                                    error={
+                                        amendmentForm.errors.revision_reason
+                                    }
+                                >
+                                    <textarea
+                                        value={
+                                            amendmentForm.data.revision_reason
+                                        }
+                                        onChange={(event) =>
+                                            amendmentForm.setData(
+                                                'revision_reason',
+                                                event.target.value,
+                                            )
+                                        }
+                                        rows={4}
+                                        maxLength={2000}
+                                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+                                        placeholder="Explain why the approved Curriculum needs to change."
+                                    />
+                                </Field>
+                            </div>
+
+                            {amendmentForm.errors.curriculum && (
+                                <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive md:col-span-2">
+                                    {amendmentForm.errors.curriculum}
+                                </p>
+                            )}
+
+                            <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground md:col-span-2">
+                                After creation, the amendment behaves like a normal
+                                Draft Curriculum. You may change Terms/Semesters,
+                                Slots, Credits and Course Mappings. Validate Structure
+                                and submit it through the existing approval workflow.
+                                The approved source version is never edited.
+                            </div>
+
+                            <div className="flex justify-end gap-2 border-t pt-4 md:col-span-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setAmending(null)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={amendmentForm.processing}
+                                >
+                                    <GitBranch className="size-4" />
+                                    {amendmentForm.processing
+                                        ? 'Creating…'
+                                        : 'Create Amendment'}
                                 </Button>
                             </div>
                         </form>
@@ -942,10 +1232,10 @@ export default function CurriculumIndex({
             {showForm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
                     <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
-                        <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-4"><div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-muted-foreground">Header only. Structure mapping is the next curriculum milestone.</p></div><button onClick={() => setShowForm(false)} className="rounded-md p-2 hover:bg-accent"><X className="size-4" /></button></div>
+                        <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-4"><div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-muted-foreground">Header fields for this Curriculum version. Amendment Program Template and Academic Session remain locked to the approved source.</p></div><button onClick={() => setShowForm(false)} className="rounded-md p-2 hover:bg-accent"><X className="size-4" /></button></div>
                         <form onSubmit={submit} className="grid gap-4 p-5 md:grid-cols-2">
-                            <Field label="Program Template" error={form.errors.program_template_id}><select value={form.data.program_template_id} onChange={e => form.setData('program_template_id', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Program Template</option>{programTemplates.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}</select></Field>
-                            <Field label="Academic Session" error={form.errors.academic_session_id}><select value={form.data.academic_session_id} onChange={e => form.setData('academic_session_id', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Academic Session</option>{academicSessions.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}</select></Field>
+                            <Field label="Program Template" error={form.errors.program_template_id}><select value={form.data.program_template_id} onChange={e => form.setData('program_template_id', e.target.value)} disabled={Boolean(editing?.parent_curriculum_id)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Program Template</option>{programTemplates.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}</select></Field>
+                            <Field label="Academic Session" error={form.errors.academic_session_id}><select value={form.data.academic_session_id} onChange={e => form.setData('academic_session_id', e.target.value)} disabled={Boolean(editing?.parent_curriculum_id)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Academic Session</option>{academicSessions.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}</select></Field>
                             <Field label="Curriculum Code" error={form.errors.code}><input value={form.data.code} onChange={e => form.setData('code', e.target.value.toUpperCase())} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={50} /></Field>
                             <Field label="Curriculum Name" error={form.errors.name}><input value={form.data.name} onChange={e => form.setData('name', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={160} /></Field>
                             <Field label="Version" error={form.errors.version}><input value={form.data.version} onChange={e => form.setData('version', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={30} /></Field>

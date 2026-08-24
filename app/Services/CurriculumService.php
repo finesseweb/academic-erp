@@ -50,6 +50,25 @@ class CurriculumService
                     'Curriculum header is locked while it is under approval, approved, active or retired.',
             ]);
         }
+        if ($curriculum->parent_curriculum_id !== null) {
+            $parent = $curriculum->parentCurriculum()->firstOrFail();
+            $contextErrors = [];
+
+            if ((int) $data['program_template_id'] !== (int) $parent->program_template_id) {
+                $contextErrors['program_template_id'] =
+                    'An amendment must remain in the same Program Template as its approved source version.';
+            }
+
+            if ((int) $data['academic_session_id'] !== (int) $parent->academic_session_id) {
+                $contextErrors['academic_session_id'] =
+                    'An amendment must remain in the same Academic Session as its approved source version.';
+            }
+
+            if ($contextErrors) {
+                throw ValidationException::withMessages($contextErrors);
+            }
+        }
+
         $this->validateOwnership($curriculum->university_id, $data);
         $this->validateUniqueness($curriculum->university_id, $data, $curriculum->id);
 
@@ -71,6 +90,28 @@ class CurriculumService
 
     public function retire(Curriculum $curriculum, int $actorId): Curriculum
     {
+        $approvedSuccessorExists = $curriculum->amendments()
+            ->where('approval_status', 'APPROVED')
+            ->exists();
+
+        if ($approvedSuccessorExists) {
+            throw ValidationException::withMessages([
+                'curriculum' =>
+                    'A previous approved Curriculum version is retained as history and cannot be retired independently.',
+            ]);
+        }
+
+        $openAmendmentExists = $curriculum->amendments()
+            ->where('lifecycle_status', '!=', 'RETIRED')
+            ->exists();
+
+        if ($openAmendmentExists) {
+            throw ValidationException::withMessages([
+                'curriculum' =>
+                    'Resolve the existing Curriculum amendment before retiring this current version.',
+            ]);
+        }
+
         return DB::transaction(function () use ($curriculum, $actorId) {
             $before = $curriculum->toArray();
             $curriculum->update([

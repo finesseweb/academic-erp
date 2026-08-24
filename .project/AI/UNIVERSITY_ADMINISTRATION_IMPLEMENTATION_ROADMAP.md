@@ -44,3 +44,15 @@ The University administration foundation is complete only when authentication, R
 - Slot-level Credits are not introduced.
 - Course / Paper Mapping remains a later milestone.
 - Copy / Clone Structure is approved as the future reuse pattern when a new Curriculum/version needs an existing structure; source and target records remain independent.
+
+
+## Academic Policies Phase 1 — 2026-08-24
+- Academic Policy Header/Master: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
+- Scope foundation: University / Program Template / Curriculum.
+- Academic Session, version, effective dates and Draft lifecycle foundation implemented.
+- Credit / Completion Policy rule section implemented.
+- Policy validation checkpoint implemented.
+- Permission-aware sidebar entry implemented under Academic Setup after Curriculum.
+- Route: `/admin/academic-policies`; permission: `academic_policy.view`.
+- Approval execution and policy amendment/version activation are the next gate and must reuse the existing Academic Approval engine.
+- Academic Calendar remains the next major frozen module after Academic Policies is completed.
