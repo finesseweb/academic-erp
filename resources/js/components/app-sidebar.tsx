@@ -176,6 +176,12 @@ const platformItems: TreeNavItem[] = [
                 permission: 'academic_policy.view',
             },
             {
+                title: 'Reservation / Quota Categories',
+                icon: ShieldCheck,
+                href: '/admin/reservation-categories',
+                permission: 'reservation_category.view',
+            },
+            {
                 title: 'Academic Calendar',
                 icon: CalendarRange,
                 href: '/admin/academic-calendars',
@@ -502,6 +508,18 @@ export function AppSidebar() {
                           href: `/college/${collegeId}/program-offerings`,
                           icon: BookOpenCheck,
                           permission: 'college_program_offering.view',
+                      },
+                      {
+                          title: 'Intake / Seat Capacity',
+                          href: `/college/${collegeId}/intakes`,
+                          icon: GraduationCap,
+                          permission: 'college_program_intake.view',
+                      },
+                      {
+                          title: 'Reservation / Seat Distribution',
+                          href: `/college/${collegeId}/reservations`,
+                          icon: ShieldCheck,
+                          permission: 'college_reservation.view',
                       },
                   ],
               },

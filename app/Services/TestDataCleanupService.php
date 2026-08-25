@@ -579,6 +579,12 @@ class TestDataCleanupService
         int $universityId
     ): array {
         return [
+            'college_program_reservation_plans' =>
+                $this->collegeReservationPlanRows($universityId),
+            'reservation_categories' =>
+                $this->reservationCategoryRows($universityId),
+            'college_program_intakes' =>
+                $this->collegeProgramIntakeRows($universityId),
             'college_program_offerings' =>
                 $this->collegeProgramOfferingRows($universityId),
             'academic_calendars' =>
@@ -717,6 +723,16 @@ class TestDataCleanupService
         return [
             'confirmation_code' => 'RESET-ACADEMIC-TEST-DATA',
             'counts' => [
+                'college_program_reservation_allocations' =>
+                    $this->countCollegeReservationAllocationsForUniversity($universityId),
+                'college_program_reservation_plans' =>
+                    $this->countCollegeReservationPlansForUniversity($universityId),
+                'reservation_categories' =>
+                    $this->countUniversityRows('reservation_categories', $universityId),
+                'college_program_intake_allocations' =>
+                    $this->countCollegeIntakeAllocationsForUniversity($universityId),
+                'college_program_intakes' =>
+                    $this->countCollegeIntakesForUniversity($universityId),
                 'college_program_offerings' =>
                     $this->countCollegeOfferingsForUniversity($universityId),
                 'academic_calendar_events' =>
@@ -842,7 +858,114 @@ class TestDataCleanupService
                 $approvalRequestIds
             );
 
-            // 2) College operational adoption leaf rows.
+            // 2) Reservation / Quota before Intake.
+            if (
+                Schema::hasTable('college_program_reservation_plans') &&
+                Schema::hasTable('college_program_reservation_allocations') &&
+                $collegeIds->isNotEmpty()
+            ) {
+                $offeringIdsForReservation =
+                    DB::table('college_program_offerings')
+                        ->whereIn('college_id', $collegeIds)
+                        ->pluck('id');
+
+                $intakeIdsForReservation =
+                    DB::table('college_program_intakes')
+                        ->whereIn('college_program_offering_id', $offeringIdsForReservation)
+                        ->pluck('id');
+
+                $planIds = DB::table('college_program_reservation_plans')
+                    ->whereIn('college_program_intake_id', $intakeIdsForReservation)
+                    ->pluck('id');
+
+                $this->deleteWhereIn(
+                    'college_program_reservation_allocations',
+                    'college_program_reservation_plan_id',
+                    $planIds
+                );
+                $this->deleteWhereIn(
+                    'college_program_reservation_plans',
+                    'id',
+                    $planIds
+                );
+            }
+
+            // 2) College operational setup: allocations -> intake -> offering.
+            if (
+                Schema::hasTable('college_program_intakes') &&
+                Schema::hasTable('college_program_offerings') &&
+                $collegeIds->isNotEmpty()
+            ) {
+                $collegeOfferingIds = DB::table('college_program_offerings')
+                    ->whereIn('college_id', $collegeIds)
+                    ->pluck('id');
+
+                $intakeIds = DB::table('college_program_intakes')
+                    ->whereIn(
+                        'college_program_offering_id',
+                        $collegeOfferingIds
+                    )
+                    ->pluck('id');
+
+                /*
+                 * Hierarchical Intake cleanup:
+                 * specialization child allocations -> discipline allocations
+                 * -> intake header.
+                 */
+                if (
+                    Schema::hasTable(
+                        'college_program_intake_allocations'
+                    ) &&
+                    $intakeIds->isNotEmpty()
+                ) {
+                    if (
+                        Schema::hasColumn(
+                            'college_program_intake_allocations',
+                            'parent_allocation_id'
+                        )
+                    ) {
+                        DB::table(
+                            'college_program_intake_allocations'
+                        )
+                            ->whereIn(
+                                'college_program_intake_id',
+                                $intakeIds
+                            )
+                            ->whereNotNull(
+                                'parent_allocation_id'
+                            )
+                            ->delete();
+
+                        DB::table(
+                            'college_program_intake_allocations'
+                        )
+                            ->whereIn(
+                                'college_program_intake_id',
+                                $intakeIds
+                            )
+                            ->whereNull(
+                                'parent_allocation_id'
+                            )
+                            ->delete();
+                    } else {
+                        DB::table(
+                            'college_program_intake_allocations'
+                        )
+                            ->whereIn(
+                                'college_program_intake_id',
+                                $intakeIds
+                            )
+                            ->delete();
+                    }
+                }
+
+                $this->deleteWhereIn(
+                    'college_program_intakes',
+                    'id',
+                    $intakeIds
+                );
+            }
+
             if (
                 Schema::hasTable('college_program_offerings') &&
                 $collegeIds->isNotEmpty()
@@ -1001,6 +1124,9 @@ class TestDataCleanupService
                 $workflowIds
             );
 
+            // 8) Reservation category master after College Reservation data.
+            $this->deleteUniversityRows('reservation_categories', $universityId);
+
             // 8) Remaining University academic masters, child -> parent.
             $this->deleteUniversityRows('courses', $universityId);
             $this->deleteUniversityRows(
@@ -1075,6 +1201,29 @@ class TestDataCleanupService
         $this->assertCleanupEnabled();
 
         return match ($type) {
+            'college_program_reservation_plans' =>
+                $this->cleanupCollegeReservationPlan(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
+            'reservation_categories' =>
+                $this->cleanupSimpleMaster(
+                    'reservation_categories',
+                    'Reservation / Quota Category',
+                    $id,
+                    $universityId,
+                    [
+                        ['college_program_reservation_allocations', 'reservation_category_id'],
+                    ],
+                    $actorId
+                ),
+            'college_program_intakes' =>
+                $this->cleanupCollegeProgramIntake(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
             'college_program_offerings' =>
                 $this->cleanupCollegeProgramOffering(
                     $id,
@@ -1195,6 +1344,209 @@ class TestDataCleanupService
                 'type' => 'Unsupported cleanup type.',
             ]),
         };
+    }
+
+    private function cleanupCollegeReservationPlan(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('college_program_reservation_plans')) {
+            abort(404);
+        }
+
+        $record = DB::table('college_program_reservation_plans as p')
+            ->join('college_program_intakes as i', 'i.id', '=', 'p.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->where('p.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select('p.*')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences(
+            $id,
+            [
+                ['admission_applications', 'college_program_reservation_plan_id'],
+                ['admissions', 'college_program_reservation_plan_id'],
+                ['student_enrollments', 'college_program_reservation_plan_id'],
+            ]
+        );
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' =>
+                    'This Reservation plan already has Admission/Student references. Clean those dependent test records first.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $allocationCount = $this->countIfExists(
+                'college_program_reservation_allocations',
+                'college_program_reservation_plan_id',
+                $record->id
+            );
+
+            if (Schema::hasTable('college_program_reservation_allocations')) {
+                DB::table('college_program_reservation_allocations')
+                    ->where('college_program_reservation_plan_id', $record->id)
+                    ->delete();
+            }
+
+            DB::table('college_program_reservation_plans')
+                ->where('id', $record->id)
+                ->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_allocations' => $allocationCount,
+            ];
+
+            $this->audit(
+                'TEST_COLLEGE_RESERVATION_PLAN_CLEANED',
+                'test_data_cleanup',
+                $record->id,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
+    }
+
+    private function cleanupCollegeProgramIntake(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (
+            ! Schema::hasTable('college_program_intakes') ||
+            ! Schema::hasTable('college_program_offerings') ||
+            ! Schema::hasTable('colleges')
+        ) {
+            abort(404);
+        }
+
+        $record = DB::table('college_program_intakes as cpi')
+            ->join(
+                'college_program_offerings as cpo',
+                'cpo.id',
+                '=',
+                'cpi.college_program_offering_id'
+            )
+            ->join(
+                'colleges as c',
+                'c.id',
+                '=',
+                'cpo.college_id'
+            )
+            ->where('cpi.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select([
+                'cpi.*',
+                'cpo.college_id',
+                'cpo.program_template_id',
+                'cpo.academic_session_id',
+            ])
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences(
+            $id,
+            [
+                ['college_program_reservation_plans', 'college_program_intake_id'],
+                ['admission_applications', 'college_program_intake_id'],
+                ['admissions', 'college_program_intake_id'],
+                ['student_enrollments', 'college_program_intake_id'],
+                ['students', 'college_program_intake_id'],
+            ]
+        );
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' =>
+                    'This Intake / Seat Capacity already has downstream Reservation, Admission, or Student references. Clean those dependent test records first.',
+            ]);
+        }
+
+        return DB::transaction(function () use (
+            $record,
+            $actorId
+        ) {
+            $allocationCount = $this->countIfExists(
+                'college_program_intake_allocations',
+                'college_program_intake_id',
+                $record->id
+            );
+
+            if (
+                Schema::hasTable(
+                    'college_program_intake_allocations'
+                )
+            ) {
+                if (
+                    Schema::hasColumn(
+                        'college_program_intake_allocations',
+                        'parent_allocation_id'
+                    )
+                ) {
+                    DB::table(
+                        'college_program_intake_allocations'
+                    )
+                        ->where(
+                            'college_program_intake_id',
+                            $record->id
+                        )
+                        ->whereNotNull('parent_allocation_id')
+                        ->delete();
+
+                    DB::table(
+                        'college_program_intake_allocations'
+                    )
+                        ->where(
+                            'college_program_intake_id',
+                            $record->id
+                        )
+                        ->whereNull('parent_allocation_id')
+                        ->delete();
+                } else {
+                    DB::table(
+                        'college_program_intake_allocations'
+                    )
+                        ->where(
+                            'college_program_intake_id',
+                            $record->id
+                        )
+                        ->delete();
+                }
+            }
+
+            DB::table('college_program_intakes')
+                ->where('id', $record->id)
+                ->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_allocations' => $allocationCount,
+            ];
+
+            $this->audit(
+                'TEST_COLLEGE_PROGRAM_INTAKE_CLEANED',
+                'test_data_cleanup',
+                $record->id,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
     }
 
     private function cleanupCollegeProgramOffering(
@@ -1583,6 +1935,190 @@ class TestDataCleanupService
         ];
     }
 
+    private function collegeReservationPlanRows(
+        int $universityId
+    ): array {
+        if (! Schema::hasTable('college_program_reservation_plans')) {
+            return [];
+        }
+
+        return DB::table('college_program_reservation_plans as p')
+            ->join('college_program_intakes as i', 'i.id', '=', 'p.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->leftJoin('program_templates as pt', 'pt.id', '=', 'o.program_template_id')
+            ->where('c.university_id', $universityId)
+            ->orderBy('c.name')
+            ->orderBy('pt.name')
+            ->get([
+                'p.id','p.status','p.bucket_type','p.bucket_key','p.basis_capacity',
+                'c.name as college_name','pt.name as program_name',
+            ])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences(
+                    $row->id,
+                    [
+                        ['admission_applications', 'college_program_reservation_plan_id'],
+                        ['admissions', 'college_program_reservation_plan_id'],
+                        ['student_enrollments', 'college_program_reservation_plan_id'],
+                    ]
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => 'RESERVATION-'.$row->id,
+                    'name' => $row->college_name.' · '.($row->program_name ?? 'Program').
+                        ' · '.$row->bucket_key.' · '.$row->basis_capacity.' seats',
+                    'status' => $row->status,
+                    'kind' => $row->bucket_type,
+                    'dependencies' => [
+                        'quota_allocations' => $this->countIfExists(
+                            'college_program_reservation_allocations',
+                            'college_program_reservation_plan_id',
+                            $row->id
+                        ),
+                    ],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function reservationCategoryRows(
+        int $universityId
+    ): array {
+        if (! Schema::hasTable('reservation_categories')) {
+            return [];
+        }
+
+        return DB::table('reservation_categories')
+            ->where('university_id', $universityId)
+            ->orderBy('display_order')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($row) {
+                $used = $this->countIfExists(
+                    'college_program_reservation_allocations',
+                    'reservation_category_id',
+                    $row->id
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->name,
+                    'status' => $row->status,
+                    'kind' => $row->nature,
+                    'dependencies' => ['reservation_allocations' => $used],
+                    'blocked' => $used > 0,
+                    'blocking_references' => $used > 0 ? [[
+                        'table' => 'college_program_reservation_allocations',
+                        'column' => 'reservation_category_id',
+                        'count' => $used,
+                    ]] : [],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function collegeProgramIntakeRows(
+        int $universityId
+    ): array {
+        if (
+            ! Schema::hasTable('college_program_intakes') ||
+            ! Schema::hasTable('college_program_offerings') ||
+            ! Schema::hasTable('colleges')
+        ) {
+            return [];
+        }
+
+        return DB::table('college_program_intakes as cpi')
+            ->join(
+                'college_program_offerings as cpo',
+                'cpo.id',
+                '=',
+                'cpi.college_program_offering_id'
+            )
+            ->join(
+                'colleges as c',
+                'c.id',
+                '=',
+                'cpo.college_id'
+            )
+            ->leftJoin(
+                'program_templates as pt',
+                'pt.id',
+                '=',
+                'cpo.program_template_id'
+            )
+            ->leftJoin(
+                'academic_sessions as s',
+                's.id',
+                '=',
+                'cpo.academic_session_id'
+            )
+            ->where('c.university_id', $universityId)
+            ->orderBy('c.name')
+            ->orderBy('pt.name')
+            ->get([
+                'cpi.id',
+                'cpi.status',
+                'cpi.approved_capacity',
+                'cpi.allocation_mode',
+                'c.name as college_name',
+                'pt.name as program_name',
+                's.name as session_name',
+            ])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences(
+                    $row->id,
+                    [
+                        [
+                            'college_program_reservations',
+                            'college_program_intake_id',
+                        ],
+                        [
+                            'admission_applications',
+                            'college_program_intake_id',
+                        ],
+                        ['admissions', 'college_program_intake_id'],
+                        [
+                            'student_enrollments',
+                            'college_program_intake_id',
+                        ],
+                        ['students', 'college_program_intake_id'],
+                    ]
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => 'INTAKE-'.$row->id,
+                    'name' =>
+                        $row->college_name.' · '.
+                        ($row->program_name ?? 'Program').' · '.
+                        ($row->session_name ?? 'Session').
+                        ' · '.$row->approved_capacity.' seats',
+                    'status' => $row->status,
+                    'kind' => $row->allocation_mode,
+                    'dependencies' => [
+                        'allocations' =>
+                            $this->countIfExists(
+                                'college_program_intake_allocations',
+                                'college_program_intake_id',
+                                $row->id
+                            ),
+                    ],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     private function collegeProgramOfferingRows(
         int $universityId
     ): array {
@@ -1850,6 +2386,110 @@ class TestDataCleanupService
         DB::table($table)
             ->where('university_id', $universityId)
             ->delete();
+    }
+
+    private function countCollegeReservationPlansForUniversity(
+        int $universityId
+    ): int {
+        if (! Schema::hasTable('college_program_reservation_plans')) {
+            return 0;
+        }
+
+        return DB::table('college_program_reservation_plans as p')
+            ->join('college_program_intakes as i', 'i.id', '=', 'p.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeReservationAllocationsForUniversity(
+        int $universityId
+    ): int {
+        if (! Schema::hasTable('college_program_reservation_allocations')) {
+            return 0;
+        }
+
+        return DB::table('college_program_reservation_allocations as a')
+            ->join('college_program_reservation_plans as p', 'p.id', '=', 'a.college_program_reservation_plan_id')
+            ->join('college_program_intakes as i', 'i.id', '=', 'p.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeIntakesForUniversity(
+        int $universityId
+    ): int {
+        if (
+            ! Schema::hasTable('college_program_intakes') ||
+            ! Schema::hasTable('college_program_offerings') ||
+            ! Schema::hasTable('colleges')
+        ) {
+            return 0;
+        }
+
+        return DB::table('college_program_intakes as cpi')
+            ->join(
+                'college_program_offerings as cpo',
+                'cpo.id',
+                '=',
+                'cpi.college_program_offering_id'
+            )
+            ->join(
+                'colleges as c',
+                'c.id',
+                '=',
+                'cpo.college_id'
+            )
+            ->where(
+                'c.university_id',
+                $universityId
+            )
+            ->count();
+    }
+
+    private function countCollegeIntakeAllocationsForUniversity(
+        int $universityId
+    ): int {
+        if (
+            ! Schema::hasTable(
+                'college_program_intake_allocations'
+            ) ||
+            ! Schema::hasTable('college_program_intakes') ||
+            ! Schema::hasTable('college_program_offerings') ||
+            ! Schema::hasTable('colleges')
+        ) {
+            return 0;
+        }
+
+        return DB::table(
+            'college_program_intake_allocations as cpia'
+        )
+            ->join(
+                'college_program_intakes as cpi',
+                'cpi.id',
+                '=',
+                'cpia.college_program_intake_id'
+            )
+            ->join(
+                'college_program_offerings as cpo',
+                'cpo.id',
+                '=',
+                'cpi.college_program_offering_id'
+            )
+            ->join(
+                'colleges as c',
+                'c.id',
+                '=',
+                'cpo.college_id'
+            )
+            ->where(
+                'c.university_id',
+                $universityId
+            )
+            ->count();
     }
 
     private function countCollegeOfferingsForUniversity(

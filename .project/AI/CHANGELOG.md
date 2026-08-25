@@ -1,18 +1,41 @@
 # Change Log
 
-## 2026-08-25 — Logout redirect standardized
+## 2026-08-25 — Reservation / Quota / Seat Distribution implemented
 
-- Overrode Fortify `LogoutResponse` so every successful logout redirects to the named ERP `login` route.
-- Removed logout's dependency on the root/home route, preventing the Laravel/Inertia welcome page from appearing after logout.
-- Added permanent `AUTH_NAVIGATION_CONTRACT.md` and linked it from the Project Constitution.
+- Added University Reservation / Quota Category Master with Vertical/Horizontal nature.
+- Added College Reservation plans against effective Intake admission seat buckets.
+- Added derived Open/Unreserved remaining and Horizontal overlay handling.
+- Added Intake downstream guards, permissions, audit events, routes, sidebar and UI.
+- Added individual Test Data Cleanup and Full Reset dependency order.
+- Added Reservation TABLE/PAGE specs, ADR 016 and Implementation Completion Contract.
 
-## 2026-08-25 — Global UI/data selection consistency contract
+## 2026-08-25 — Intake changed to hierarchical Discipline/Specialization capacity
 
-- Standardized Current ACTIVE Academic Session as the creation default for session-dependent modules.
-- Corrected Curriculum, Academic Policy and Academic Calendar creation forms; College Program Offering already follows the same rule.
-- Preserved historical references on Edit/View when Current Session changes.
-- Added mandatory project-wide rules for configured `display_order`, dependent dropdowns, status/eligibility filtering, current-vs-historical version selection and frontend/backend validation parity.
-- Added `UI_DATA_SELECTION_CONSISTENCY.md` and linked it from Project Constitution, Page Flow Standard and Page Spec Template.
+- Finalized Program -> Discipline -> optional Specialization seat hierarchy.
+- Removed Specialization as a mutually-exclusive Intake mode.
+- Added self-parent allocation relationship so Specialization capacity is contained within its Discipline capacity.
+- Activation requires Discipline total = Program capacity; Specialization total only needs to be <= parent Discipline capacity.
+- Added derived General Discipline remaining seats.
+- Froze future Student Lifecycle references: Discipline allocation required, Specialization allocation nullable.
+- Added ADR 015 and synchronized Intake PAGE/TABLE specs and hierarchy.
+
+## 2026-08-25 — Intake seat-bearing specialization model corrected
+
+- Replaced ambiguous Program-only/Structured Intake model with PROGRAM / DISCIPLINE / ADMISSION_SPECIALIZATION allocation levels.
+- Added explicit `is_admission_seat_bearing` flag to Program Template specialization mappings, default false.
+- Optional/curriculum specializations no longer participate in Intake automatically.
+- Admission Specialization allocations require explicit seat-bearing configuration.
+- Documented separate Admission seat identity vs Student academic specialization/elective choice.
+
+## 2026-08-25 — College Intake / Seat Capacity implemented
+
+- Added one Intake header per active College Program Offering.
+- Added Program-only and Discipline/Specialization structured seat-capacity modes.
+- Added child allocation table with mapped Discipline/Specialization validation and display order.
+- Added activation integrity gate requiring structured allocations to total approved capacity exactly.
+- Added protected/delegable permissions for SUPER_ADMIN and COLLEGE_ADMIN.
+- Added College-scoped audit events, sidebar/routes/UI and Test Data cleanup dependency updates.
+- Added ADR 014 plus TABLE/PAGE specs.
 
 ## 2026-08-25 — Program Offering current Session/Curriculum selection correction
 
