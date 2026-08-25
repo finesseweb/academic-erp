@@ -1,10 +1,11 @@
 # Change Log
 
-## 2026-08-25 — Academic Policy Degree Level ENUM database fix
+## 2026-08-25 — Academic Calendar integrity and explicit lifecycle audit
 
-- Fixed MySQL `academic_policies.scope_type` so the physical ENUM now includes `DEGREE_LEVEL`.
-- Added a follow-up migration rather than editing the earlier migration, so environments where `degree_level_id` was already migrated can be upgraded safely.
-- Documented that Academic Policy scope changes must keep request validation, service rules, foreign keys, and the physical database ENUM synchronized.
+- Added Academic Session -> Academic Calendar date integrity validation: Session date changes are blocked when existing Calendar events would fall outside the proposed new Session range.
+- Preserved dependent data explicitly: Calendar events are not silently disabled or deleted.
+- Replaced generic Calendar/Event status audit names with explicit `ACTIVATED` / `DEACTIVATED` events.
+- Updated Academic Session, Academic Calendar, Calendar Event and ADR 011 documentation.
 
 ## 2026-08-25 — Academic Policy Degree Level scope
 
@@ -35,3 +36,12 @@
 - Froze the separation between common workflow mechanics and module-specific validation/final lifecycle actions.
 - Added future expansion guidance to prefer subject handlers/registration over duplicated approval systems or growing controller branching.
 - Updated implementation state, roadmap, registry and Approval QA checklist.
+## 2026-08-25 — Academic Calendar foundation
+- Marked Common Academic Approval QA complete after project-owner confirmation.
+- Added University `academic_calendars` and `academic_calendar_events` design/implementation.
+- Enforced one official University calendar per Academic Session and event dates within session bounds.
+- Added per-event `allow_college_override` for the future College Academic Calendar milestone.
+- Added granular Academic Calendar permissions and Super Admin seed/grants.
+- Added audited Laravel service/controller/Form Requests and `resources/js/pages/academic-calendars/index.tsx`.
+- Added ADR 011, PAGE_SPEC, TABLE_SPECs, schema/relationship/permission documentation and Calendar QA gate.
+

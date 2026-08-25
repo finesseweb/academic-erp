@@ -55,5 +55,7 @@ The University administration foundation is complete only when authentication, R
 - Permission-aware sidebar entry implemented under Academic Setup after Curriculum.
 - Route: `/admin/academic-policies`; permission: `academic_policy.view`.
 - Approval execution and policy amendment/version activation are IMPLEMENTED through the common Academic Approval engine; final QA is the current gate.
-- Academic Calendar remains the next major frozen module after Academic Policies is completed.
+- Academic Calendar: IMPLEMENTED_IN_REPLACEMENT_PACKAGE on 2026-08-25; QA and owner review pending.
 - Future approval-enabled modules must reuse the same common engine; only subject-specific validation and final lifecycle behavior belong in module handlers/services.
+
+- Academic Calendar foundation includes one official University calendar per Academic Session, normalized events and event-level future College override governance.

@@ -10,3 +10,11 @@ University-scoped list/create/update/status/current-session management. Codes ar
 
 ## UX
 Responsive token-based cards, empty state, shared modern DatePicker with direct month/year selection, inline errors, processing lock/spinner, lifecycle controls and current/status badges. Permissions: `academic_session.view/create/update/close/set_current`.
+
+
+## Calendar Integrity Rule
+When a University Academic Calendar already contains events for an Academic Session, changing the Session date range must preserve every existing Calendar event.
+- If an event would start before the proposed Session start date or end after the proposed Session end date, reject the Session update.
+- The validation error should identify the affected events so the administrator can correct them.
+- Never silently disable or delete Calendar events because the parent Session dates changed.
+- After affected events are corrected, the Session dates may be changed normally.

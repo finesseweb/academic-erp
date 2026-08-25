@@ -22,6 +22,8 @@ Do not invent table entries. Add an entry only after inspecting/approving the re
 | Affiliated College | `colleges` | University Foundation | University-owned child | `id` | `code` | `universities.id` | `TABLE_SPECS/colleges.md` |
 | Authorized signatory appointment | `authorized_signatories` | University Foundation | University-owned child | `id` | Appointment identity + authority period | `universities.id` | `TABLE_SPECS/authorized_signatories.md` |
 | Academic session | `academic_sessions` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `universities.id` | `TABLE_SPECS/academic_sessions.md` |
+| University academic calendar | `academic_calendars` | Academic Calendar | University-owned child | `id` | (`university_id`, `academic_session_id`); (`university_id`, `code`) | `academic_sessions.id` | `TABLE_SPECS/academic_calendars.md` |
+| University academic calendar event | `academic_calendar_events` | Academic Calendar | Via Academic Calendar -> University | `id` | event identity | `academic_calendars.id` | `TABLE_SPECS/academic_calendar_events.md` |
 | Degree level | `degree_levels` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `universities.id` | `TABLE_SPECS/degree_levels.md` |
 | Degree | `degrees` | Academic Master | University-owned child | `id` | (`university_id`, `code`) | `degree_levels.id` | `TABLE_SPECS/degrees.md` |
 | Discipline / specialization | `academic_disciplines` | Academic Master | University-owned hierarchy | `id` | (`university_id`, `code`) | `universities.id`; optional self parent | `TABLE_SPECS/academic_disciplines.md` |
@@ -114,3 +116,10 @@ One-to-one, version-bound Academic Policy configuration for promotion/progressio
 ### academic_policy_progression_rule_sets / academic_policy_progression_rule_terms
 
 Dynamic version-bound progression checkpoints. Multiple source Curriculum Terms can be mapped to one target Term. This replaces legacy `academic_policy_progression_rules`.
+
+
+## Academic Calendar — 2026-08-25
+- `academic_calendars` — one official University Calendar header per Academic Session.
+- `academic_calendar_events` — dated University calendar events/ranges; includes the future College override governance flag.
+- Calendar dates are constrained by application validation to the owning Academic Session.
+- Routine/Timetable and detailed Examination scheduling are intentionally separate domains.

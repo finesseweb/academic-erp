@@ -151,3 +151,11 @@ On `next` / `next N` / `nextN`:
 | Academic Policy — Grading | `/admin/academic-policies/{academicPolicy}/grading` | `resources/js/pages/admin/academic-policies/grading.tsx` | IMPLEMENTED — Phase 4 |
 
 | Academic Policy — Promotion / Progression | `/admin/academic-policies/{academicPolicy}/progression` | `resources/js/pages/admin/academic-policies/progression.tsx` | IMPLEMENTED — Phase 5 |
+
+## Academic Calendar — 2026-08-25
+- `PAGE_SPECS/UNIVERSITY_ADMIN/ACADEMIC_CALENDAR_PAGE.md` — CORE_IMPLEMENTED, PENDING_REVIEW.
+- Route: `/admin/academic-calendars`.
+- Permission gate: `academic_calendar.view`.
+- Database: `academic_calendars`, `academic_calendar_events`.
+- Current gate: Academic Calendar QA in `NEXT_WORKFLOW.md`.
+

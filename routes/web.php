@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AcademicDisciplineController;
+use App\Http\Controllers\AcademicCalendarController;
 use App\Http\Controllers\AcademicSessionController;
 use App\Http\Controllers\AcademicPolicyController;
 use App\Http\Controllers\AcademicPolicyApprovalController;
@@ -92,6 +93,13 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('admin/academic-sessions/{academicSession}', [AcademicSessionController::class, 'update'])->name('academic-sessions.update');
     Route::patch('admin/academic-sessions/{academicSession}/status', [AcademicSessionController::class, 'status'])->name('academic-sessions.status');
     Route::patch('admin/academic-sessions/{academicSession}/current', [AcademicSessionController::class, 'setCurrent'])->name('academic-sessions.current');
+    Route::get('admin/academic-calendars', [AcademicCalendarController::class, 'index'])->name('academic-calendars.index');
+    Route::post('admin/academic-calendars', [AcademicCalendarController::class, 'store'])->name('academic-calendars.store');
+    Route::patch('admin/academic-calendars/{academicCalendar}', [AcademicCalendarController::class, 'update'])->name('academic-calendars.update');
+    Route::patch('admin/academic-calendars/{academicCalendar}/status', [AcademicCalendarController::class, 'status'])->name('academic-calendars.status');
+    Route::post('admin/academic-calendars/{academicCalendar}/events', [AcademicCalendarController::class, 'storeEvent'])->name('academic-calendars.events.store');
+    Route::patch('admin/academic-calendars/{academicCalendar}/events/{event}', [AcademicCalendarController::class, 'updateEvent'])->name('academic-calendars.events.update');
+    Route::patch('admin/academic-calendars/{academicCalendar}/events/{event}/status', [AcademicCalendarController::class, 'eventStatus'])->name('academic-calendars.events.status');
     Route::get('admin/degree-levels', [DegreeLevelController::class, 'index'])->name('degree-levels.index');
     Route::post('admin/degree-levels', [DegreeLevelController::class, 'store'])->name('degree-levels.store');
     Route::patch('admin/degree-levels/{degreeLevel}', [DegreeLevelController::class, 'update'])->name('degree-levels.update');

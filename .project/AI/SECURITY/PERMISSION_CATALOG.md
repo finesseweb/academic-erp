@@ -251,3 +251,15 @@ Approver identities are never authorized by hard-coded role names. Workflow stag
   - college delegable: no
   - purpose: view and execute controlled test-data cleanup tools
   - never grants raw SQL/database access
+
+## Academic Calendar permissions — implemented 2026-08-25
+- `academic_calendar.view`
+- `academic_calendar.create`
+- `academic_calendar.update`
+- `academic_calendar.disable`
+- `academic_calendar.event_create`
+- `academic_calendar.event_update`
+- `academic_calendar.event_disable`
+
+These permissions govern the University Academic Calendar header and events. They are University-scoped, non-College-delegable and initially granted to protected `SUPER_ADMIN`. `disable` / `event_disable` are sensitive non-destructive lifecycle actions. Future College Academic Calendar permissions will be specified separately and must respect each University event's `allow_college_override` flag.
+

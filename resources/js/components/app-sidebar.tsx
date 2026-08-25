@@ -175,6 +175,12 @@ const platformItems: TreeNavItem[] = [
                 href: '/admin/academic-policies',
                 permission: 'academic_policy.view',
             },
+            {
+                title: 'Academic Calendar',
+                icon: CalendarRange,
+                href: '/admin/academic-calendars',
+                permission: 'academic_calendar.view',
+            },
         ],
     },
     {

@@ -27,6 +27,3 @@ Allowed `scope_type` values:
 - `CURRICULUM` — policy for one current ACTIVE + APPROVED Curriculum in the selected Academic Session; curriculum_id required, degree_level_id null, and program_template_id may be used only when it matches the Curriculum.
 
 The scope hierarchy is `UNIVERSITY -> DEGREE_LEVEL -> PROGRAM_TEMPLATE -> CURRICULUM`. Degree Level scope references the existing Degree Level Master; no duplicate free-text undergraduate/postgraduate field is introduced.
-
-## Physical DB migration note — 2026-08-25
-The existing MySQL `scope_type` column was originally an ENUM containing only `UNIVERSITY`, `PROGRAM_TEMPLATE`, and `CURRICULUM`. Adding Degree Level scope therefore requires both the nullable `degree_level_id` foreign key **and** expansion of the physical ENUM to include `DEGREE_LEVEL`. The follow-up migration `2026_08_25_061500_expand_academic_policy_scope_type_enum.php` performs this expansion. Do not treat a frontend/request validation change alone as sufficient.
