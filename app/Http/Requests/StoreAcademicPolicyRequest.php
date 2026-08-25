@@ -16,12 +16,13 @@ class StoreAcademicPolicyRequest extends FormRequest
     {
         return [
             'academic_session_id' => ['required', 'integer'],
+            'degree_level_id' => ['nullable', 'integer'],
             'program_template_id' => ['nullable', 'integer'],
             'curriculum_id' => ['nullable', 'integer'],
             'name' => ['required', 'string', 'max:180'],
             'code' => ['required', 'string', 'max:100'],
             'version' => ['required', 'string', 'max:30'],
-            'scope_type' => ['required', Rule::in(['UNIVERSITY', 'PROGRAM_TEMPLATE', 'CURRICULUM'])],
+            'scope_type' => ['required', Rule::in(['UNIVERSITY', 'DEGREE_LEVEL', 'PROGRAM_TEMPLATE', 'CURRICULUM'])],
             'effective_from' => ['nullable', 'date'],
             'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'],
             'description' => ['nullable', 'string', 'max:5000'],

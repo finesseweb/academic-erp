@@ -49,12 +49,13 @@ class AcademicPolicyApprovalService
         $workflow = DB::table('approval_workflows')
             ->where('id', $workflowId)
             ->where('university_id', $policy->university_id)
+            ->where('applies_to', 'ACADEMIC_POLICY')
             ->where('status', 'ACTIVE')
             ->first();
 
         if (! $workflow) {
             throw ValidationException::withMessages([
-                'approval_workflow_id' => 'Select an active Academic Approval Workflow.',
+                'approval_workflow_id' => 'Select an active Academic Policy approval workflow from this University.',
             ]);
         }
 

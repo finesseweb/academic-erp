@@ -454,6 +454,10 @@ Full and granular cross-version reuse is supported. Partial clone target must re
 Hard delete is a setup-correction feature only. Entire Curriculum, Term, Slot and Mapping deletion are allowed only before operational assignment and while the target Curriculum is DRAFT. ACTIVE/RETIRED or assigned academic history must never be hard-deleted.
 
 
+
+### Common Approval Engine — Frozen Rule
+Academic Approval / Versioning is a reusable governance capability, not a Curriculum-only or Academic-Policy-only feature. Future approval-enabled modules must plug into the common approval engine for workflow, ordered stages, role assignment, Approve/Return/Reject, history and audit. Module-specific services/handlers retain their own validation and final lifecycle action. Backend submission must validate University/scope, ACTIVE workflow status and matching `applies_to` subject type.
+
 ### Phase 5 Governance Approval — Implementation Note
 Phase 5A starts with reusable Workflow Setup and Role-based ordered stages. Phase 5B connects the engine to Curriculum lifecycle and approval execution. Gate 5 must pass before Admissions.
 

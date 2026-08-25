@@ -1,5 +1,6 @@
 /.phpunit.cache
 /bootstrap/ssr
+/.project
 /node_modules
 /public/build
 /public/fonts-manifest.dev.json
@@ -18,8 +19,6 @@
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
-composer.json
-composer.lock
 Homestead.yaml
 npm-debug.log
 yarn-error.log
@@ -29,4 +28,4 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
-eslint.config.js
+.project.zip

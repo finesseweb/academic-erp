@@ -171,6 +171,7 @@ The chain is intentionally single-successor in application rules. An unapproved 
 ## Academic Policy relationships
 `universities -> academic_policies`
 `academic_sessions -> academic_policies`
+`degree_levels -> academic_policies` (scope-dependent)
 `program_templates -> academic_policies` (scope-dependent)
 `curricula -> academic_policies` (scope-dependent)
 `academic_policies -> academic_policies` (parent revision / superseded version)
@@ -215,3 +216,16 @@ Future Student Academic Lifecycle consumes the resolved applicable rule; the pol
 through `academic_policy_progression_rule_terms` for source Terms.
 
 Each specific Rule Set may also reference one `target_curriculum_term_id`.
+
+## Academic Calendar Relationships — 2026-08-25
+| Child FK | Parent | Cardinality | Required | Delete | Meaning |
+|---|---|---|---|---|---|
+| `academic_calendars.university_id` | `universities.id` | many-to-one | Yes | RESTRICT | University owner |
+| `academic_calendars.academic_session_id` | `academic_sessions.id` | one calendar per session within University | Yes | RESTRICT | Calendar's governing Academic Session |
+| `academic_calendar_events.academic_calendar_id` | `academic_calendars.id` | many-to-one | Yes | RESTRICT | Event belongs to University Academic Calendar |
+
+Verified business path:
+`universities -> academic_sessions -> academic_calendars -> academic_calendar_events`
+
+Future College calendar adoption/override must reference this University foundation and may override only events where `allow_college_override = true`.
+

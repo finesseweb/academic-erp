@@ -2,6 +2,30 @@
 
 Always read `PROJECT_CONSTITUTION.md` first, then follow `README.md`.
 
+
+## Project Context Access and Consistency Rule — Mandatory
+Before developing or changing anything, determine whether the agent has sufficient access to the current project and its authoritative references.
+
+### Agent with full project access
+If the agent (for example Codex or another repository-aware agent) has access to the complete current project/repository and `.project/AI/` documentation, it MUST inspect the relevant existing implementation and authoritative documents first, then develop consistently from project reality. It should not ask the owner for references that are already available in the repository.
+
+The inspection must include every affected layer as applicable: UI/design patterns, components, routes, controllers/services, models, migrations/schema, relationships, permissions/RBAC/scope, naming conventions, workflows, audit behavior, tests, and living documentation. Repository reality plus `.project/AI/` are the development reference.
+
+### Agent with partial or no project-file access
+If the agent does NOT have full access to the relevant current project files, it MUST NOT guess existing architecture or invent a parallel pattern. Whenever an existing reference is needed to preserve consistency, it must ask the owner for the specific relevant file(s), code, screenshot, schema, PAGE_SPEC, or other project reference before finalizing that part of the implementation.
+
+This applies especially to:
+- UI layout, design system, components, forms, tables, navigation and interaction patterns;
+- database tables, columns, constraints, indexes, relationships and migrations;
+- Laravel controllers/services/policies/models and backend conventions;
+- React/Inertia page/component structure and frontend conventions;
+- routes, route names and URL hierarchy;
+- permissions, roles, scopes, audit behavior and security rules;
+- module names, terminology, status values and workflow/lifecycle rules;
+- documentation structure and implementation-state updates.
+
+The goal is one consistent ERP. Lack of file access is never permission to guess. Ask only for the missing reference actually needed, then continue according to the established project.
+
 ## Before Changing Any Feature
 - Read its PAGE_SPEC/feature documentation.
 - Inspect the current Laravel migrations / Eloquent schema and relevant new-ERP table specs/relationships.
@@ -75,3 +99,8 @@ Do not create a new folder convention per page.
 Before implementing or changing any UI, read `.project/AI/UI_UX_GUIDELINES.md`.
 A page is incomplete if it lacks appropriate loaders/skeletons, pending button states, professional semantic messages/toasts, validation feedback, empty/no-result/error states, meaningful icons, destructive confirmations, responsive behavior, accessibility/focus behavior, and permission-aware actions.
 Do not create visually inconsistent one-off CRUD screens. Reuse the shared application shell and design-system components.
+
+## Common Approval Engine Rule — Mandatory
+When a current or future module requires approval, first inspect and reuse the existing Academic Approval engine. Do not create a separate module-specific approval system. Keep workflow/stage/role/decision/history mechanics common, while keeping subject-specific validation and final lifecycle behavior in the module's approval handler/service.
+
+Every approval submission must enforce in Laravel that the workflow is ACTIVE, belongs to the same University/scope, and has an `applies_to` value matching the subject type. Never rely only on a frontend dropdown/filter for this constraint.

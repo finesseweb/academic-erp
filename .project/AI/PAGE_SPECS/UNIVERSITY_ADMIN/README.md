@@ -68,4 +68,4 @@ Recommended University administration navigation:
   - My Profile
 
 Affiliated College detail pages may expose College operations by scope, including College Fee Management.
-
+- `ACADEMIC_CALENDAR_PAGE.md` — University Academic Calendar header/events and future College override governance.

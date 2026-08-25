@@ -141,9 +141,9 @@ On `next` / `next N` / `nextN`:
 - Database: self-linked amendment metadata on `curricula`
 - Status: IMPLEMENTED_IN_REPLACEMENT_PACKAGE; repository apply/QA required
 
-- University Admin / Academic Policies — Phase 1 IMPLEMENTED (package): Header/Master + validation.
+- University Admin / Academic Policies — Phase 1 IMPLEMENTED (package): Header/Master + validation. Degree Level scope added in 2026-08-25 replacement package; QA pending.
 - University Admin / Academic Policy / Credit & Completion — Phase 1 IMPLEMENTED (package).
-- Academic Policy Approval Execution — PENDING integration.
+- Academic Policy Approval Execution — IMPLEMENTED; common Inbox integration complete, QA gate pending.
 - University Admin / Academic Policy / Attendance — Phase 2 IMPLEMENTED (package): configurable attendance threshold, calculation level, condonation, exam-eligibility flag, special exemption permission, rounding, validation integration.
 
 | Academic Policy — Assessment / Examination | `/admin/academic-policies/{academicPolicy}/assessment-examination` | `resources/js/pages/admin/academic-policies/assessment-examination.tsx` | IMPLEMENTED — Phase 3 |
@@ -151,3 +151,11 @@ On `next` / `next N` / `nextN`:
 | Academic Policy — Grading | `/admin/academic-policies/{academicPolicy}/grading` | `resources/js/pages/admin/academic-policies/grading.tsx` | IMPLEMENTED — Phase 4 |
 
 | Academic Policy — Promotion / Progression | `/admin/academic-policies/{academicPolicy}/progression` | `resources/js/pages/admin/academic-policies/progression.tsx` | IMPLEMENTED — Phase 5 |
+
+## Academic Calendar — 2026-08-25
+- `PAGE_SPECS/UNIVERSITY_ADMIN/ACADEMIC_CALENDAR_PAGE.md` — CORE_IMPLEMENTED, PENDING_REVIEW.
+- Route: `/admin/academic-calendars`.
+- Permission gate: `academic_calendar.view`.
+- Database: `academic_calendars`, `academic_calendar_events`.
+- Current gate: Academic Calendar QA in `NEXT_WORKFLOW.md`.
+

@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateAcademicPolicyRequest;
 use App\Models\AcademicPolicy;
 use App\Models\AcademicSession;
 use App\Models\Curriculum;
+use App\Models\DegreeLevel;
 use App\Models\ProgramTemplate;
 use App\Models\University;
 use App\Services\AcademicPolicyApprovalService;
@@ -34,7 +35,7 @@ class AcademicPolicyController extends Controller
         $status = strtoupper((string) $request->query('status', ''));
 
         $policies = AcademicPolicy::query()
-            ->with(['academicSession:id,name,code', 'programTemplate:id,name,code', 'curriculum:id,name,code,version'])
+            ->with(['academicSession:id,name,code', 'degreeLevel:id,name,code', 'programTemplate:id,name,code', 'curriculum:id,name,code,version'])
             ->withExists([
                 'creditCompletionRule as credit_completion_configured',
                 'attendanceRule as attendance_configured',
@@ -142,6 +143,7 @@ class AcademicPolicyController extends Controller
             'policies' => $policies,
             'filters' => ['search' => $search, 'status' => $status],
             'academicSessions' => AcademicSession::query()->where('university_id', $university->id)->where('status', 'ACTIVE')->orderByDesc('starts_on')->get(['id','name','code']),
+            'degreeLevels' => DegreeLevel::query()->where('university_id', $university->id)->where('status', 'ACTIVE')->orderBy('display_order')->orderBy('name')->get(['id','name','code']),
             'programTemplates' => ProgramTemplate::query()->where('university_id', $university->id)->where('status', 'ACTIVE')->orderBy('name')->get(['id','name','code']),
             'curricula' => Curriculum::query()
                 ->where('university_id', $university->id)
