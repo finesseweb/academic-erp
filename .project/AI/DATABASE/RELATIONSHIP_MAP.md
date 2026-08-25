@@ -171,6 +171,7 @@ The chain is intentionally single-successor in application rules. An unapproved 
 ## Academic Policy relationships
 `universities -> academic_policies`
 `academic_sessions -> academic_policies`
+`degree_levels -> academic_policies` (scope-dependent)
 `program_templates -> academic_policies` (scope-dependent)
 `curricula -> academic_policies` (scope-dependent)
 `academic_policies -> academic_policies` (parent revision / superseded version)

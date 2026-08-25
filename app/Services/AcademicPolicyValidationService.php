@@ -225,6 +225,7 @@ class AcademicPolicyValidationService
             'header' => [
                 'university_id' => $policy->university_id,
                 'academic_session_id' => $policy->academic_session_id,
+                'degree_level_id' => $policy->degree_level_id,
                 'program_template_id' => $policy->program_template_id,
                 'curriculum_id' => $policy->curriculum_id,
                 'name' => $policy->name,

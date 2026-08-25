@@ -22,6 +22,16 @@ Project: University ERP
 - Auditable high-impact actions.
 - Safe, versioned Laravel migrations / Eloquent/MySQL migrations.
 
+
+## Project Context Access and Consistency Constitution — Mandatory
+All development must preserve consistency with the current University ERP across architecture, database, UI/design, backend, frontend, routes, security, naming, workflow and documentation.
+
+An AI agent/developer with full access to the current repository and `.project/AI/` MUST inspect the relevant existing code and authoritative documentation and develop from those references without requesting information that is already available.
+
+An AI agent/developer without full access to the relevant current project files MUST NOT guess or invent incompatible patterns. When an existing project reference is required to make a consistent implementation decision, it MUST request the specific missing reference from the project owner before finalizing that part of the work. This includes, as applicable, design/UI patterns, database schema and relationships, migrations, backend structure, frontend components, routes, permissions/RBAC/scope, naming, workflows, audit rules and documentation.
+
+The purpose of this rule is to ensure that full-access and partial-access agents both produce work that fits the same ERP instead of creating isolated or conflicting implementations.
+
 ## New Database Constitution
 This ERP uses a BRAND-NEW database design. The legacy Zend/MySQL ERP is NOT the schema authority and must not constrain the new schema.
 
@@ -57,6 +67,18 @@ No AI agent or developer may violate this constitution without an explicit appro
 - Business components consume semantic design tokens; they must not hard-code theme-specific colors.
 - Custom themes may define approved design tokens only. Raw CSS, HTML or JavaScript from theme creators is prohibited.
 - Theme changes must never bypass accessibility, authorization or tenant-scope rules.
+
+
+## Common Academic Approval Engine Constitution — Mandatory
+The ERP uses one reusable Academic Approval engine for approval-enabled academic and operational modules. Curriculum and Academic Policy are the first integrated subject types; future modules that require approval MUST integrate with this common engine instead of creating an isolated approval subsystem.
+
+The common engine owns reusable workflow mechanics: workflow selection, University scope, ordered stages, role-based approver assignment, pending-stage routing, Approve / Return / Reject decisions, remarks requirements, stage history, request history, authorization and auditability.
+
+Each subject/module remains responsible for its own domain validation, submission eligibility, correction/resubmission rules and final lifecycle action. Examples include activating an approved Curriculum, activating/current-version handling for an Academic Policy, and future module-specific publish/lock/activate actions.
+
+Every submission MUST validate server-side that the selected workflow belongs to the same University, is ACTIVE, and `applies_to` the submitting subject type. Frontend filtering is UX only and never replaces backend validation.
+
+New subject types should be added through a reusable subject-handler/registration pattern when expansion makes controller branching unwieldy. Do not duplicate the approval engine for each module.
 
 ## Living Documentation Constitution Rule
 The ``.project/AI/` directory is an authoritative part of the project. Implementation and documentation must remain synchronized. All contributors and AI agents MUST follow `DOCUMENTATION_MAINTENANCE.md`. Documentation maintenance is part of the Definition of Done. Major architectural/product deviations require approval and an ADR; normal implementation changes must automatically update their respective documentation.

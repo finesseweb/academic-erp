@@ -54,5 +54,6 @@ The University administration foundation is complete only when authentication, R
 - Policy validation checkpoint implemented.
 - Permission-aware sidebar entry implemented under Academic Setup after Curriculum.
 - Route: `/admin/academic-policies`; permission: `academic_policy.view`.
-- Approval execution and policy amendment/version activation are the next gate and must reuse the existing Academic Approval engine.
+- Approval execution and policy amendment/version activation are IMPLEMENTED through the common Academic Approval engine; final QA is the current gate.
 - Academic Calendar remains the next major frozen module after Academic Policies is completed.
+- Future approval-enabled modules must reuse the same common engine; only subject-specific validation and final lifecycle behavior belong in module handlers/services.

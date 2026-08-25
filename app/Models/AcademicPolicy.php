@@ -12,6 +12,7 @@ class AcademicPolicy extends Model
     protected $fillable = [
         'university_id',
         'academic_session_id',
+        'degree_level_id',
         'program_template_id',
         'curriculum_id',
         'parent_policy_id',
@@ -49,6 +50,7 @@ class AcademicPolicy extends Model
 
     public function university(): BelongsTo { return $this->belongsTo(University::class); }
     public function academicSession(): BelongsTo { return $this->belongsTo(AcademicSession::class); }
+    public function degreeLevel(): BelongsTo { return $this->belongsTo(DegreeLevel::class); }
     public function programTemplate(): BelongsTo { return $this->belongsTo(ProgramTemplate::class); }
     public function curriculum(): BelongsTo { return $this->belongsTo(Curriculum::class); }
     public function parentPolicy(): BelongsTo { return $this->belongsTo(self::class, 'parent_policy_id'); }

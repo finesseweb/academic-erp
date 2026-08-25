@@ -7,3 +7,5 @@ QA both subjects in the common Inbox:
 4. Approve/Return/Reject each.
 5. Confirm Curriculum keeps its existing lifecycle behavior.
 6. Confirm final Academic Policy approval becomes ACTIVE / APPROVED / Current.
+7. Confirm backend rejects workflow type mismatch (Curriculum workflow for Academic Policy and vice versa).
+8. Confirm Return preserves the same subject version/record for correction and resubmission.

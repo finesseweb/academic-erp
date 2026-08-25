@@ -141,9 +141,9 @@ On `next` / `next N` / `nextN`:
 - Database: self-linked amendment metadata on `curricula`
 - Status: IMPLEMENTED_IN_REPLACEMENT_PACKAGE; repository apply/QA required
 
-- University Admin / Academic Policies — Phase 1 IMPLEMENTED (package): Header/Master + validation.
+- University Admin / Academic Policies — Phase 1 IMPLEMENTED (package): Header/Master + validation. Degree Level scope added in 2026-08-25 replacement package; QA pending.
 - University Admin / Academic Policy / Credit & Completion — Phase 1 IMPLEMENTED (package).
-- Academic Policy Approval Execution — PENDING integration.
+- Academic Policy Approval Execution — IMPLEMENTED; common Inbox integration complete, QA gate pending.
 - University Admin / Academic Policy / Attendance — Phase 2 IMPLEMENTED (package): configurable attendance threshold, calculation level, condonation, exam-eligibility flag, special exemption permission, rounding, validation integration.
 
 | Academic Policy — Assessment / Examination | `/admin/academic-policies/{academicPolicy}/assessment-examination` | `resources/js/pages/admin/academic-policies/assessment-examination.tsx` | IMPLEMENTED — Phase 3 |

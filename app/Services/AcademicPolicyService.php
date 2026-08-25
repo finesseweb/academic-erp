@@ -84,6 +84,7 @@ class AcademicPolicyService
             $target = AcademicPolicy::create([
                 'university_id' => $source->university_id,
                 'academic_session_id' => $targetSessionId,
+                'degree_level_id' => $source->degree_level_id,
                 'program_template_id' => $source->program_template_id,
                 'curriculum_id' => $source->curriculum_id,
                 'parent_policy_id' => null,
@@ -235,6 +236,7 @@ class AcademicPolicyService
             $target = AcademicPolicy::create([
                 'university_id' => $source->university_id,
                 'academic_session_id' => $source->academic_session_id,
+                'degree_level_id' => $source->degree_level_id,
                 'program_template_id' => $source->program_template_id,
                 'curriculum_id' => $source->curriculum_id,
                 'parent_policy_id' => $source->id,
@@ -453,14 +455,38 @@ class AcademicPolicyService
         }
 
         $scope = $data['scope_type'];
+        $degreeLevelId = $data['degree_level_id'] ?? null;
         $programId = $data['program_template_id'] ?? null;
         $curriculumId = $data['curriculum_id'] ?? null;
 
-        if ($scope === 'UNIVERSITY' && ($programId || $curriculumId)) {
-            throw ValidationException::withMessages(['scope_type' => 'University-wide policy cannot target a Program Template or Curriculum.']);
+        if ($scope === 'UNIVERSITY' && ($degreeLevelId || $programId || $curriculumId)) {
+            throw ValidationException::withMessages(['scope_type' => 'University-wide policy cannot target a Degree Level, Program Template or Curriculum.']);
+        }
+
+        if ($scope === 'DEGREE_LEVEL') {
+            if (! $degreeLevelId) {
+                throw ValidationException::withMessages(['degree_level_id' => 'Degree Level is required for Degree Level-scoped policy.']);
+            }
+
+            $exists = DB::table('degree_levels')
+                ->where('id', $degreeLevelId)
+                ->where('university_id', $universityId)
+                ->where('status', 'ACTIVE')
+                ->exists();
+
+            if (! $exists) {
+                throw ValidationException::withMessages(['degree_level_id' => 'Select an active Degree Level from this University.']);
+            }
+
+            if ($programId || $curriculumId) {
+                throw ValidationException::withMessages(['scope_type' => 'Degree Level-scoped policy cannot also target a Program Template or Curriculum.']);
+            }
         }
 
         if ($scope === 'PROGRAM_TEMPLATE') {
+            if ($degreeLevelId) {
+                throw ValidationException::withMessages(['degree_level_id' => 'Degree Level must be blank for Program-scoped policy.']);
+            }
             if (! $programId) {
                 throw ValidationException::withMessages(['program_template_id' => 'Program Template is required for Program-scoped policy.']);
             }
@@ -474,6 +500,9 @@ class AcademicPolicyService
         }
 
         if ($scope === 'CURRICULUM') {
+            if ($degreeLevelId) {
+                throw ValidationException::withMessages(['degree_level_id' => 'Degree Level must be blank for Curriculum-scoped policy.']);
+            }
             if (! $curriculumId) {
                 throw ValidationException::withMessages(['curriculum_id' => 'Curriculum is required for Curriculum-scoped policy.']);
             }
