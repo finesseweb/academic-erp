@@ -37,14 +37,40 @@ Run College Program Offering QA defined in `NEXT_WORKFLOW.md`. Do not begin Inta
 - Curriculum currentness remains derived from ADR 007 amendment chains; no duplicate `is_current_version` column/flag is introduced.
 - Existing Program Offerings are historical references and are never auto-relinked when Session Current status or Curriculum Current version changes.
 
-## Global UI/data-selection consistency correction — 2026-08-25
-- Current ACTIVE Academic Session default is now standardized for new session-dependent forms.
-- Corrected existing Add Curriculum, Add Academic Policy, Add Academic Calendar, and College Program Offering behavior.
-- Existing records are never automatically reassigned when Current Session changes.
-- New project-wide `UI_DATA_SELECTION_CONSISTENCY.md` also freezes display-order, dependent-dropdown, current/historical-reference, status filtering and backend-parity rules for future modules.
 
-## Logout redirect correction — 2026-08-25
-- Fortify logout response is explicitly bound to redirect to the named `login` route.
-- Logout no longer depends on the application's `/` home route, so Laravel/Inertia welcome page is not shown after logout.
-- Rule applies consistently to all ERP roles/scopes.
-- Added permanent `AUTH_NAVIGATION_CONTRACT.md` for future authentication/session-flow work.
+## College Intake / Seat Capacity — 2026-08-25
+- Next College Academic Setup milestone implemented in replacement package.
+- Hierarchy: Program Offering -> Intake Header -> optional Discipline/Specialization allocations.
+- Supports PROGRAM_ONLY and STRUCTURED capacity modes.
+- Structured activation requires exact allocation total.
+- University Program Template mappings remain authoritative.
+- Status: OWNER_QA_REQUIRED before Reservation / Quota starts.
+
+
+## Intake admission-specialization correction — 2026-08-25
+- Intake allocation levels are now PROGRAM / DISCIPLINE / ADMISSION_SPECIALIZATION.
+- Optional academic specializations are excluded from seat capacity by default.
+- Program Template specialization mapping gains `is_admission_seat_bearing` (default false).
+- Admission Specialization seat rows require that explicit flag.
+- Student Lifecycle contract now separates admission seat identity from later academic specialization/elective choice.
+
+
+## Intake hierarchical capacity correction — 2026-08-25
+- Final Intake model: PROGRAM or DISCIPLINE allocation mode.
+- Specialization capacity is optional child capacity under a Discipline, not a separate mutually-exclusive Intake mode.
+- Discipline totals equal Program capacity on activation.
+- Specialization child totals may be less than or equal to Discipline capacity.
+- Remaining General Discipline seats are derived automatically.
+- Future Student Lifecycle must store Discipline seat allocation plus nullable Specialization seat allocation.
+- ADR 015 supersedes the earlier admission-specialization-only interpretation.
+
+
+## Reservation / Quota / Seat Distribution — 2026-08-25
+- Implemented after Intake / Seat Capacity.
+- University-owned configurable Reservation Categories support VERTICAL and HORIZONTAL nature.
+- College Reservation Plans attach only to effective admission seat buckets: PROGRAM, DISCIPLINE_GENERAL, or SPECIALIZATION.
+- Open/Unreserved remaining is derived from bucket capacity minus Vertical reserved seats.
+- Horizontal quota overlays the same physical seats and does not create extra capacity.
+- Reservation protects dependent Intake capacity/allocation from unsafe mutation.
+- Admission/Student lifecycle must preserve physical seat bucket + reservation context.
+- Status: OWNER_QA_REQUIRED before Admission implementation.

@@ -89,6 +89,9 @@ type Props = {
     academicPolicies: AcademicPolicy[];
     fullReset: FullReset;
     entities: {
+        college_program_reservation_plans: Entity[];
+        reservation_categories: Entity[];
+        college_program_intakes: Entity[];
         college_program_offerings: Entity[];
         academic_calendars: Entity[];
         approval_workflows: Entity[];
@@ -106,6 +109,9 @@ type Props = {
 type TabKey =
     | 'curriculum'
     | 'academic_policies'
+    | 'college_program_reservation_plans'
+    | 'reservation_categories'
+    | 'college_program_intakes'
     | 'college_program_offerings'
     | 'academic_calendars'
     | 'approval_workflows'
@@ -133,6 +139,9 @@ type ActionTarget = {
 };
 
 const tabs: { key: TabKey; label: string }[] = [
+    { key: 'college_program_reservation_plans', label: 'Reservation / Seat Distribution' },
+    { key: 'college_program_intakes', label: 'Intake / Seat Capacity' },
+    { key: 'reservation_categories', label: 'Reservation Categories' },
     { key: 'college_program_offerings', label: 'Program Offerings' },
     { key: 'academic_calendars', label: 'Academic Calendars' },
     { key: 'academic_policies', label: 'Academic Policies' },
@@ -156,7 +165,7 @@ export default function TestDataCleanup({
     entities,
     fullReset,
 }: Props) {
-    const [tab, setTab] = useState<TabKey>('college_program_offerings');
+    const [tab, setTab] = useState<TabKey>('college_program_reservation_plans');
     const [target, setTarget] = useState<ActionTarget | null>(null);
 
     const form = useForm({
