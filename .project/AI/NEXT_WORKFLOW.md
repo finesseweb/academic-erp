@@ -1,18 +1,20 @@
-# Next Workflow — Academic Calendar QA
+# Next Workflow — College Program Offerings QA
 
-Academic Approval QA is complete. Validate the new University Academic Calendar milestone:
+Academic Calendar QA and owner review are complete. Validate the first College Academic Setup milestone:
 
-1. Run migrations and confirm `academic_calendars` and `academic_calendar_events` exist.
-2. Confirm `academic_calendar.*` permissions are registered and Super Admin can open `/admin/academic-calendars`.
-3. Create one calendar for an existing Academic Session.
-4. Attempt a second calendar for the same session and confirm it is rejected.
-5. Add an event whose dates fall inside the Academic Session and confirm it saves.
-6. Attempt an event before the session start or after the session end and confirm backend validation rejects it.
-7. Edit an event and verify `allow_college_override` persists correctly.
-8. Disable/re-enable a calendar and event; verify records are preserved.
-9. Confirm audit log rows are written for create/update/status operations.
-10. Confirm a user without the relevant permission cannot perform the protected action.
-11. Run the frontend production build and verify responsive page behavior.
-12. Owner reviews the page before advancing to the next hierarchy milestone.
+1. Run migrations and confirm `college_program_offerings` exists.
+2. Confirm `college_program_offering.*` permissions exist and are College-delegable.
+3. Assign the required permissions to a College role and confirm the scoped College user sees `College Academic Setup -> Program Offerings`.
+4. Create an offering with a same-University active Program Template, PLANNED/ACTIVE Academic Session and approved ACTIVE matching Curriculum.
+5. Confirm the new offering starts `INACTIVE`.
+6. Activate the offering and confirm the status becomes `ACTIVE`.
+7. Attempt a duplicate for the same College + Program + Academic Session and confirm it is rejected.
+8. Attempt to submit a Curriculum that does not match the selected Program or Academic Session and confirm backend rejection.
+9. Attempt cross-University IDs and confirm rejection.
+10. Deactivate/re-activate and confirm records are preserved and explicit audit events are written.
+11. Confirm an inactive College can view but cannot create/update/change status.
+12. Confirm unauthorized College users receive 403 and the sidebar item is hidden.
+13. Run frontend production build and verify responsive behavior.
+14. Owner reviews before Intake / Seat Capacity begins.
 
-Important: Academic Calendar is not Routine/Timetable and not detailed Examination scheduling.
+Important: Intake / Seat Capacity is intentionally not part of Program Offerings.

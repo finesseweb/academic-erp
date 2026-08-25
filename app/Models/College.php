@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class College extends Model
 {
@@ -21,5 +22,10 @@ class College extends Model
     public function principal(): BelongsTo
     {
         return $this->belongsTo(User::class, 'principal_user_id');
+    }
+
+    public function programOfferings(): HasMany
+    {
+        return $this->hasMany(CollegeProgramOffering::class);
     }
 }

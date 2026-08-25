@@ -180,8 +180,14 @@ class CurriculumController extends Controller
             'academicSessions' => AcademicSession::query()
                 ->where('university_id', $university->id)
                 ->where('status', 'ACTIVE')
+                ->orderByDesc('is_current')
                 ->orderByDesc('starts_on')
-                ->get(['id', 'name', 'code']),
+                ->get([
+                    'id',
+                    'name',
+                    'code',
+                    'is_current',
+                ]),
             'approvalWorkflows' => ApprovalWorkflow::query()
                 ->where('university_id', $university->id)
                 ->where('applies_to', 'CURRICULUM')

@@ -71,3 +71,11 @@ Use consistent iconography and semantic status communication.
 
 ## Source of Truth
 Detailed visual/behavioral requirements are mandatory in `UI_UX_GUIDELINES.md`.
+
+## Selection / Default Consistency Gate
+Before a form/page is considered complete, verify `.project/AI/UI_DATA_SELECTION_CONSISTENCY.md`:
+- Current ACTIVE Academic Session is the default for new session-scoped records.
+- Configured `display_order` is respected where present.
+- Dependent selectors clear/filter invalid children.
+- New-record eligibility is filtered without rewriting historical Edit/View references.
+- Backend validation repeats material frontend selection rules.

@@ -263,3 +263,22 @@ Approver identities are never authorized by hard-coded role names. Workflow stag
 
 These permissions govern the University Academic Calendar header and events. They are University-scoped, non-College-delegable and initially granted to protected `SUPER_ADMIN`. `disable` / `event_disable` are sensitive non-destructive lifecycle actions. Future College Academic Calendar permissions will be specified separately and must respect each University event's `allow_college_override` flag.
 
+
+
+## College Program Offering permissions — implemented 2026-08-25
+- `college_program_offering.view`
+- `college_program_offering.create`
+- `college_program_offering.update`
+- `college_program_offering.enable`
+- `college_program_offering.disable`
+
+These permissions are College-delegable and must be enforced with `hasCollegePermission(..., college_id)`. Enable/disable are sensitive non-destructive lifecycle actions. University academic masters remain authoritative.
+
+## College Academic Setup — Program Offerings
+Protected default roles: `SUPER_ADMIN`, `COLLEGE_ADMIN`
+
+- `college_program_offering.view` — College-delegable; mandatory on COLLEGE_ADMIN
+- `college_program_offering.create` — College-delegable; mandatory on COLLEGE_ADMIN
+- `college_program_offering.update` — College-delegable; mandatory on COLLEGE_ADMIN
+- `college_program_offering.enable` — College-delegable; mandatory on COLLEGE_ADMIN; sensitive
+- `college_program_offering.disable` — College-delegable; mandatory on COLLEGE_ADMIN; sensitive

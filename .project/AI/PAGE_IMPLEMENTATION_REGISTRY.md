@@ -159,3 +159,12 @@ On `next` / `next N` / `nextN`:
 - Database: `academic_calendars`, `academic_calendar_events`.
 - Current gate: Academic Calendar QA in `NEXT_WORKFLOW.md`.
 
+
+
+## College Program Offerings — 2026-08-25
+- Route: `/college/{college}/program-offerings`
+- Page: `college-program-offerings/index`
+- Status: `IMPLEMENTED_IN_REPLACEMENT_PACKAGE / PENDING_REVIEW`
+- Scope: College
+- Source definitions: University Program Template + approved Curriculum + Academic Session
+- Current gate: Program Offering QA in `NEXT_WORKFLOW.md`.

@@ -76,17 +76,29 @@ type Entity = {
     blocking_references: Ref[];
 };
 
+type FullReset = {
+    confirmation_code: string;
+    counts: Record<string, number>;
+    preserved: string[];
+};
+
 type Props = {
     enabled: boolean;
     environment: string;
     curricula: Curriculum[];
     academicPolicies: AcademicPolicy[];
+    fullReset: FullReset;
     entities: {
+        college_program_offerings: Entity[];
+        academic_calendars: Entity[];
+        approval_workflows: Entity[];
         courses: Entity[];
         course_categories: Entity[];
         course_types: Entity[];
         program_templates: Entity[];
         disciplines: Entity[];
+        degrees: Entity[];
+        degree_levels: Entity[];
         academic_sessions: Entity[];
     };
 };
@@ -94,11 +106,16 @@ type Props = {
 type TabKey =
     | 'curriculum'
     | 'academic_policies'
+    | 'college_program_offerings'
+    | 'academic_calendars'
+    | 'approval_workflows'
     | 'courses'
     | 'course_categories'
     | 'course_types'
     | 'program_templates'
     | 'disciplines'
+    | 'degrees'
+    | 'degree_levels'
     | 'academic_sessions';
 
 type ActionTarget = {
@@ -107,7 +124,8 @@ type ActionTarget = {
         | 'cleanup_curriculum'
         | 'reset_policy_approval'
         | 'cleanup_academic_policy'
-        | 'cleanup_master';
+        | 'cleanup_master'
+        | 'full_reset';
     type?: Exclude<TabKey, 'curriculum' | 'academic_policies'>;
     id: number;
     code: string;
@@ -115,13 +133,18 @@ type ActionTarget = {
 };
 
 const tabs: { key: TabKey; label: string }[] = [
-    { key: 'curriculum', label: 'Curriculum' },
+    { key: 'college_program_offerings', label: 'Program Offerings' },
+    { key: 'academic_calendars', label: 'Academic Calendars' },
     { key: 'academic_policies', label: 'Academic Policies' },
+    { key: 'curriculum', label: 'Curriculum' },
+    { key: 'approval_workflows', label: 'Approval Workflows' },
     { key: 'courses', label: 'Courses' },
-    { key: 'course_categories', label: 'Course Categories' },
-    { key: 'course_types', label: 'Course Types' },
     { key: 'program_templates', label: 'Program Templates' },
     { key: 'disciplines', label: 'Disciplines' },
+    { key: 'course_categories', label: 'Course Categories' },
+    { key: 'course_types', label: 'Course Types' },
+    { key: 'degrees', label: 'Degrees' },
+    { key: 'degree_levels', label: 'Degree Levels' },
     { key: 'academic_sessions', label: 'Academic Sessions' },
 ];
 
@@ -131,8 +154,9 @@ export default function TestDataCleanup({
     curricula,
     academicPolicies,
     entities,
+    fullReset,
 }: Props) {
-    const [tab, setTab] = useState<TabKey>('curriculum');
+    const [tab, setTab] = useState<TabKey>('college_program_offerings');
     const [target, setTarget] = useState<ActionTarget | null>(null);
 
     const form = useForm({
@@ -154,6 +178,17 @@ export default function TestDataCleanup({
         event.preventDefault();
 
         if (!target) return;
+
+        if (target.mode === 'full_reset') {
+            form.delete(
+                '/admin/system-maintenance/test-data-cleanup/full-reset',
+                {
+                    preserveScroll: true,
+                    onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
 
         if (target.mode === 'reset_approval') {
             form.post(
@@ -243,6 +278,52 @@ export default function TestDataCleanup({
                         </div>
                     </div>
                 </div>
+
+                <Card className="border-destructive/40">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-destructive">
+                            <ShieldAlert className="size-5" />
+                            Full Academic Test Reset
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Deletes all currently implemented academic/test data in explicit child-first dependency order. It does not disable foreign keys or use raw TRUNCATE.
+                        </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                            {Object.entries(fullReset.counts).map(([name, count]) => (
+                                <div key={name} className="rounded-md border p-3">
+                                    <div className="text-xs text-muted-foreground">
+                                        {name.replaceAll('_', ' ')}
+                                    </div>
+                                    <div className="text-lg font-semibold">{count}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">Preserved:</span>{' '}
+                            {fullReset.preserved.join(' · ')}
+                        </div>
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                disabled={!enabled}
+                                onClick={() =>
+                                    openAction({
+                                        mode: 'full_reset',
+                                        id: 0,
+                                        code: fullReset.confirmation_code,
+                                        name: 'Full Academic Test Data Reset',
+                                    })
+                                }
+                            >
+                                <Eraser className="size-4" />
+                                Reset All Academic Test Data
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 <div className="flex flex-wrap gap-2 rounded-lg border bg-card p-2">
                     {tabs.map((item) => (
@@ -649,10 +730,12 @@ export default function TestDataCleanup({
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <AlertTriangle className="size-5 text-destructive" />
-                                {target.mode === 'reset_approval' ||
-                                target.mode === 'reset_policy_approval'
-                                    ? 'Reset Test Approval'
-                                    : 'Clean Test Data'}
+                                {target.mode === 'full_reset'
+                                    ? 'Full Academic Test Reset'
+                                    : target.mode === 'reset_approval' ||
+                                        target.mode === 'reset_policy_approval'
+                                      ? 'Reset Test Approval'
+                                      : 'Clean Test Data'}
                             </CardTitle>
                         </CardHeader>
 
@@ -671,8 +754,10 @@ export default function TestDataCleanup({
                                 </div>
 
                                 <p className="text-sm text-muted-foreground">
-                                    {target.mode === 'reset_approval'
-                                        ? 'Approval requests/history for this test Curriculum will be removed and the Curriculum will return to DRAFT / NOT_SUBMITTED. Structure is preserved.'
+                                    {target.mode === 'full_reset'
+                                        ? 'All currently implemented academic/test records will be permanently deleted in dependency-safe order. University Profile, Colleges, Users, protected Roles, Permissions, access assignments, Audit Logs, migrations, and system tables are preserved.'
+                                        : target.mode === 'reset_approval'
+                                          ? 'Approval requests/history for this test Curriculum will be removed and the Curriculum will return to DRAFT / NOT_SUBMITTED. Structure is preserved.'
                                         : target.mode === 'reset_policy_approval'
                                           ? 'Approval requests/history for this standalone test Academic Policy will be removed and the Policy will return to DRAFT / NOT_SUBMITTED. Configured policy rules are preserved.'
                                           : target.mode === 'cleanup_academic_policy'
@@ -756,12 +841,14 @@ export default function TestDataCleanup({
                                                 target.code
                                         }
                                     >
-                                        {target.mode === 'reset_approval' ||
-                                        target.mode === 'reset_policy_approval'
-                                            ? 'Reset Approval'
-                                            : target.mode === 'cleanup_academic_policy'
-                                              ? 'Permanently Clean Policy Chain'
-                                              : 'Permanently Clean'}
+                                        {target.mode === 'full_reset'
+                                            ? 'Reset All Academic Test Data'
+                                            : target.mode === 'reset_approval' ||
+                                                target.mode === 'reset_policy_approval'
+                                              ? 'Reset Approval'
+                                              : target.mode === 'cleanup_academic_policy'
+                                                ? 'Permanently Clean Policy Chain'
+                                                : 'Permanently Clean'}
                                     </Button>
                                 </div>
                             </form>

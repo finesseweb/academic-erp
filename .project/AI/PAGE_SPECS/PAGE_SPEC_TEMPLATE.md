@@ -111,3 +111,13 @@ Review Status: NOT_APPLICABLE
 - Documentation updated.
 
 ## Change History
+
+## Selection / Ordering Contract
+Document for this page:
+- Academic Session eligibility + whether Current ACTIVE is default.
+- Dropdown eligibility/status rules.
+- Parent -> child dependent selector rules.
+- Current/versioned-master rule for new vs historical records.
+- `display_order` or other stable ordering rule for every configurable list.
+- Backend validation mirroring material UI filtering/default rules.
+- Any intentional exception to `UI_DATA_SELECTION_CONSISTENCY.md`.

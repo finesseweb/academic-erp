@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 
 type Option = { id: number; name: string; code: string };
+type AcademicSessionOption = Option & { is_current: boolean };
 type ApprovalWorkflowOption = { id: number; name: string; code: string };
 type Curriculum = {
     id: number;
@@ -57,7 +58,7 @@ type Props = {
     };
     filters: { search?: string; status?: string };
     programTemplates: Option[];
-    academicSessions: Option[];
+    academicSessions: AcademicSessionOption[];
     approvalWorkflows: ApprovalWorkflowOption[];
     permissions: {
         create: boolean;
@@ -146,13 +147,21 @@ export default function CurriculumIndex({
     });
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
+    const currentAcademicSession = academicSessions.find(
+        (session) => session.is_current,
+    );
     const form = useForm(emptyForm);
 
     const title = useMemo(() => editing ? 'Edit Curriculum Header' : 'Create Curriculum Header', [editing]);
 
     const openCreate = () => {
         setEditing(null);
-        form.reset();
+        form.setData({
+            ...emptyForm,
+            academic_session_id: currentAcademicSession
+                ? String(currentAcademicSession.id)
+                : '',
+        });
         form.clearErrors();
         setShowForm(true);
     };
@@ -1234,8 +1243,8 @@ export default function CurriculumIndex({
                     <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
                         <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-4"><div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-muted-foreground">Header fields for this Curriculum version. Amendment Program Template and Academic Session remain locked to the approved source.</p></div><button onClick={() => setShowForm(false)} className="rounded-md p-2 hover:bg-accent"><X className="size-4" /></button></div>
                         <form onSubmit={submit} className="grid gap-4 p-5 md:grid-cols-2">
-                            <Field label="Program Template" error={form.errors.program_template_id}><select value={form.data.program_template_id} onChange={e => form.setData('program_template_id', e.target.value)} disabled={Boolean(editing?.parent_curriculum_id)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Program Template</option>{programTemplates.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}</select></Field>
-                            <Field label="Academic Session" error={form.errors.academic_session_id}><select value={form.data.academic_session_id} onChange={e => form.setData('academic_session_id', e.target.value)} disabled={Boolean(editing?.parent_curriculum_id)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Academic Session</option>{academicSessions.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}</select></Field>
+                            <Field label="Program Template" error={form.errors.program_template_id}><select value={form.data.program_template_id} onChange={e => form.setData('program_template_id', e.target.value)} disabled={Boolean(editing?.parent_curriculum_id)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Program Template</option>{programTemplates.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code}){o.is_current ? ' · Current' : ''}</option>)}</select></Field>
+                            <Field label="Academic Session" error={form.errors.academic_session_id}><select value={form.data.academic_session_id} onChange={e => form.setData('academic_session_id', e.target.value)} disabled={Boolean(editing?.parent_curriculum_id)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"><option value="">Select Academic Session</option>{academicSessions.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code}){o.is_current ? ' · Current' : ''}</option>)}</select></Field>
                             <Field label="Curriculum Code" error={form.errors.code}><input value={form.data.code} onChange={e => form.setData('code', e.target.value.toUpperCase())} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={50} /></Field>
                             <Field label="Curriculum Name" error={form.errors.name}><input value={form.data.name} onChange={e => form.setData('name', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={160} /></Field>
                             <Field label="Version" error={form.errors.version}><input value={form.data.version} onChange={e => form.setData('version', e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" maxLength={30} /></Field>
