@@ -493,6 +493,18 @@ export function AppSidebar() {
                       },
                   ],
               },
+              {
+                  title: 'College Academic Setup',
+                  icon: GraduationCap,
+                  children: [
+                      {
+                          title: 'Program Offerings',
+                          href: `/college/${collegeId}/program-offerings`,
+                          icon: BookOpenCheck,
+                          permission: 'college_program_offering.view',
+                      },
+                  ],
+              },
           ]
         : [];
 

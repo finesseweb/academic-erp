@@ -129,6 +129,10 @@ Handled through College-scoped roles:
 
 ## 07 — College Academic Setup
 - Program Offerings
+  - University Program Selection
+  - Curriculum Selection
+  - Academic Session
+  - Activate / Deactivate Offering
 - Curriculum Adoption
 - Intake / Seat Capacity
 - Reservation / Quota

@@ -21,6 +21,7 @@ class TestDataCleanupService
         ['admissions', 'curriculum_id'],
         ['admission_applications', 'curriculum_id'],
         ['academic_policies', 'curriculum_id'],
+        ['college_program_offerings', 'curriculum_id'],
         ['academic_policy_progression_rule_sets', 'curriculum_id'],
     ];
 
@@ -578,6 +579,12 @@ class TestDataCleanupService
         int $universityId
     ): array {
         return [
+            'college_program_offerings' =>
+                $this->collegeProgramOfferingRows($universityId),
+            'academic_calendars' =>
+                $this->academicCalendarRows($universityId),
+            'approval_workflows' =>
+                $this->approvalWorkflowRows($universityId),
             'courses' => $this->courseRows($universityId),
             'course_categories' =>
                 $this->simpleRows(
@@ -619,7 +626,7 @@ class TestDataCleanupService
                             'program_template_id',
                             $id
                         ),
-                        'disciplines' =>
+                        'discipline_mappings' =>
                             $this->countIfExists(
                                 'program_template_disciplines',
                                 'program_template_id',
@@ -631,19 +638,43 @@ class TestDataCleanupService
                                 'program_template_id',
                                 $id
                             ),
+                        'college_program_offerings' =>
+                            $this->countIfExists(
+                                'college_program_offerings',
+                                'program_template_id',
+                                $id
+                            ),
                     ]
                 ),
             'disciplines' =>
+                $this->disciplineRows($universityId),
+            'degrees' =>
                 $this->simpleRows(
-                    'academic_disciplines',
+                    'degrees',
                     $universityId,
                     fn ($id) => [
-                        'curriculum_mappings' =>
-                            $this->disciplineMappingCount($id),
                         'program_templates' =>
                             $this->countIfExists(
-                                'program_template_disciplines',
-                                'discipline_id',
+                                'program_templates',
+                                'degree_id',
+                                $id
+                            ),
+                    ]
+                ),
+            'degree_levels' =>
+                $this->simpleRows(
+                    'degree_levels',
+                    $universityId,
+                    fn ($id) => [
+                        'degrees' => $this->countIfExists(
+                            'degrees',
+                            'degree_level_id',
+                            $id
+                        ),
+                        'academic_policies' =>
+                            $this->countIfExists(
+                                'academic_policies',
+                                'degree_level_id',
                                 $id
                             ),
                     ]
@@ -664,9 +695,375 @@ class TestDataCleanupService
                                 'academic_session_id',
                                 $id
                             ),
+                        'academic_calendars' =>
+                            $this->countIfExists(
+                                'academic_calendars',
+                                'academic_session_id',
+                                $id
+                            ),
+                        'college_program_offerings' =>
+                            $this->countIfExists(
+                                'college_program_offerings',
+                                'academic_session_id',
+                                $id
+                            ),
                     ]
                 ),
         ];
+    }
+
+    public function fullAcademicResetPreview(int $universityId): array
+    {
+        return [
+            'confirmation_code' => 'RESET-ACADEMIC-TEST-DATA',
+            'counts' => [
+                'college_program_offerings' =>
+                    $this->countCollegeOfferingsForUniversity($universityId),
+                'academic_calendar_events' =>
+                    $this->countCalendarEventsForUniversity($universityId),
+                'academic_calendars' =>
+                    $this->countUniversityRows('academic_calendars', $universityId),
+                'approval_requests' =>
+                    $this->countUniversityRows('approval_requests', $universityId),
+                'approval_workflows' =>
+                    $this->countUniversityRows('approval_workflows', $universityId),
+                'academic_policies' =>
+                    $this->countUniversityRows('academic_policies', $universityId),
+                'curricula' =>
+                    $this->countUniversityRows('curricula', $universityId),
+                'courses' =>
+                    $this->countUniversityRows('courses', $universityId),
+                'program_templates' =>
+                    $this->countUniversityRows('program_templates', $universityId),
+                'disciplines' =>
+                    $this->countUniversityRows('academic_disciplines', $universityId),
+                'course_categories' =>
+                    $this->countUniversityRows('course_categories', $universityId),
+                'course_types' =>
+                    $this->countUniversityRows('course_types', $universityId),
+                'degrees' =>
+                    $this->countUniversityRows('degrees', $universityId),
+                'degree_levels' =>
+                    $this->countUniversityRows('degree_levels', $universityId),
+                'academic_sessions' =>
+                    $this->countUniversityRows('academic_sessions', $universityId),
+            ],
+            'preserved' => [
+                'University Profile',
+                'Affiliated Colleges',
+                'Users and login accounts',
+                'Protected/system Roles',
+                'Permissions and Role-Permission grants',
+                'College role/scope assignments',
+                'Authorized Signatories',
+                'Audit Logs',
+                'Laravel migrations/system tables',
+            ],
+        ];
+    }
+
+    public function fullAcademicReset(
+        int $universityId,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        $preview = $this->fullAcademicResetPreview($universityId);
+
+        return DB::transaction(function () use (
+            $universityId,
+            $actorId,
+            $preview
+        ) {
+            $collegeIds = Schema::hasTable('colleges')
+                ? DB::table('colleges')
+                    ->where('university_id', $universityId)
+                    ->pluck('id')
+                : collect();
+
+            $sessionIds = $this->universityIds(
+                'academic_sessions',
+                $universityId
+            );
+            $calendarIds = $this->universityIds(
+                'academic_calendars',
+                $universityId
+            );
+            $policyIds = $this->universityIds(
+                'academic_policies',
+                $universityId
+            );
+            $curriculumIds = $this->universityIds(
+                'curricula',
+                $universityId
+            );
+            $workflowIds = $this->universityIds(
+                'approval_workflows',
+                $universityId
+            );
+            $templateIds = $this->universityIds(
+                'program_templates',
+                $universityId
+            );
+            $disciplineIds = $this->universityIds(
+                'academic_disciplines',
+                $universityId
+            );
+            $degreeIds = $this->universityIds(
+                'degrees',
+                $universityId
+            );
+            $degreeLevelIds = $this->universityIds(
+                'degree_levels',
+                $universityId
+            );
+
+            /*
+             * Dependency-safe reset order:
+             * leaf/transactional rows -> configured children -> parent masters.
+             * Do not disable FK checks and do not TRUNCATE.
+             */
+
+            // 1) Approval execution history before subjects/workflows.
+            $approvalRequestIds = Schema::hasTable('approval_requests')
+                ? DB::table('approval_requests')
+                    ->where('university_id', $universityId)
+                    ->pluck('id')
+                : collect();
+
+            $this->deleteWhereIn(
+                'approval_request_stages',
+                'approval_request_id',
+                $approvalRequestIds
+            );
+            $this->deleteWhereIn(
+                'approval_requests',
+                'id',
+                $approvalRequestIds
+            );
+
+            // 2) College operational adoption leaf rows.
+            if (
+                Schema::hasTable('college_program_offerings') &&
+                $collegeIds->isNotEmpty()
+            ) {
+                DB::table('college_program_offerings')
+                    ->whereIn('college_id', $collegeIds)
+                    ->delete();
+            }
+
+            // 3) Calendar children before Calendar headers.
+            $this->deleteWhereIn(
+                'academic_calendar_events',
+                'academic_calendar_id',
+                $calendarIds
+            );
+            $this->deleteWhereIn(
+                'academic_calendars',
+                'id',
+                $calendarIds
+            );
+
+            // 4) Academic Policy children and version links.
+            $ruleSetIds = Schema::hasTable(
+                'academic_policy_progression_rule_sets'
+            ) && $policyIds->isNotEmpty()
+                ? DB::table('academic_policy_progression_rule_sets')
+                    ->whereIn('academic_policy_id', $policyIds)
+                    ->pluck('id')
+                : collect();
+
+            $this->deleteWhereIn(
+                'academic_policy_progression_rule_terms',
+                'progression_rule_set_id',
+                $ruleSetIds
+            );
+
+            foreach ([
+                'academic_policy_progression_rule_sets',
+                'academic_policy_progression_rules',
+                'academic_policy_grade_bands',
+                'academic_policy_grading_rules',
+                'academic_policy_assessment_exam_rules',
+                'academic_policy_attendance_rules',
+                'academic_policy_credit_category_requirements',
+                'academic_policy_credit_completion_rules',
+            ] as $table) {
+                $this->deleteWhereIn(
+                    $table,
+                    'academic_policy_id',
+                    $policyIds
+                );
+            }
+
+            if (
+                Schema::hasTable('academic_policies') &&
+                $policyIds->isNotEmpty()
+            ) {
+                $updates = ['updated_at' => now()];
+                if (Schema::hasColumn('academic_policies', 'parent_policy_id')) {
+                    $updates['parent_policy_id'] = null;
+                }
+                if (Schema::hasColumn('academic_policies', 'superseded_by_id')) {
+                    $updates['superseded_by_id'] = null;
+                }
+
+                DB::table('academic_policies')
+                    ->whereIn('id', $policyIds)
+                    ->update($updates);
+
+                DB::table('academic_policies')
+                    ->whereIn('id', $policyIds)
+                    ->delete();
+            }
+
+            // 5) Curriculum structure before Curriculum headers.
+            $termIds = Schema::hasTable('curriculum_terms')
+                ? DB::table('curriculum_terms')
+                    ->whereIn('curriculum_id', $curriculumIds)
+                    ->pluck('id')
+                : collect();
+
+            $slotIds = Schema::hasTable('curriculum_slots')
+                ? DB::table('curriculum_slots')
+                    ->whereIn('curriculum_term_id', $termIds)
+                    ->pluck('id')
+                : collect();
+
+            $this->deleteWhereIn(
+                'curriculum_course_mappings',
+                'curriculum_slot_id',
+                $slotIds
+            );
+            $this->deleteWhereIn(
+                'curriculum_slots',
+                'id',
+                $slotIds
+            );
+            $this->deleteWhereIn(
+                'curriculum_terms',
+                'id',
+                $termIds
+            );
+
+            if (
+                Schema::hasTable('curricula') &&
+                $curriculumIds->isNotEmpty()
+            ) {
+                if (
+                    Schema::hasColumn(
+                        'curricula',
+                        'parent_curriculum_id'
+                    )
+                ) {
+                    DB::table('curricula')
+                        ->whereIn('id', $curriculumIds)
+                        ->update([
+                            'parent_curriculum_id' => null,
+                            'updated_at' => now(),
+                        ]);
+                }
+
+                DB::table('curricula')
+                    ->whereIn('id', $curriculumIds)
+                    ->delete();
+            }
+
+            // 6) Program Template discipline/specialization mappings.
+            $templateDisciplineIds =
+                Schema::hasTable('program_template_disciplines') &&
+                $templateIds->isNotEmpty()
+                    ? DB::table('program_template_disciplines')
+                        ->whereIn('program_template_id', $templateIds)
+                        ->pluck('id')
+                    : collect();
+
+            $this->deleteWhereIn(
+                'program_template_discipline_specializations',
+                'program_template_discipline_id',
+                $templateDisciplineIds
+            );
+            $this->deleteWhereIn(
+                'program_template_disciplines',
+                'id',
+                $templateDisciplineIds
+            );
+
+            // 7) Approval workflow stages before workflow headers.
+            $this->deleteWhereIn(
+                'approval_workflow_stages',
+                'approval_workflow_id',
+                $workflowIds
+            );
+            $this->deleteWhereIn(
+                'approval_workflows',
+                'id',
+                $workflowIds
+            );
+
+            // 8) Remaining University academic masters, child -> parent.
+            $this->deleteUniversityRows('courses', $universityId);
+            $this->deleteUniversityRows(
+                'program_templates',
+                $universityId
+            );
+
+            // Break discipline self-parent links before deleting all.
+            if (
+                Schema::hasTable('academic_disciplines') &&
+                $disciplineIds->isNotEmpty()
+            ) {
+                if (
+                    Schema::hasColumn(
+                        'academic_disciplines',
+                        'parent_id'
+                    )
+                ) {
+                    DB::table('academic_disciplines')
+                        ->whereIn('id', $disciplineIds)
+                        ->update(['parent_id' => null]);
+                }
+
+                DB::table('academic_disciplines')
+                    ->whereIn('id', $disciplineIds)
+                    ->delete();
+            }
+
+            $this->deleteUniversityRows(
+                'course_categories',
+                $universityId
+            );
+            $this->deleteUniversityRows(
+                'course_types',
+                $universityId
+            );
+            $this->deleteWhereIn('degrees', 'id', $degreeIds);
+            $this->deleteWhereIn(
+                'degree_levels',
+                'id',
+                $degreeLevelIds
+            );
+            $this->deleteWhereIn(
+                'academic_sessions',
+                'id',
+                $sessionIds
+            );
+
+            $this->audit(
+                'TEST_FULL_ACADEMIC_DATA_RESET',
+                'test_data_cleanup',
+                $universityId,
+                [
+                    'deleted_counts' => $preview['counts'],
+                    'preserved' => $preview['preserved'],
+                    'dependency_strategy' =>
+                        'child-first explicit deletion; foreign keys kept enabled',
+                ],
+                $actorId
+            );
+
+            return $preview;
+        });
     }
 
     public function cleanupMaster(
@@ -678,6 +1075,24 @@ class TestDataCleanupService
         $this->assertCleanupEnabled();
 
         return match ($type) {
+            'college_program_offerings' =>
+                $this->cleanupCollegeProgramOffering(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
+            'academic_calendars' =>
+                $this->cleanupAcademicCalendar(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
+            'approval_workflows' =>
+                $this->cleanupApprovalWorkflow(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
             'courses' =>
                 $this->cleanupCourse(
                     $id,
@@ -723,6 +1138,10 @@ class TestDataCleanupService
                             'program_template_id',
                         ],
                         ['academic_policies', 'program_template_id'],
+                        [
+                            'college_program_offerings',
+                            'program_template_id',
+                        ],
                     ],
                     $actorId
                 ),
@@ -730,6 +1149,29 @@ class TestDataCleanupService
                 $this->cleanupDiscipline(
                     $id,
                     $universityId,
+                    $actorId
+                ),
+            'degrees' =>
+                $this->cleanupSimpleMaster(
+                    'degrees',
+                    'Degree',
+                    $id,
+                    $universityId,
+                    [
+                        ['program_templates', 'degree_id'],
+                    ],
+                    $actorId
+                ),
+            'degree_levels' =>
+                $this->cleanupSimpleMaster(
+                    'degree_levels',
+                    'Degree Level',
+                    $id,
+                    $universityId,
+                    [
+                        ['degrees', 'degree_level_id'],
+                        ['academic_policies', 'degree_level_id'],
+                    ],
                     $actorId
                 ),
             'academic_sessions' =>
@@ -741,6 +1183,11 @@ class TestDataCleanupService
                     [
                         ['curricula', 'academic_session_id'],
                         ['academic_policies', 'academic_session_id'],
+                        ['academic_calendars', 'academic_session_id'],
+                        [
+                            'college_program_offerings',
+                            'academic_session_id',
+                        ],
                     ],
                     $actorId
                 ),
@@ -748,6 +1195,198 @@ class TestDataCleanupService
                 'type' => 'Unsupported cleanup type.',
             ]),
         };
+    }
+
+    private function cleanupCollegeProgramOffering(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('college_program_offerings')) {
+            abort(404);
+        }
+
+        $record = DB::table('college_program_offerings as cpo')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->where('cpo.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select('cpo.*')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences(
+            $id,
+            [
+                ['college_program_intakes', 'college_program_offering_id'],
+                ['college_program_reservations', 'college_program_offering_id'],
+                ['batches', 'college_program_offering_id'],
+                ['sections', 'college_program_offering_id'],
+                ['student_enrollments', 'college_program_offering_id'],
+                ['admission_applications', 'college_program_offering_id'],
+            ]
+        );
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' =>
+                    'This Program Offering already has downstream College/operational records. Clean those dependent test records first.',
+            ]);
+        }
+
+        DB::table('college_program_offerings')
+            ->where('id', $id)
+            ->delete();
+
+        $this->audit(
+            'TEST_COLLEGE_PROGRAM_OFFERING_CLEANED',
+            'test_data_cleanup',
+            $id,
+            ['record' => (array) $record],
+            $actorId
+        );
+
+        return ['record' => (array) $record];
+    }
+
+    private function cleanupAcademicCalendar(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('academic_calendars')) {
+            abort(404);
+        }
+
+        $record = DB::table('academic_calendars')
+            ->where('id', $id)
+            ->where('university_id', $universityId)
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $futureRefs = $this->downstreamReferences(
+            $id,
+            [
+                ['college_academic_calendars', 'university_academic_calendar_id'],
+                ['college_calendar_overrides', 'academic_calendar_id'],
+            ]
+        );
+
+        if (count($futureRefs) > 0) {
+            throw ValidationException::withMessages([
+                'record' =>
+                    'This University Academic Calendar is already referenced by College Calendar data. Clean those dependent test records first.',
+            ]);
+        }
+
+        return DB::transaction(function () use (
+            $record,
+            $actorId
+        ) {
+            $eventCount = $this->countIfExists(
+                'academic_calendar_events',
+                'academic_calendar_id',
+                $record->id
+            );
+
+            if (Schema::hasTable('academic_calendar_events')) {
+                DB::table('academic_calendar_events')
+                    ->where('academic_calendar_id', $record->id)
+                    ->delete();
+            }
+
+            DB::table('academic_calendars')
+                ->where('id', $record->id)
+                ->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_events' => $eventCount,
+            ];
+
+            $this->audit(
+                'TEST_ACADEMIC_CALENDAR_CLEANED',
+                'test_data_cleanup',
+                $record->id,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
+    }
+
+    private function cleanupApprovalWorkflow(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('approval_workflows')) {
+            abort(404);
+        }
+
+        $record = DB::table('approval_workflows')
+            ->where('id', $id)
+            ->where('university_id', $universityId)
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $requestCount = $this->countIfExists(
+            'approval_requests',
+            'approval_workflow_id',
+            $id
+        );
+
+        if ($requestCount > 0) {
+            throw ValidationException::withMessages([
+                'record' =>
+                    'This Approval Workflow still has approval request history. Clean/reset the related Curriculum or Academic Policy approval data first.',
+            ]);
+        }
+
+        return DB::transaction(function () use (
+            $record,
+            $actorId
+        ) {
+            $stageCount = $this->countIfExists(
+                'approval_workflow_stages',
+                'approval_workflow_id',
+                $record->id
+            );
+
+            if (Schema::hasTable('approval_workflow_stages')) {
+                DB::table('approval_workflow_stages')
+                    ->where('approval_workflow_id', $record->id)
+                    ->delete();
+            }
+
+            DB::table('approval_workflows')
+                ->where('id', $record->id)
+                ->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_stages' => $stageCount,
+            ];
+
+            $this->audit(
+                'TEST_APPROVAL_WORKFLOW_CLEANED',
+                'test_data_cleanup',
+                $record->id,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
     }
 
     private function cleanupCourse(
@@ -841,8 +1480,23 @@ class TestDataCleanupService
             'discipline_id',
             $id
         );
+        $specializationTemplateCount = $this->countIfExists(
+            'program_template_discipline_specializations',
+            'specialization_id',
+            $id
+        );
+        $childCount = $this->countIfExists(
+            'academic_disciplines',
+            'parent_id',
+            $id
+        );
 
-        if ($mappingCount > 0 || $templateCount > 0) {
+        if (
+            $mappingCount > 0 ||
+            $templateCount > 0 ||
+            $specializationTemplateCount > 0 ||
+            $childCount > 0
+        ) {
             throw ValidationException::withMessages([
                 'record' =>
                     'Discipline/Specialization is still linked to a Program Template or Curriculum Mapping. Clean those dependent test records first.',
@@ -927,6 +1581,312 @@ class TestDataCleanupService
             'table' => $table,
             'record' => (array) $record,
         ];
+    }
+
+    private function collegeProgramOfferingRows(
+        int $universityId
+    ): array {
+        if (
+            ! Schema::hasTable('college_program_offerings') ||
+            ! Schema::hasTable('colleges')
+        ) {
+            return [];
+        }
+
+        return DB::table('college_program_offerings as cpo')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->join(
+                'program_templates as pt',
+                'pt.id',
+                '=',
+                'cpo.program_template_id'
+            )
+            ->join(
+                'academic_sessions as s',
+                's.id',
+                '=',
+                'cpo.academic_session_id'
+            )
+            ->where('c.university_id', $universityId)
+            ->orderBy('c.name')
+            ->orderBy('pt.name')
+            ->get([
+                'cpo.id',
+                'cpo.status',
+                'c.name as college_name',
+                'c.code as college_code',
+                'pt.name as program_name',
+                'pt.code as program_code',
+                's.name as session_name',
+                's.code as session_code',
+            ])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences(
+                    $row->id,
+                    [
+                        [
+                            'college_program_intakes',
+                            'college_program_offering_id',
+                        ],
+                        [
+                            'college_program_reservations',
+                            'college_program_offering_id',
+                        ],
+                        ['batches', 'college_program_offering_id'],
+                        ['sections', 'college_program_offering_id'],
+                        [
+                            'student_enrollments',
+                            'college_program_offering_id',
+                        ],
+                    ]
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => 'OFFERING-'.$row->id,
+                    'name' =>
+                        $row->college_name.' · '.
+                        $row->program_name.' · '.
+                        $row->session_name,
+                    'status' => $row->status,
+                    'kind' => 'COLLEGE_PROGRAM_OFFERING',
+                    'dependencies' => [],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function academicCalendarRows(
+        int $universityId
+    ): array {
+        if (! Schema::hasTable('academic_calendars')) {
+            return [];
+        }
+
+        return DB::table('academic_calendars')
+            ->where('university_id', $universityId)
+            ->orderByDesc('id')
+            ->get()
+            ->map(function ($row) {
+                $futureRefs = $this->downstreamReferences(
+                    $row->id,
+                    [
+                        [
+                            'college_academic_calendars',
+                            'university_academic_calendar_id',
+                        ],
+                        [
+                            'college_calendar_overrides',
+                            'academic_calendar_id',
+                        ],
+                    ]
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->name,
+                    'status' => $row->status,
+                    'kind' => 'UNIVERSITY_ACADEMIC_CALENDAR',
+                    'dependencies' => [
+                        'events' => $this->countIfExists(
+                            'academic_calendar_events',
+                            'academic_calendar_id',
+                            $row->id
+                        ),
+                    ],
+                    'blocked' => count($futureRefs) > 0,
+                    'blocking_references' => $futureRefs,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function approvalWorkflowRows(
+        int $universityId
+    ): array {
+        if (! Schema::hasTable('approval_workflows')) {
+            return [];
+        }
+
+        return DB::table('approval_workflows')
+            ->where('university_id', $universityId)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($row) {
+                $requestCount = $this->countIfExists(
+                    'approval_requests',
+                    'approval_workflow_id',
+                    $row->id
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->name,
+                    'status' => $row->status,
+                    'kind' => $row->applies_to ?? 'APPROVAL_WORKFLOW',
+                    'dependencies' => [
+                        'stages' => $this->countIfExists(
+                            'approval_workflow_stages',
+                            'approval_workflow_id',
+                            $row->id
+                        ),
+                        'approval_requests' => $requestCount,
+                    ],
+                    'blocked' => $requestCount > 0,
+                    'blocking_references' =>
+                        $requestCount > 0
+                            ? [[
+                                'table' => 'approval_requests',
+                                'column' => 'approval_workflow_id',
+                                'count' => $requestCount,
+                            ]]
+                            : [],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function disciplineRows(int $universityId): array
+    {
+        if (! Schema::hasTable('academic_disciplines')) {
+            return [];
+        }
+
+        return DB::table('academic_disciplines')
+            ->where('university_id', $universityId)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($row) {
+                $dependencies = [
+                    'curriculum_mappings' =>
+                        $this->disciplineMappingCount($row->id),
+                    'program_templates' =>
+                        $this->countIfExists(
+                            'program_template_disciplines',
+                            'discipline_id',
+                            $row->id
+                        ),
+                    'specialization_mappings' =>
+                        $this->countIfExists(
+                            'program_template_discipline_specializations',
+                            'specialization_id',
+                            $row->id
+                        ),
+                    'child_specializations' =>
+                        $this->countIfExists(
+                            'academic_disciplines',
+                            'parent_id',
+                            $row->id
+                        ),
+                ];
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->name,
+                    'status' => $row->status ?? null,
+                    'kind' => $row->kind ?? null,
+                    'dependencies' => $dependencies,
+                    'blocked' =>
+                        collect($dependencies)
+                            ->contains(fn ($count) => (int) $count > 0),
+                    'blocking_references' => [],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function countUniversityRows(
+        string $table,
+        int $universityId
+    ): int {
+        if (
+            ! Schema::hasTable($table) ||
+            ! Schema::hasColumn($table, 'university_id')
+        ) {
+            return 0;
+        }
+
+        return DB::table($table)
+            ->where('university_id', $universityId)
+            ->count();
+    }
+
+    private function universityIds(
+        string $table,
+        int $universityId
+    ): Collection {
+        if (
+            ! Schema::hasTable($table) ||
+            ! Schema::hasColumn($table, 'university_id')
+        ) {
+            return collect();
+        }
+
+        return DB::table($table)
+            ->where('university_id', $universityId)
+            ->pluck('id');
+    }
+
+    private function deleteUniversityRows(
+        string $table,
+        int $universityId
+    ): void {
+        if (
+            ! Schema::hasTable($table) ||
+            ! Schema::hasColumn($table, 'university_id')
+        ) {
+            return;
+        }
+
+        DB::table($table)
+            ->where('university_id', $universityId)
+            ->delete();
+    }
+
+    private function countCollegeOfferingsForUniversity(
+        int $universityId
+    ): int {
+        if (
+            ! Schema::hasTable('college_program_offerings') ||
+            ! Schema::hasTable('colleges')
+        ) {
+            return 0;
+        }
+
+        return DB::table('college_program_offerings as cpo')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCalendarEventsForUniversity(
+        int $universityId
+    ): int {
+        if (
+            ! Schema::hasTable('academic_calendar_events') ||
+            ! Schema::hasTable('academic_calendars')
+        ) {
+            return 0;
+        }
+
+        return DB::table('academic_calendar_events as ace')
+            ->join(
+                'academic_calendars as ac',
+                'ac.id',
+                '=',
+                'ace.academic_calendar_id'
+            )
+            ->where('ac.university_id', $universityId)
+            ->count();
     }
 
     private function courseRows(int $universityId): array

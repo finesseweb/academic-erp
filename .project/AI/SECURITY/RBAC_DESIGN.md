@@ -132,3 +132,8 @@ Examples:
 - Parent: linked child/children.
 
 Finance permissions also obey University-vs-College governance in `../DOMAIN/FEE_GOVERNANCE_AND_INSTALLMENTS.md`.
+
+## Protected System Role Expansion Rule
+When a new module becomes part of an existing protected administrator's responsibility, the module's mandatory permissions must be synchronized into that protected role by a forward migration. Do not rely on the Role Permission UI to mutate protected system roles.
+
+For College Academic Setup, `COLLEGE_ADMIN` must automatically receive the mandatory permissions for each implemented College-level module while those permissions may separately remain delegable to College-owned custom roles where appropriate.

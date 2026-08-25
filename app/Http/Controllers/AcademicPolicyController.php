@@ -142,7 +142,17 @@ class AcademicPolicyController extends Controller
         return Inertia::render('admin/academic-policies/index', [
             'policies' => $policies,
             'filters' => ['search' => $search, 'status' => $status],
-            'academicSessions' => AcademicSession::query()->where('university_id', $university->id)->where('status', 'ACTIVE')->orderByDesc('starts_on')->get(['id','name','code']),
+            'academicSessions' => AcademicSession::query()
+                ->where('university_id', $university->id)
+                ->where('status', 'ACTIVE')
+                ->orderByDesc('is_current')
+                ->orderByDesc('starts_on')
+                ->get([
+                    'id',
+                    'name',
+                    'code',
+                    'is_current',
+                ]),
             'degreeLevels' => DegreeLevel::query()->where('university_id', $university->id)->where('status', 'ACTIVE')->orderBy('display_order')->orderBy('name')->get(['id','name','code']),
             'programTemplates' => ProgramTemplate::query()->where('university_id', $university->id)->where('status', 'ACTIVE')->orderBy('name')->get(['id','name','code']),
             'curricula' => Curriculum::query()

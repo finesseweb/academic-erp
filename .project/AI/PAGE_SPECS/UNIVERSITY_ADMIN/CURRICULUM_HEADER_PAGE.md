@@ -82,3 +82,7 @@ Curriculum Header uses the Permission Catalog table language for header backgrou
 See `CURRICULUM_AMENDMENT_VERSIONING.md` and decision `007_CURRICULUM_AMENDMENT_VERSIONING.md`.
 
 `Add Curriculum` creates an independent Curriculum header. `Amend Curriculum` creates the next linked version of an already approved Curriculum.
+
+## Current Session Default — 2026-08-25
+For `Add Curriculum`, the University's `ACTIVE + is_current` Academic Session is preselected when available. Other ACTIVE sessions remain selectable.
+Editing an existing Curriculum preserves its stored Academic Session. Changing the University's Current Session never rewrites existing Curriculum rows.

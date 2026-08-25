@@ -229,3 +229,12 @@ Verified business path:
 
 Future College calendar adoption/override must reference this University foundation and may override only events where `allow_college_override = true`.
 
+
+
+## College Program Offering
+`College -> CollegeProgramOffering -> ProgramTemplate + Curriculum + AcademicSession`
+
+Rules:
+- all academic references must resolve to the College's University
+- Curriculum must match Program Template + Academic Session
+- later College academic execution should reference an ACTIVE Program Offering rather than selecting University Program Template directly

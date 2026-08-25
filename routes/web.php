@@ -18,6 +18,7 @@ use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthorizedSignatoryController;
 use App\Http\Controllers\CollegeAuditLogController;
 use App\Http\Controllers\CollegeController;
+use App\Http\Controllers\CollegeProgramOfferingController;
 use App\Http\Controllers\CollegeRoleController;
 use App\Http\Controllers\CollegeRolePermissionController;
 use App\Http\Controllers\CollegeUserController;
@@ -82,6 +83,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::redirect('super-admin/permissions', '/admin/permissions');
     Route::get('admin/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     Route::get('admin/system-maintenance/test-data-cleanup', [TestDataCleanupController::class, 'index'])->name('test-data-cleanup.index');
+    Route::delete('admin/system-maintenance/test-data-cleanup/full-reset', [TestDataCleanupController::class, 'fullReset'])->name('test-data-cleanup.full-reset');
     Route::delete('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}', [TestDataCleanupController::class, 'destroyCurriculum'])->name('test-data-cleanup.curricula.destroy');
     Route::post('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}/reset-approval', [TestDataCleanupController::class, 'resetCurriculumApproval'])->name('test-data-cleanup.curricula.reset-approval');
     Route::delete('admin/system-maintenance/test-data-cleanup/academic-policies/{academicPolicy}', [TestDataCleanupController::class, 'destroyAcademicPolicy'])->name('test-data-cleanup.academic-policies.destroy');
@@ -183,6 +185,10 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::delete('admin/curricula/{curriculum}/structure/terms/{term}/slots/{slot}/course-mappings/{mapping}', [CurriculumStructureController::class, 'deleteCourseMapping'])->name('curricula.structure.course-mappings.delete');
     Route::patch('admin/curricula/{curriculum}/structure/terms/{term}/slots/{slot}/course-mappings/{mapping}/order', [CurriculumStructureController::class, 'updateCourseMappingOrder'])->name('curricula.structure.course-mappings.order');
     Route::redirect('super-admin/audit-logs', '/admin/audit-logs');
+    Route::get('college/{college}/program-offerings', [CollegeProgramOfferingController::class, 'index'])->name('college-program-offerings.index');
+    Route::post('college/{college}/program-offerings', [CollegeProgramOfferingController::class, 'store'])->name('college-program-offerings.store');
+    Route::patch('college/{college}/program-offerings/{offering}', [CollegeProgramOfferingController::class, 'update'])->name('college-program-offerings.update');
+    Route::patch('college/{college}/program-offerings/{offering}/status', [CollegeProgramOfferingController::class, 'status'])->name('college-program-offerings.status');
     Route::get('college/{college}/users', [CollegeUserController::class, 'index'])->name('college-users.index');
     Route::get('college/{college}/users/create', [CollegeUserController::class, 'create'])->name('college-users.create');
     Route::post('college/{college}/users', [CollegeUserController::class, 'store'])->name('college-users.store');

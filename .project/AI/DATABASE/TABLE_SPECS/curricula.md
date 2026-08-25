@@ -68,3 +68,20 @@ Index:
 
 Audit:
 `CURRICULUM_AMENDMENT_CREATED`
+
+
+## Downstream Current-Version Consumption Rule — 2026-08-25
+The existing amendment design remains authoritative: Curriculum currentness is derived and `curricula` does not store a mutable `is_current_version` flag.
+
+For downstream modules that create a NEW academic adoption/reference and require the operative Curriculum (starting with College Program Offerings):
+- eligible Curriculum = `lifecycle_status = ACTIVE`
+- `approval_status = APPROVED`
+- same University / Program Template / Academic Session required by the consuming module
+- no direct child Curriculum with `approval_status = APPROVED`
+
+Previous approved versions remain valid historical records for already-linked data. A newer approved amendment must never silently rewrite existing foreign keys.
+
+Future modules must explicitly document whether they need:
+1. the Current Curriculum for a new operational record, or
+2. the historical Curriculum already frozen on an existing record.
+They must not simply list every `ACTIVE + APPROVED` version when the workflow requires the current operative version.

@@ -32,3 +32,7 @@ Scope UI rules:
 - Curriculum: require current ACTIVE + APPROVED Curriculum; Degree Level remains blank. Program Template may be used as the UI filter and must match the selected Curriculum when supplied.
 
 The list view displays the selected Degree Level name for `DEGREE_LEVEL` policies. Clone and Amendment keep the source policy scope and Degree Level reference.
+
+## Current Session Default — 2026-08-25
+For `Add Academic Policy`, the University's `ACTIVE + is_current` Academic Session is preselected when available. Other ACTIVE sessions remain selectable.
+Editing/version history preserves the Policy's stored Academic Session and does not follow later Current-session changes automatically.

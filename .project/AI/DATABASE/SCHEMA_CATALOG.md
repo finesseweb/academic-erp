@@ -123,3 +123,5 @@ Dynamic version-bound progression checkpoints. Multiple source Curriculum Terms 
 - `academic_calendar_events` — dated University calendar events/ranges; includes the future College override governance flag.
 - Calendar dates are constrained by application validation to the owning Academic Session.
 - Routine/Timetable and detailed Examination scheduling are intentionally separate domains.
+
+- `college_program_offerings` — College adoption of one University Program Template + approved Curriculum for an Academic Session; operational parent for later College academic setup.

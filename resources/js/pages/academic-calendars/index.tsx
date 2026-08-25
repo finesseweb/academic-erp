@@ -99,6 +99,9 @@ function CalendarForm({
     const action = calendar
         ? `/admin/academic-calendars/${calendar.id}`
         : '/admin/academic-calendars';
+    const currentAcademicSession = sessions.find(
+        (session) => session.is_current && session.status === 'ACTIVE',
+    );
 
     return (
         <Dialog>
@@ -130,7 +133,14 @@ function CalendarForm({
                             {!calendar && (
                                 <div className="space-y-2 sm:col-span-2">
                                     <Label>Academic Session</Label>
-                                    <Select name="academic_session_id">
+                                    <Select
+                                        name="academic_session_id"
+                                        defaultValue={
+                                            currentAcademicSession
+                                                ? String(currentAcademicSession.id)
+                                                : undefined
+                                        }
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select session" />
                                         </SelectTrigger>

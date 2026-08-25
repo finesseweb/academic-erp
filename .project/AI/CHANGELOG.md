@@ -1,5 +1,47 @@
 # Change Log
 
+## 2026-08-25 — Logout redirect standardized
+
+- Overrode Fortify `LogoutResponse` so every successful logout redirects to the named ERP `login` route.
+- Removed logout's dependency on the root/home route, preventing the Laravel/Inertia welcome page from appearing after logout.
+- Added permanent `AUTH_NAVIGATION_CONTRACT.md` and linked it from the Project Constitution.
+
+## 2026-08-25 — Global UI/data selection consistency contract
+
+- Standardized Current ACTIVE Academic Session as the creation default for session-dependent modules.
+- Corrected Curriculum, Academic Policy and Academic Calendar creation forms; College Program Offering already follows the same rule.
+- Preserved historical references on Edit/View when Current Session changes.
+- Added mandatory project-wide rules for configured `display_order`, dependent dropdowns, status/eligibility filtering, current-vs-historical version selection and frontend/backend validation parity.
+- Added `UI_DATA_SELECTION_CONSISTENCY.md` and linked it from Project Constitution, Page Flow Standard and Page Spec Template.
+
+## 2026-08-25 — Program Offering current Session/Curriculum selection correction
+
+- New College Program Offering now preselects the University's current ACTIVE Academic Session.
+- Eligible non-current PLANNED/ACTIVE sessions remain selectable.
+- Program Offering Curriculum choices now include only the derived Current ACTIVE + APPROVED Curriculum for the selected Program + Academic Session.
+- Backend validation rejects superseded/Previous Curriculum versions.
+- Preserved ADR 007 design: Curriculum currentness is derived from approved amendment children; no duplicate mutable current flag was added.
+- Existing Program Offerings remain historically pinned to their stored Session/Curriculum references.
+- Updated Program Offering PAGE_SPEC, ADR 012, ADR 007, curricula TABLE_SPEC and CURRENT_IMPLEMENTATION_STATE.
+
+## 2026-08-25 — College Program Offering protected-role permission synchronization
+
+- Corrected the College Program Offering permission baseline for protected system roles.
+- Added a forward corrective migration that synchronizes all five `college_program_offering.*` permissions into both `SUPER_ADMIN` and `COLLEGE_ADMIN`.
+- Preserved `is_college_delegable = true` so College Administrators may still delegate permitted capabilities to College-owned custom roles.
+- Kept protected system-role permissions read-only in the Role Permission Matrix; no controller/UI security rule was weakened.
+- Updated Program Offering PAGE_SPEC, ADR 012, RBAC design and permission catalog.
+
+## 2026-08-25 — College Program Offerings
+
+- Closed University Academic Calendar QA/owner gate.
+- Implemented first College Academic Setup module: Program Offerings.
+- Added `college_program_offerings` with College + Program Template + Curriculum + Academic Session references and non-destructive lifecycle.
+- Added College-delegable permissions and College-scoped audit events.
+- Added backend integrity checks for same-University ownership, approved active matching Curriculum, duplicate prevention and inactive-College mutation blocking.
+- Added College Program Offerings Inertia/React page and hierarchical sidebar entry.
+- Added TABLE_SPEC, PAGE_SPEC and ADR 012.
+
 ## 2026-08-25 — Academic Calendar integrity and explicit lifecycle audit
 
 - Added Academic Session -> Academic Calendar date integrity validation: Session date changes are blocked when existing Calendar events would fall outside the proposed new Session range.

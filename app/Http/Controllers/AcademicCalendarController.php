@@ -28,8 +28,18 @@ class AcademicCalendarController extends Controller
         $university = University::query()->firstOrFail();
         $sessions = AcademicSession::query()
             ->where('university_id', $university->id)
+            ->where('status', 'ACTIVE')
+            ->orderByDesc('is_current')
             ->orderByDesc('starts_on')
-            ->get(['id', 'name', 'code', 'starts_on', 'ends_on', 'status', 'is_current']);
+            ->get([
+                'id',
+                'name',
+                'code',
+                'starts_on',
+                'ends_on',
+                'status',
+                'is_current',
+            ]);
 
         $calendars = AcademicCalendar::query()
             ->with(['academicSession:id,name,code,starts_on,ends_on,status,is_current', 'events'])

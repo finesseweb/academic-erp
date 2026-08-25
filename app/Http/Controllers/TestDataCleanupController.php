@@ -76,6 +76,9 @@ class TestDataCleanupController extends Controller
                 'entities' =>
                     $this->service
                         ->listMaintenanceEntities($university->id),
+                'fullReset' =>
+                    $this->service
+                        ->fullAcademicResetPreview($university->id),
             ]
         );
     }
@@ -161,6 +164,45 @@ class TestDataCleanupController extends Controller
         return back()->with(
             'success',
             'Selected Academic Policy test version chain and dependent policy configuration were cleaned successfully.'
+        );
+    }
+
+    public function fullReset(
+        Request $request
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+
+        $university = University::query()->firstOrFail();
+
+        $request->validate([
+            'confirmation_code' => [
+                'required',
+                'string',
+                'max:120',
+            ],
+        ]);
+
+        $expected = 'RESET-ACADEMIC-TEST-DATA';
+
+        if (
+            trim((string) $request->input(
+                'confirmation_code'
+            )) !== $expected
+        ) {
+            throw ValidationException::withMessages([
+                'confirmation_code' =>
+                    'Type RESET-ACADEMIC-TEST-DATA exactly to run the full test reset.',
+            ]);
+        }
+
+        $this->service->fullAcademicReset(
+            $university->id,
+            $request->user()->id
+        );
+
+        return back()->with(
+            'success',
+            'Full academic test data reset completed in dependency-safe order. System core and access data were preserved.'
         );
     }
 

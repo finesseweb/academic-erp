@@ -152,3 +152,13 @@ A batch command is not reduced to one milestone by any generic "one page", "one 
 
 ## Automatic `next` / `next N` Workflow — Mandatory
 `next` approves exactly 1 next eligible incomplete milestone. `next N` or `nextN` approves exactly N sequential eligible incomplete milestones. The agent MUST inspect repository reality first, reconcile stale implementation statuses, resume at the earliest genuinely incomplete eligible milestone, skip already-completed milestones without counting them, complete/validate/document each selected milestone in order, and stop after exactly the requested count. Replacing workflow instruction files never resets implementation progress.
+
+## UI / Data Selection Consistency
+All existing and future pages MUST follow `.project/AI/UI_DATA_SELECTION_CONSISTENCY.md`.
+
+This includes Current Academic Session defaults, status/eligibility filtering, dependent dropdown behavior, configured `display_order`, historical-reference preservation, and frontend/backend rule parity. A module may deviate only through an explicit PAGE_SPEC/ADR exception.
+
+## Authentication Navigation
+All authentication entry/exit behavior MUST follow `.project/AI/AUTH_NAVIGATION_CONTRACT.md`.
+
+Successful logout must explicitly redirect to the named `login` route and must not rely on the application root/home route.

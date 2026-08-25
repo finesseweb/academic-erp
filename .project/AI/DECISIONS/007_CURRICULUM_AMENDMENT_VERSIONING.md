@@ -45,3 +45,11 @@ Because amendments are forced into a single chain, this produces:
 `V1.0 -> V1.1 -> V1.2 -> ...`
 
 while an unapproved V1.2 does not replace V1.1 yet.
+
+
+## Downstream Adoption Rule — 2026-08-25
+When a downstream module creates a new operative reference and asks the user to choose the applicable Curriculum, it must use the derived Current version rather than presenting superseded Previous versions as equally eligible.
+
+College Program Offerings is the first enforced consumer of this rule.
+
+Existing downstream records keep their historical Curriculum FK when a newer amendment becomes Current. No automatic relinking is permitted.
