@@ -86,3 +86,10 @@ The documentation and actual Laravel migrations / Eloquent/MySQL schema must not
 ## Production Principle
 Production migration execution is a separate controlled deployment activity. AI may prepare and review migration files, but must not independently apply destructive or unapproved production schema changes.
 Application startup must not automatically invoke `prisma migrate dev` or `prisma migrate deploy`.
+
+## MySQL identifier and Eloquent table-name safety
+
+- MySQL constraint/index identifiers must remain within the 64-character identifier limit. For long Academic ERP table/column names, migrations must define short explicit foreign-key/index/unique names instead of relying on Laravel-generated names.
+- Before delivery, review every new FK name that Laravel would infer from long table/column names; prefer module abbreviations such as `caa_*`, `caac_*`, `casr_*` where the schema remains unambiguous.
+- When a documented physical table name differs from Laravel's Eloquent pluralization/snake-case inference (for example `..._tiebreakers` versus inferred `..._tie_breakers`), the model must set `protected $table` explicitly.
+- New multi-table migrations that can fail after partial MySQL DDL must be designed for safe rerun when Laravel has not recorded the migration as completed. Recovery logic must only recreate tables owned exclusively by that failed, not-yet-completed migration; never drop established project tables as a generic recovery strategy.

@@ -1,5 +1,5 @@
 import { Form, Head, router } from '@inertiajs/react';
-import { Plus, Power, ShieldCheck, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Power, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +34,23 @@ function PlanForm({collegeId,buckets}:{collegeId:number;buckets:Bucket[]}){
     </Dialog>
 }
 
+function PlanEditForm({collegeId,plan}:{collegeId:number;plan:Plan}){
+    return <Dialog><DialogTrigger asChild><Button variant="outline" size="sm"><Pencil className="size-4"/>Edit</Button></DialogTrigger>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-xl overflow-hidden sm:w-full">
+            <DialogTitle>Edit Reservation / Seat Distribution</DialogTitle>
+            <DialogDescription>The admission seat bucket is fixed after creation. Deactivate the plan before editing plan notes or quota allocations.</DialogDescription>
+            <Form action={`/college/${collegeId}/reservations/${plan.id}`} method="patch" className="min-w-0 space-y-4">{({processing,errors})=><>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <div className="font-medium">{plan.intake.offering.program_template.name} · {planBucketLabel(plan)}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{plan.intake.offering.academic_session.name} · {plan.basis_capacity} seats · Seat bucket cannot be changed</div>
+                </div>
+                <div className="space-y-2"><Label>Notes</Label><textarea name="notes" defaultValue={plan.notes??''} className="min-h-28 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm"/>{errors.notes&&<p className="text-xs text-destructive">{errors.notes}</p>}</div>
+                <DialogFooter className="flex-wrap"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={processing}>{processing&&<Spinner/>}Save Changes</Button></DialogFooter>
+            </>}</Form>
+        </DialogContent>
+    </Dialog>
+}
+
 function AllocationForm({collegeId,plan,categories,allocation}:{collegeId:number;plan:Plan;categories:Category[];allocation?:Allocation}){
     const action=allocation?`/college/${collegeId}/reservations/${plan.id}/allocations/${allocation.id}`:`/college/${collegeId}/reservations/${plan.id}/allocations`;
     return <Dialog><DialogTrigger asChild><Button variant="outline" size="sm">{allocation?'Edit':<><Plus className="size-4"/>Add Quota</>}</Button></DialogTrigger>
@@ -48,6 +65,38 @@ function AllocationForm({collegeId,plan,categories,allocation}:{collegeId:number
     </Dialog>
 }
 
+function PlanStatusDialog({collegeId,plan}:{collegeId:number;plan:Plan}){
+    const activating=plan.status!=='ACTIVE';
+    return <Dialog>
+        <DialogTrigger asChild>
+            <Button type="button" size="sm" variant="outline">
+                <Power className="size-4"/>{activating?'Activate':'Deactivate'}
+            </Button>
+        </DialogTrigger>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md sm:w-full">
+            <DialogTitle>{activating?'Activate':'Deactivate'} Reservation / Seat Distribution?</DialogTitle>
+            <DialogDescription>
+                {activating
+                    ? 'Activation validates the current quota allocation against this exact Intake seat bucket. After activation, quota editing is locked until the plan is deactivated.'
+                    : 'Deactivation is allowed only when no active Selection Rule depends on this Reservation plan.'}
+            </DialogDescription>
+            <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <div className="font-medium">{plan.intake.offering.program_template.name} · {planBucketLabel(plan)}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{plan.intake.offering.academic_session.name} · {plan.basis_capacity} seats · Current status: {plan.status}</div>
+            </div>
+            <Form action={`/college/${collegeId}/reservations/${plan.id}/status`} method="patch">
+                {({processing})=><>
+                    <input type="hidden" name="status" value={activating?'ACTIVE':'INACTIVE'}/>
+                    <DialogFooter>
+                        <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                        <Button type="submit" variant="outline" disabled={processing}>{processing&&<Spinner/>}{activating?'Activate Plan':'Deactivate Plan'}</Button>
+                    </DialogFooter>
+                </>}
+            </Form>
+        </DialogContent>
+    </Dialog>
+}
+
 export default function CollegeReservations({college,plans,availableBuckets,categories,can}:Props){
     const del=(plan:Plan,a:Allocation)=>{if(confirm('Remove this Reservation / Quota allocation?'))router.delete(`/college/${college.id}/reservations/${plan.id}/allocations/${a.id}`,{preserveScroll:true});};
     return <><Head title={`${college.name} Reservation / Seat Distribution`}/><div className="space-y-6 p-4 md:p-6">
@@ -55,7 +104,7 @@ export default function CollegeReservations({college,plans,availableBuckets,cate
         {categories.length===0&&<Card><CardContent className="p-4 text-sm text-muted-foreground">No active Reservation / Quota categories exist. Configure the University category master first.</CardContent></Card>}
         {plans.length===0?<Card><CardContent className="grid place-items-center py-16 text-center"><ShieldCheck className="size-10 text-muted-foreground"/><h2 className="mt-3 font-semibold">No Reservation plan configured</h2><p className="mt-1 text-sm text-muted-foreground">Activate Intake first, then create a plan for the appropriate Program, General Discipline, or Specialization bucket.</p></CardContent></Card>:
         <div className="space-y-4">{plans.map(plan=>{const vertical=plan.allocations.filter(a=>a.status==='ACTIVE'&&a.category.nature==='VERTICAL').reduce((s,a)=>s+Number(a.seat_capacity),0);const open=Number(plan.basis_capacity)-vertical;return <Card key={plan.id}>
-            <CardHeader className="gap-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{plan.intake.offering.program_template.name} · {planBucketLabel(plan)}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{plan.intake.offering.academic_session.name} · Capacity {plan.basis_capacity}</p></div>{(plan.status==='ACTIVE'?can.disable:can.enable)&&<Form action={`/college/${college.id}/reservations/${plan.id}/status`} method="patch"><input type="hidden" name="status" value={plan.status==='ACTIVE'?'INACTIVE':'ACTIVE'}/>{({processing})=><Button type="submit" size="sm" variant={plan.status==='ACTIVE'?'outline':'default'} disabled={processing}><Power className="size-4"/>{plan.status==='ACTIVE'?'Deactivate':'Activate'}</Button>}</Form>}</div>
+            <CardHeader className="gap-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><CardTitle>{plan.intake.offering.program_template.name} · {planBucketLabel(plan)}</CardTitle><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${plan.status==='ACTIVE'?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800'}`}>{plan.status}</span></div><p className="mt-1 text-sm text-muted-foreground">{plan.intake.offering.academic_session.name} · Capacity {plan.basis_capacity}</p></div><div className="flex flex-wrap items-center gap-2">{can.update&&plan.status==='INACTIVE'&&<PlanEditForm collegeId={college.id} plan={plan}/>} {college.status==='ACTIVE'&&(plan.status==='ACTIVE'?can.disable:can.enable)&&<PlanStatusDialog collegeId={college.id} plan={plan}/>}</div></div>
             <div className="grid gap-2 sm:grid-cols-3"><div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Seat Bucket</div><div className="font-medium">{plan.basis_capacity}</div></div><div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Vertical Reserved</div><div className="font-medium">{vertical}</div></div><div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Open / Unreserved Remaining</div><div className="font-medium">{open}</div></div></div>
             </CardHeader>
             <CardContent className="space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-medium">Quota Allocations</h3><p className="text-xs text-muted-foreground">Horizontal quotas overlay capacity and do not reduce Open/Unreserved remaining.</p></div>{can.update&&plan.status==='INACTIVE'&&categories.length>0&&<AllocationForm collegeId={college.id} plan={plan} categories={categories}/>}</div>

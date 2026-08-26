@@ -1,0 +1,328 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\College;
+use App\Models\CollegeAdmissionApplication;
+use App\Models\CollegeAdmissionApplicationChoice;
+use App\Models\CollegeAdmissionCycle;
+use App\Models\CollegeAdmissionSelectionRule;
+use App\Models\CollegeProgramIntake;
+use App\Models\CollegeProgramReservationPlan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class CollegeAdmissionApplicationService
+{
+    public function __construct(private CollegeReservationService $reservationService)
+    {
+    }
+
+    public function create(College $college, array $data, int $actorId, ?string $ip): CollegeAdmissionApplication
+    {
+        $this->assertCollegeActive($college);
+        $cycle = $this->activeCycle($college, (int) $data['college_admission_cycle_id']);
+        $contexts = $this->resolveChoices($college, $cycle, $data['choices']);
+
+        return DB::transaction(function () use ($college, $cycle, $data, $contexts, $actorId, $ip) {
+            $application = CollegeAdmissionApplication::create([
+                'college_id' => $college->id,
+                'college_admission_cycle_id' => $cycle->id,
+                'application_no' => 'PENDING-'.Str::uuid(),
+                ...$this->candidateData($data),
+                'status' => 'DRAFT',
+                'created_by' => $actorId,
+                'updated_by' => $actorId,
+            ]);
+
+            $application->update([
+                'application_no' => strtoupper($college->code.'-'.$cycle->code.'-'.str_pad((string) $application->id, 6, '0', STR_PAD_LEFT)),
+            ]);
+
+            $this->replaceChoices($application, $contexts);
+            $application->load($this->applicationRelations());
+            $this->audit('COLLEGE_ADMISSION_APPLICATION_CREATED', $application, $college, $actorId, $ip, null, $application->toArray());
+
+            return $application;
+        });
+    }
+
+    public function update(CollegeAdmissionApplication $application, College $college, array $data, int $actorId, ?string $ip): CollegeAdmissionApplication
+    {
+        $this->assertOwned($application, $college);
+        $this->assertCollegeActive($college);
+        $this->assertDraft($application);
+
+        $cycle = $this->activeCycle($college, (int) $data['college_admission_cycle_id']);
+        $contexts = $this->resolveChoices($college, $cycle, $data['choices']);
+
+        return DB::transaction(function () use ($application, $college, $cycle, $data, $contexts, $actorId, $ip) {
+            $application->load('choices');
+            $before = $application->toArray();
+
+            $application->update([
+                'college_admission_cycle_id' => $cycle->id,
+                ...$this->candidateData($data),
+                'updated_by' => $actorId,
+            ]);
+            $this->replaceChoices($application, $contexts);
+
+            $fresh = $application->fresh()->load($this->applicationRelations());
+            $this->audit('COLLEGE_ADMISSION_APPLICATION_UPDATED', $fresh, $college, $actorId, $ip, $before, $fresh->toArray());
+
+            return $fresh;
+        });
+    }
+
+    public function submit(CollegeAdmissionApplication $application, College $college, int $actorId, ?string $ip): CollegeAdmissionApplication
+    {
+        $this->assertOwned($application, $college);
+        $this->assertCollegeActive($college);
+        $this->assertDraft($application);
+
+        $application->load(['admissionCycle', 'choices']);
+        $cycle = $this->activeCycle($college, (int) $application->college_admission_cycle_id);
+        $today = today()->toDateString();
+        if ($today < $cycle->application_start_date->toDateString() || $today > $cycle->application_end_date->toDateString()) {
+            throw ValidationException::withMessages([
+                'application' => 'This Admission Cycle is outside its Application Start / End window. A draft cannot be submitted now.',
+            ]);
+        }
+
+        $choiceInput = $application->choices->map(fn ($choice) => [
+            'college_program_intake_id' => $choice->college_program_intake_id,
+            'bucket_key' => $choice->bucket_key,
+        ])->all();
+        $contexts = $this->resolveChoices($college, $cycle, $choiceInput);
+
+        return DB::transaction(function () use ($application, $college, $contexts, $actorId, $ip) {
+            $before = $application->load('choices')->toArray();
+            $this->replaceChoices($application, $contexts);
+            $application->update([
+                'status' => 'SUBMITTED',
+                'submitted_at' => now(),
+                'withdrawn_at' => null,
+                'updated_by' => $actorId,
+            ]);
+
+            $fresh = $application->fresh()->load($this->applicationRelations());
+            $this->audit('COLLEGE_ADMISSION_APPLICATION_SUBMITTED', $fresh, $college, $actorId, $ip, $before, $fresh->toArray());
+
+            return $fresh;
+        });
+    }
+
+    public function setEligibility(CollegeAdmissionApplicationChoice $choice, College $college, string $status, ?string $reason, int $actorId, ?string $ip): CollegeAdmissionApplicationChoice
+    {
+        $application = $choice->application()->firstOrFail();
+        $this->assertOwned($application, $college);
+        if ($application->status !== 'SUBMITTED') {
+            throw ValidationException::withMessages(['eligibility_status' => 'Eligibility can be assessed only for a SUBMITTED application.']);
+        }
+        if (! in_array($status, ['PENDING', 'ELIGIBLE', 'INELIGIBLE'], true)) {
+            throw ValidationException::withMessages(['eligibility_status' => 'Invalid eligibility status.']);
+        }
+        if ($status === 'INELIGIBLE' && blank($reason)) {
+            throw ValidationException::withMessages(['eligibility_reason' => 'Give a reason when a candidate choice is marked INELIGIBLE.']);
+        }
+
+        return DB::transaction(function () use ($choice, $application, $college, $status, $reason, $actorId, $ip) {
+            $before = $choice->toArray();
+            $choice->update([
+                'eligibility_status' => $status,
+                'eligibility_reason' => $status === 'PENDING' ? null : (filled($reason) ? trim((string) $reason) : null),
+                'eligibility_checked_at' => $status === 'PENDING' ? null : now(),
+                'eligibility_checked_by' => $status === 'PENDING' ? null : $actorId,
+            ]);
+            $fresh = $choice->fresh();
+            $this->audit('COLLEGE_ADMISSION_CHOICE_ELIGIBILITY_CHANGED', $application, $college, $actorId, $ip, $before, $fresh->toArray());
+            return $fresh;
+        });
+    }
+
+    public function withdraw(CollegeAdmissionApplication $application, College $college, int $actorId, ?string $ip): void
+    {
+        $this->assertOwned($application, $college);
+        if ($application->status === 'WITHDRAWN') {
+            return;
+        }
+
+        $blockingTables = [
+            'college_admission_scores',
+            'college_admission_interviews',
+            'college_admission_merit_entries',
+            'college_admission_seat_allocations',
+            'admissions',
+            'students',
+        ];
+        foreach ($blockingTables as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'college_admission_application_id') && DB::table($table)->where('college_admission_application_id', $application->id)->exists()) {
+                throw ValidationException::withMessages(['application' => 'This application already has downstream Admission/Student processing and cannot be withdrawn from this stage.']);
+            }
+        }
+
+        DB::transaction(function () use ($application, $college, $actorId, $ip) {
+            $before = $application->toArray();
+            $application->update(['status' => 'WITHDRAWN', 'withdrawn_at' => now(), 'updated_by' => $actorId]);
+            $this->audit('COLLEGE_ADMISSION_APPLICATION_WITHDRAWN', $application, $college, $actorId, $ip, $before, $application->fresh()->toArray());
+        });
+    }
+
+    private function resolveChoices(College $college, CollegeAdmissionCycle $cycle, array $choices): array
+    {
+        $seen = [];
+        $resolved = [];
+        foreach (array_values($choices) as $index => $input) {
+            $intakeId = (int) ($input['college_program_intake_id'] ?? 0);
+            $bucketKey = trim((string) ($input['bucket_key'] ?? ''));
+            $identity = $intakeId.'|'.$bucketKey;
+            if (isset($seen[$identity])) {
+                throw ValidationException::withMessages(['choices' => 'The same Admission Seat Bucket cannot be selected more than once in one application.']);
+            }
+            $seen[$identity] = true;
+
+            $intake = CollegeProgramIntake::query()
+                ->with('offering')
+                ->whereKey($intakeId)
+                ->where('status', 'ACTIVE')
+                ->whereHas('offering', fn ($q) => $q
+                    ->where('college_id', $college->id)
+                    ->where('id', $cycle->college_program_offering_id)
+                    ->where('status', 'ACTIVE'))
+                ->first();
+
+            if (! $intake || ! $intake->offering) {
+                throw ValidationException::withMessages(['choices' => 'Every seat-bucket choice must belong to the exact ACTIVE Program Offering of the selected Admission Cycle and have an ACTIVE Intake.']);
+            }
+
+            $bucket = $this->reservationService->availableBuckets($intake)->firstWhere('bucket_key', $bucketKey);
+            if (! $bucket) {
+                throw ValidationException::withMessages(['choices' => 'One selected Admission Seat Bucket is no longer valid for its Intake.']);
+            }
+
+            $plan = CollegeProgramReservationPlan::query()
+                ->where('college_program_intake_id', $intake->id)
+                ->where('bucket_key', $bucketKey)
+                ->first();
+            if ($plan && $plan->status !== 'ACTIVE') {
+                throw ValidationException::withMessages(['choices' => 'Reservation is configured but INACTIVE for one selected seat bucket. Activate that Reservation Plan first.']);
+            }
+
+            $rule = CollegeAdmissionSelectionRule::query()
+                ->where('college_program_intake_id', $intake->id)
+                ->where('bucket_key', $bucketKey)
+                ->where('status', 'ACTIVE')
+                ->orderByDesc('version_no')
+                ->first();
+            if (! $rule) {
+                throw ValidationException::withMessages(['choices' => 'Every application choice requires an ACTIVE Merit / Roster / Selection Rule for the exact seat bucket.']);
+            }
+            if ((int) ($rule->college_program_reservation_plan_id ?? 0) !== (int) ($plan?->id ?? 0)) {
+                throw ValidationException::withMessages(['choices' => 'The active Selection Rule reservation context no longer matches the current seat bucket. Review the Selection Rule before accepting applications.']);
+            }
+
+            $resolved[] = [
+                'preference_no' => $index + 1,
+                'college_program_intake_id' => $intake->id,
+                'college_program_reservation_plan_id' => $plan?->id,
+                'college_admission_selection_rule_id' => $rule->id,
+                'bucket_type' => $bucket['bucket_type'],
+                'bucket_key' => $bucket['bucket_key'],
+                'basis_capacity' => (int) $bucket['basis_capacity'],
+            ];
+        }
+
+        return $resolved;
+    }
+
+    private function replaceChoices(CollegeAdmissionApplication $application, array $contexts): void
+    {
+        $application->choices()->delete();
+        foreach ($contexts as $context) {
+            $application->choices()->create([
+                ...$context,
+                'eligibility_status' => 'PENDING',
+                'eligibility_reason' => null,
+                'eligibility_checked_at' => null,
+                'eligibility_checked_by' => null,
+            ]);
+        }
+    }
+
+    private function activeCycle(College $college, int $cycleId): CollegeAdmissionCycle
+    {
+        $cycle = CollegeAdmissionCycle::query()
+            ->whereKey($cycleId)
+            ->where('college_id', $college->id)
+            ->where('status', 'ACTIVE')
+            ->whereNotNull('college_program_offering_id')
+            ->whereHas('programOffering', fn ($q) => $q->where('college_id', $college->id)->where('status', 'ACTIVE'))
+            ->first();
+        if (! $cycle) {
+            throw ValidationException::withMessages(['college_admission_cycle_id' => 'Select an ACTIVE Admission Cycle linked to an ACTIVE Program Offering for this College.']);
+        }
+        return $cycle;
+    }
+
+    private function candidateData(array $data): array
+    {
+        return [
+            'external_reference' => filled($data['external_reference'] ?? null) ? trim((string) $data['external_reference']) : null,
+            'candidate_name' => trim((string) $data['candidate_name']),
+            'email' => filled($data['email'] ?? null) ? strtolower(trim((string) $data['email'])) : null,
+            'phone' => filled($data['phone'] ?? null) ? trim((string) $data['phone']) : null,
+            'date_of_birth' => $data['date_of_birth'],
+            'remarks' => filled($data['remarks'] ?? null) ? trim((string) $data['remarks']) : null,
+        ];
+    }
+
+    private function assertOwned(CollegeAdmissionApplication $application, College $college): void
+    {
+        abort_unless((int) $application->college_id === (int) $college->id, 404);
+    }
+
+    private function assertDraft(CollegeAdmissionApplication $application): void
+    {
+        if ($application->status !== 'DRAFT') {
+            throw ValidationException::withMessages(['application' => 'Only a DRAFT application can be edited or submitted.']);
+        }
+    }
+
+    private function assertCollegeActive(College $college): void
+    {
+        if ($college->status !== 'ACTIVE') {
+            throw ValidationException::withMessages(['college' => 'Admission Applications cannot be changed while this College is inactive.']);
+        }
+    }
+
+    private function applicationRelations(): array
+    {
+        return [
+            'admissionCycle.academicSession:id,name,code,is_current',
+            'admissionCycle.programOffering.programTemplate:id,name,code',
+            'admissionCycle.programOffering.academicSession:id,name,code,is_current',
+            'choices.intake.offering.programTemplate:id,name,code',
+            'choices.intake.offering.academicSession:id,name,code,is_current',
+            'choices.reservationPlan:id,status',
+            'choices.selectionRule:id,name,code,version_no,selection_mode,status,merit_weight_percent,entrance_weight_percent,interview_weight_percent',
+        ];
+    }
+
+    private function audit(string $event, CollegeAdmissionApplication $application, College $college, int $actorId, ?string $ip, ?array $before, ?array $after): void
+    {
+        DB::table('audit_logs')->insert([
+            'actor_user_id' => $actorId,
+            'event' => $event,
+            'resource_type' => 'CollegeAdmissionApplication',
+            'resource_id' => $application->id,
+            'scope_type' => 'COLLEGE',
+            'scope_reference' => 'college:'.$college->id,
+            'before' => $before ? json_encode($before) : null,
+            'after' => $after ? json_encode($after) : null,
+            'ip_address' => $ip,
+            'created_at' => now(),
+        ]);
+    }
+}
