@@ -174,6 +174,18 @@ Every implementation must explicitly handle desktop, tablet and mobile.
 Desktop should optimize information density; mobile should prioritize essential actions and readable content.
 Sidebars collapse appropriately. Tables may scroll or transform where needed. Forms should avoid unusably narrow multi-column layouts.
 
+### Responsive Dialog / Form Width Contract
+For React/Inertia create/edit dialogs, the dialog container and every form control must be viewport-safe. This is a mandatory consistency gate for all new and modified pages.
+
+- Do not rely on an unprefixed `max-w-*` class to override the shared Dialog default `sm:max-w-lg`; use an explicit responsive override such as `sm:!max-w-xl`, `sm:!max-w-2xl` or `sm:!max-w-3xl` when the form requires additional width.
+- Use `w-[calc(100vw-2rem)]` (or an equivalent viewport-safe width) so dialogs retain side margins on small screens.
+- Long create/edit forms must use a bounded height such as `max-h-[90vh]`/`max-h-[92vh]` with a scrollable form body instead of allowing the dialog to run beyond the viewport.
+- Keep dialog header and action footer visible where practical; only the form body should vertically scroll.
+- Form/grid wrappers that can contain long values must use `min-w-0`; Inputs, Select triggers and textareas must use the available width and must never extend outside the dialog.
+- Select dropdown content must also be constrained to the viewport. Long selected labels should truncate or wrap without changing dialog width.
+- Multi-column form grids may activate only at a breakpoint where each field remains comfortably usable; otherwise collapse to one column.
+- Before OWNER_QA_COMPLETE, test the dialog at desktop, tablet and mobile widths and verify there is no horizontal overflow, clipped footer, unreachable field or layout jump.
+
 ## 13. Accessibility
 Minimum requirements:
 - keyboard navigable controls
@@ -403,3 +415,18 @@ Use:
 Keep independent lifecycle actions such as Edit, Validate, Retire or Approval separate when they operate on the parent record as a whole.
 
 Academic Policies is the reference implementation of this pattern.
+
+### Searchable Operational Selectors — 2026-08-26
+For downstream College Academic modules that can grow to many Program Offerings and operational child records:
+- do not flatten every Program / Session / Discipline / Specialization combination into one huge global Select;
+- use **Program Offering** as the first operational selector when the downstream record already belongs to an offering context;
+- make Program Offering searchable by program name/code and academic-session name/code;
+- use a second searchable dependent selector for the exact operational child record (for example Admission Seat Bucket);
+- selecting/changing the parent must filter and reset the dependent selector;
+- search menus must have bounded height, internal vertical scrolling and viewport-safe width;
+- current-session records may be sorted first, but eligible planned/non-current records must remain searchable when business rules permit them;
+- backend IDs/relationships remain authoritative; the search UI must not duplicate academic hierarchy columns merely for filtering.
+
+Merit / Roster / Selection Rules is the reference implementation: `Program Offering → searchable Admission Seat Bucket`.
+Applications / Candidate Eligibility extends this pattern inside an Admission Cycle: `searchable Admission Cycle → searchable Program Offering → searchable Admission Seat Bucket`, with repeatable ordered Program Choices where the domain permits multiple preferences.
+

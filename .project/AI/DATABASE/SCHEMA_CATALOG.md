@@ -125,3 +125,18 @@ Dynamic version-bound progression checkpoints. Multiple source Curriculum Terms 
 - Routine/Timetable and detailed Examination scheduling are intentionally separate domains.
 
 - `college_program_offerings` — College adoption of one University Program Template + approved Curriculum for an Academic Session; operational parent for later College academic setup.
+
+### college_admission_selection_rules
+Versioned College Merit / Roster / Selection configuration attached to an exact effective Intake seat bucket; `college_program_reservation_plan_id` is optional and used only when Reservation is configured for that bucket. Supports MERIT / ENTRANCE / INTERVIEW / COMBINED selection with Merit, Entrance and Interview normalized scoring components, component-aware qualifying thresholds, optional final weighted threshold, policy/roster reference, structured ordered tie-break children and INACTIVE/ACTIVE/RETIRED lifecycle. See `TABLE_SPECS/college_admission_selection_rules.md`, `TABLE_SPECS/college_admission_selection_rule_tiebreakers.md`, ADR 018, ADR 019 and ADR 020.
+
+
+### `college_admission_selection_rule_tiebreakers`
+Ordered machine-readable tie-break criteria for one Selection Rule version, including Interview Score. Priority controls evaluation order; free-text policy notes are not executable. See `TABLE_SPECS/college_admission_selection_rule_tiebreakers.md`, ADR 019 and ADR 020.
+
+
+## Admission Applications — 2026-08-26
+- `college_admission_applications` — College/Cycle-scoped candidate application header and DRAFT/SUBMITTED/WITHDRAWN lifecycle.
+- `college_admission_application_choices` — ordered Program/seat-bucket choices with optional Reservation context, exact Selection Rule version, and per-choice preliminary eligibility.
+
+## Admission Cycle Program Offering anchor — 2026-08-26
+`college_admission_cycles` now includes `college_program_offering_id` (FK -> `college_program_offerings.id`) as its authoritative parent. `academic_session_id` is retained as a derived compatibility snapshot. See ADR 022 and the table spec for lifecycle/application constraints.

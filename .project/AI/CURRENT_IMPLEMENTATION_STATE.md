@@ -73,4 +73,39 @@ Run College Program Offering QA defined in `NEXT_WORKFLOW.md`. Do not begin Inta
 - Horizontal quota overlays the same physical seats and does not create extra capacity.
 - Reservation protects dependent Intake capacity/allocation from unsafe mutation.
 - Admission/Student lifecycle must preserve physical seat bucket + reservation context.
+- Plan-level lifecycle UI correction: every plan now shows its status plus explicit Edit and Activate/Deactivate actions; plan metadata is editable only while INACTIVE and seat-bucket identity remains immutable.
+- Reservation lifecycle permissions are synchronized to College roles that already have Reservation update access, so quota editing and required lifecycle completion stay consistent.
 - Status: OWNER_QA_REQUIRED before Admission implementation.
+
+## Merit / Roster / Selection Rules — 2026-08-26
+- Implemented immediately after Reservation / Seat Distribution according to `HIERARCHY_PATCH_STUDENT_ADMISSION_RESERVATION.md`.
+- A Selection Rule belongs to one exact effective Intake admission seat bucket. Reservation is optional per bucket; when defined it must be ACTIVE and its plan id is preserved for traceability.
+- Rules are versioned: new versions start INACTIVE; only INACTIVE versions are editable; activating a version retires the previous active version for that seat bucket.
+- Selection modes support MERIT, ENTRANCE, INTERVIEW and COMBINED without hard-coding University/Government policy. Merit, Entrance and Interview are first-class normalized scoring components; Combined may use any two or all three with positive weights totaling exactly 100%.
+- Rule preserves component-aware normalized qualifying thresholds (Merit / Entrance / Interview / Final Weighted) plus ordered machine-readable tie-breakers, including Interview Score, for later candidate ranking. Free-text tie-break wording is policy notes only.
+- Interview execution is intentionally not part of Student Lifecycle: future Admission Processing will schedule/evaluate interviews and persist candidate interview scores; Merit/Roster generation consumes those scores through the ACTIVE Selection Rule; Student Lifecycle starts after admission confirmation.
+- Activation requires Program Offering + Intake to remain ACTIVE. Reservation is required to be ACTIVE only when a Reservation Plan is defined for that exact bucket.
+- Status: OWNER_QA_ACCEPTED — 2026-08-26. Owner confirmed Selection Rule behavior/UI before starting Student Admission Processing.
+- Reservation / Seat Distribution lifecycle UI corrected: plan managers now receive visible Activate/Deactivate controls beside Edit, with update-permission fallback and dependency-safe confirmation.
+
+
+## Applications / Candidate Eligibility — 2026-08-26
+- Implemented as the first transactional Student Admission Processing milestone after Selection Rules.
+- Restored/connected the existing Admission Cycle route/sidebar as the Application parent and corrected its activation gate to require an eligible ACTIVE Selection Rule rather than globally requiring Reservation.
+- Application header supports DRAFT -> SUBMITTED -> WITHDRAWN.
+- Candidate may have ordered Program Choices; each choice consumes the exact ACTIVE Offering + Intake seat bucket, optional ACTIVE Reservation Plan, and ACTIVE Selection Rule.
+- Submission revalidates upstream context, records `submitted_at`, and locks the exact Selection Rule version for later Score / Interview / Merit processing.
+- Preliminary ELIGIBLE / INELIGIBLE / PENDING is stored per Program Choice and does not duplicate Selection Rule score thresholds.
+- Test Data Cleanup / Full Academic Reset dependency graph extended for Applications, Choices, Selection Rules and Admission Cycles.
+- Status: OWNER_QA_REQUIRED before Score Capture / Normalization implementation.
+
+### Admission prerequisite repair — 2026-08-26
+The Admission Cycle foundation is now explicitly part of the delivered implementation state (table/model/controller/requests/permissions). Applications must reference a real `college_admission_cycles` row. A repair migration also guarantees the structured Selection Rule tie-breaker table exists before Admission processing depends on it.
+
+## Admission Cycle Program Offering Anchor Patch — 2026-08-26
+- Admission Cycle is now directly anchored to `college_program_offerings` instead of being configured from Academic Session alone.
+- Academic Session remains a derived compatibility snapshot; Program Offering is authoritative for College/Session/Program/Curriculum context.
+- Admission Cycle create/edit uses a searchable ACTIVE Program Offering selector.
+- Activation validates the exact offering's ACTIVE Intake and at least one ACTIVE Selection Rule; Reservation stays optional per bucket.
+- Applications inherit the cycle's Program Offering and can select only seat buckets/specializations from that exact offering.
+- Status: IMPLEMENTED — OWNER QA REQUIRED before continuing Score Capture / Normalization.

@@ -6,6 +6,7 @@ use App\Models\College;
 use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationAllocation;
 use App\Models\CollegeProgramReservationPlan;
+use App\Models\CollegeAdmissionSelectionRule;
 use App\Models\ReservationCategory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -139,6 +140,36 @@ class CollegeReservationService
 
             return $plan;
         });
+    }
+
+    public function updatePlan(
+        CollegeProgramReservationPlan $plan,
+        College $college,
+        array $data,
+        int $actorId,
+        ?string $ip
+    ): CollegeProgramReservationPlan {
+        $this->assertOwnedPlan($plan, $college);
+        $this->assertPlanEditable($plan);
+
+        $before = $plan->only(['notes', 'status']);
+
+        $plan->update([
+            'notes' => $data['notes'] ?? null,
+            'updated_by' => $actorId,
+        ]);
+
+        $this->audit(
+            'COLLEGE_RESERVATION_PLAN_UPDATED',
+            $plan,
+            $college,
+            $actorId,
+            $ip,
+            $before,
+            $plan->fresh()->only(['notes', 'status'])
+        );
+
+        return $plan->fresh();
     }
 
     public function addAllocation(
@@ -286,6 +317,34 @@ class CollegeReservationService
             }
 
             $this->validateCurrentAllocationTotals($plan);
+        }
+
+        if ($status === 'ACTIVE') {
+            $activeOpenRule = CollegeAdmissionSelectionRule::query()
+                ->where('college_program_intake_id', $plan->college_program_intake_id)
+                ->where('bucket_key', $plan->bucket_key)
+                ->whereNull('college_program_reservation_plan_id')
+                ->where('status', 'ACTIVE')
+                ->exists();
+
+            if ($activeOpenRule) {
+                throw ValidationException::withMessages([
+                    'plan' => 'An ACTIVE Selection Rule currently treats this bucket as Open/General because Reservation was not defined. Retire that rule, activate this Reservation plan, then create/activate the next Selection Rule version.',
+                ]);
+            }
+        }
+
+        if ($status === 'INACTIVE') {
+            $activeDependentRule = CollegeAdmissionSelectionRule::query()
+                ->where('college_program_reservation_plan_id', $plan->id)
+                ->where('status', 'ACTIVE')
+                ->exists();
+
+            if ($activeDependentRule) {
+                throw ValidationException::withMessages([
+                    'plan' => 'This Reservation plan is used by an ACTIVE Selection Rule. Retire the Selection Rule before deactivating the Reservation plan.',
+                ]);
+            }
         }
 
         $before = ['status' => $plan->status];

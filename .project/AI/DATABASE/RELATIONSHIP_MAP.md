@@ -238,3 +238,28 @@ Rules:
 - all academic references must resolve to the College's University
 - Curriculum must match Program Template + Academic Session
 - later College academic execution should reference an ACTIVE Program Offering rather than selecting University Program Template directly
+
+## Admission Selection Rules — 2026-08-26
+`college_program_reservation_plans (1) -> (many historical versions) college_admission_selection_rules`
+
+At runtime only one Selection Rule version may be ACTIVE for an effective Intake seat bucket. Reservation Plan linkage is nullable and present only where Reservation is configured. Future Student Admission records must reference the exact Selection Rule version used so historical selection remains traceable. Each Selection Rule has ordered `college_admission_selection_rule_tiebreakers` children used by the future ranking engine; qualifying thresholds are explicit normalized Merit / Entrance / Final Weighted fields.
+
+
+## Student Admission Processing — Applications
+`colleges`
+→ `college_admission_cycles`
+→ `college_admission_applications`
+→ `college_admission_application_choices`
+→ `college_program_intakes` / effective `bucket_key`
+→ optional `college_program_reservation_plans`
+→ exact `college_admission_selection_rules` version
+
+Future Score / Interview / Merit / Seat Allocation records must reference the Application Choice and consume its locked Selection Rule version rather than resolving a new current rule.
+
+### Admission Cycle Program Offering anchor (ADR 022)
+`college_program_offerings.id`
+→ `college_admission_cycles.college_program_offering_id`
+→ `college_admission_applications.college_admission_cycle_id`
+→ `college_admission_application_choices`
+
+Rule: every Application Choice Intake/seat bucket must resolve back to the same `college_program_offering_id` carried by the Admission Cycle. `academic_session_id` on Admission Cycle is a derived compatibility snapshot, not an independent academic parent.

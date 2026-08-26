@@ -579,6 +579,10 @@ class TestDataCleanupService
         int $universityId
     ): array {
         return [
+            'college_admission_applications' =>
+                $this->collegeAdmissionApplicationRows($universityId),
+            'college_admission_selection_rules' =>
+                $this->collegeAdmissionSelectionRuleRows($universityId),
             'college_program_reservation_plans' =>
                 $this->collegeReservationPlanRows($universityId),
             'reservation_categories' =>
@@ -723,6 +727,16 @@ class TestDataCleanupService
         return [
             'confirmation_code' => 'RESET-ACADEMIC-TEST-DATA',
             'counts' => [
+                'college_admission_application_choices' =>
+                    $this->countCollegeAdmissionApplicationChoicesForUniversity($universityId),
+                'college_admission_applications' =>
+                    $this->countCollegeAdmissionApplicationsForUniversity($universityId),
+                'college_admission_cycles' =>
+                    $this->countCollegeAdmissionCyclesForUniversity($universityId),
+                'college_admission_selection_rule_tiebreakers' =>
+                    $this->countCollegeAdmissionSelectionRuleTieBreakersForUniversity($universityId),
+                'college_admission_selection_rules' =>
+                    $this->countCollegeAdmissionSelectionRulesForUniversity($universityId),
                 'college_program_reservation_allocations' =>
                     $this->countCollegeReservationAllocationsForUniversity($universityId),
                 'college_program_reservation_plans' =>
@@ -858,7 +872,33 @@ class TestDataCleanupService
                 $approvalRequestIds
             );
 
-            // 2) Reservation / Quota before Intake.
+            // 2) Admission transactional/configuration rows before Selection Rules / Reservation / Intake.
+            if ($collegeIds->isNotEmpty()) {
+                $collegeOfferingIdsForAdmission = Schema::hasTable('college_program_offerings')
+                    ? DB::table('college_program_offerings')->whereIn('college_id', $collegeIds)->pluck('id')
+                    : collect();
+                $intakeIdsForAdmission = Schema::hasTable('college_program_intakes')
+                    ? DB::table('college_program_intakes')->whereIn('college_program_offering_id', $collegeOfferingIdsForAdmission)->pluck('id')
+                    : collect();
+
+                $applicationIds = Schema::hasTable('college_admission_applications')
+                    ? DB::table('college_admission_applications')->whereIn('college_id', $collegeIds)->pluck('id')
+                    : collect();
+                $this->deleteWhereIn('college_admission_application_choices', 'college_admission_application_id', $applicationIds);
+                $this->deleteWhereIn('college_admission_applications', 'id', $applicationIds);
+
+                $selectionRuleIds = Schema::hasTable('college_admission_selection_rules')
+                    ? DB::table('college_admission_selection_rules')->whereIn('college_program_intake_id', $intakeIdsForAdmission)->pluck('id')
+                    : collect();
+                $this->deleteWhereIn('college_admission_selection_rule_tiebreakers', 'college_admission_selection_rule_id', $selectionRuleIds);
+                $this->deleteWhereIn('college_admission_selection_rules', 'id', $selectionRuleIds);
+
+                if (Schema::hasTable('college_admission_cycles')) {
+                    DB::table('college_admission_cycles')->whereIn('college_id', $collegeIds)->delete();
+                }
+            }
+
+            // 3) Reservation / Quota before Intake.
             if (
                 Schema::hasTable('college_program_reservation_plans') &&
                 Schema::hasTable('college_program_reservation_allocations') &&
@@ -1201,6 +1241,18 @@ class TestDataCleanupService
         $this->assertCleanupEnabled();
 
         return match ($type) {
+            'college_admission_applications' =>
+                $this->cleanupCollegeAdmissionApplication(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
+            'college_admission_selection_rules' =>
+                $this->cleanupCollegeAdmissionSelectionRule(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
             'college_program_reservation_plans' =>
                 $this->cleanupCollegeReservationPlan(
                     $id,
@@ -1346,6 +1398,245 @@ class TestDataCleanupService
         };
     }
 
+    private function cleanupCollegeAdmissionApplication(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('college_admission_applications')) {
+            abort(404);
+        }
+
+        $record = DB::table('college_admission_applications as a')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('a.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select('a.*', 'c.name as college_name')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences(
+            $id,
+            [
+                ['college_admission_scores', 'college_admission_application_id'],
+                ['college_admission_interviews', 'college_admission_application_id'],
+                ['college_admission_merit_entries', 'college_admission_application_id'],
+                ['college_admission_seat_allocations', 'college_admission_application_id'],
+                ['admissions', 'college_admission_application_id'],
+                ['students', 'college_admission_application_id'],
+            ]
+        );
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Admission Application already has downstream Score / Interview / Merit / Seat / Student references. Clean those dependent test records first.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $choiceCount = $this->countIfExists(
+                'college_admission_application_choices',
+                'college_admission_application_id',
+                $record->id
+            );
+            $this->deleteWhereIn(
+                'college_admission_application_choices',
+                'college_admission_application_id',
+                collect([$record->id])
+            );
+            DB::table('college_admission_applications')->where('id', $record->id)->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_choices' => $choiceCount,
+            ];
+            $this->audit(
+                'TEST_COLLEGE_ADMISSION_APPLICATION_CLEANED',
+                'test_data_cleanup',
+                $record->id,
+                $result,
+                $actorId
+            );
+            return $result;
+        });
+    }
+
+    private function collegeAdmissionApplicationRows(int $universityId): array
+    {
+        if (! Schema::hasTable('college_admission_applications')) {
+            return [];
+        }
+
+        return DB::table('college_admission_applications as a')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->leftJoin('college_admission_cycles as ac', 'ac.id', '=', 'a.college_admission_cycle_id')
+            ->where('c.university_id', $universityId)
+            ->orderByDesc('a.id')
+            ->get([
+                'a.id', 'a.application_no', 'a.candidate_name', 'a.status',
+                'c.name as college_name', 'ac.name as cycle_name',
+            ])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences(
+                    $row->id,
+                    [
+                        ['college_admission_scores', 'college_admission_application_id'],
+                        ['college_admission_interviews', 'college_admission_application_id'],
+                        ['college_admission_merit_entries', 'college_admission_application_id'],
+                        ['college_admission_seat_allocations', 'college_admission_application_id'],
+                        ['admissions', 'college_admission_application_id'],
+                        ['students', 'college_admission_application_id'],
+                    ]
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->application_no,
+                    'name' => $row->candidate_name.' · '.$row->college_name.' · '.($row->cycle_name ?? 'Admission Cycle'),
+                    'status' => $row->status,
+                    'kind' => 'APPLICATION',
+                    'dependencies' => [
+                        'program_choices' => $this->countIfExists(
+                            'college_admission_application_choices',
+                            'college_admission_application_id',
+                            $row->id
+                        ),
+                    ],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupCollegeAdmissionSelectionRule(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('college_admission_selection_rules')) {
+            abort(404);
+        }
+
+        $record = DB::table('college_admission_selection_rules as sr')
+            ->join('college_program_intakes as i', 'i.id', '=', 'sr.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->where('sr.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select('sr.*', 'c.name as college_name')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences(
+            $id,
+            [
+                ['college_admission_application_choices', 'college_admission_selection_rule_id'],
+                ['college_admission_scores', 'college_admission_selection_rule_id'],
+                ['college_admission_interviews', 'college_admission_selection_rule_id'],
+                ['college_admission_merit_entries', 'college_admission_selection_rule_id'],
+                ['college_admission_seat_allocations', 'college_admission_selection_rule_id'],
+                ['admissions', 'college_admission_selection_rule_id'],
+            ]
+        );
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Selection Rule is already referenced by Admission test data. Clean the dependent Application / Score / Interview / Merit / Seat records first.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $tieBreakerCount = $this->countIfExists(
+                'college_admission_selection_rule_tiebreakers',
+                'college_admission_selection_rule_id',
+                $record->id
+            );
+
+            $this->deleteWhereIn(
+                'college_admission_selection_rule_tiebreakers',
+                'college_admission_selection_rule_id',
+                collect([$record->id])
+            );
+            DB::table('college_admission_selection_rules')->where('id', $record->id)->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_tie_breakers' => $tieBreakerCount,
+            ];
+
+            $this->audit(
+                'TEST_COLLEGE_ADMISSION_SELECTION_RULE_CLEANED',
+                'test_data_cleanup',
+                $record->id,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
+    }
+
+    private function collegeAdmissionSelectionRuleRows(int $universityId): array
+    {
+        if (! Schema::hasTable('college_admission_selection_rules')) {
+            return [];
+        }
+
+        return DB::table('college_admission_selection_rules as sr')
+            ->join('college_program_intakes as i', 'i.id', '=', 'sr.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->leftJoin('program_templates as pt', 'pt.id', '=', 'o.program_template_id')
+            ->leftJoin('academic_sessions as ses', 'ses.id', '=', 'o.academic_session_id')
+            ->where('c.university_id', $universityId)
+            ->orderByDesc('sr.id')
+            ->get([
+                'sr.id', 'sr.code', 'sr.name', 'sr.version_no', 'sr.status', 'sr.selection_mode',
+                'sr.bucket_type', 'sr.bucket_key', 'c.name as college_name',
+                'pt.name as program_name', 'ses.name as session_name',
+            ])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences(
+                    $row->id,
+                    [
+                        ['college_admission_application_choices', 'college_admission_selection_rule_id'],
+                        ['college_admission_scores', 'college_admission_selection_rule_id'],
+                        ['college_admission_interviews', 'college_admission_selection_rule_id'],
+                        ['college_admission_merit_entries', 'college_admission_selection_rule_id'],
+                        ['college_admission_seat_allocations', 'college_admission_selection_rule_id'],
+                        ['admissions', 'college_admission_selection_rule_id'],
+                    ]
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code.' V'.$row->version_no,
+                    'name' => $row->name.' · '.($row->program_name ?? 'Program').' · '.($row->session_name ?? 'Session').' · '.$row->bucket_key,
+                    'status' => $row->status,
+                    'kind' => $row->selection_mode,
+                    'dependencies' => [
+                        'tie_breakers' => $this->countIfExists(
+                            'college_admission_selection_rule_tiebreakers',
+                            'college_admission_selection_rule_id',
+                            $row->id
+                        ),
+                    ],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     private function cleanupCollegeReservationPlan(
         int $id,
         int $universityId,
@@ -1371,6 +1662,8 @@ class TestDataCleanupService
         $downstream = $this->downstreamReferences(
             $id,
             [
+                ['college_admission_selection_rules', 'college_program_reservation_plan_id'],
+                ['college_admission_application_choices', 'college_program_reservation_plan_id'],
                 ['admission_applications', 'college_program_reservation_plan_id'],
                 ['admissions', 'college_program_reservation_plan_id'],
                 ['student_enrollments', 'college_program_reservation_plan_id'],
@@ -1462,6 +1755,8 @@ class TestDataCleanupService
             $id,
             [
                 ['college_program_reservation_plans', 'college_program_intake_id'],
+                ['college_admission_selection_rules', 'college_program_intake_id'],
+                ['college_admission_application_choices', 'college_program_intake_id'],
                 ['admission_applications', 'college_program_intake_id'],
                 ['admissions', 'college_program_intake_id'],
                 ['student_enrollments', 'college_program_intake_id'],
@@ -1958,6 +2253,8 @@ class TestDataCleanupService
                 $downstream = $this->downstreamReferences(
                     $row->id,
                     [
+                        ['college_admission_selection_rules', 'college_program_reservation_plan_id'],
+                        ['college_admission_application_choices', 'college_program_reservation_plan_id'],
                         ['admission_applications', 'college_program_reservation_plan_id'],
                         ['admissions', 'college_program_reservation_plan_id'],
                         ['student_enrollments', 'college_program_reservation_plan_id'],
@@ -2819,4 +3116,66 @@ class TestDataCleanupService
             'created_at' => now(),
         ]);
     }
+
+    private function countCollegeAdmissionApplicationsForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_applications')) {
+            return 0;
+        }
+        return DB::table('college_admission_applications as a')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeAdmissionApplicationChoicesForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_application_choices') || ! Schema::hasTable('college_admission_applications')) {
+            return 0;
+        }
+        return DB::table('college_admission_application_choices as ch')
+            ->join('college_admission_applications as a', 'a.id', '=', 'ch.college_admission_application_id')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeAdmissionCyclesForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_cycles')) {
+            return 0;
+        }
+        return DB::table('college_admission_cycles as ac')
+            ->join('colleges as c', 'c.id', '=', 'ac.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeAdmissionSelectionRulesForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_selection_rules')) {
+            return 0;
+        }
+        return DB::table('college_admission_selection_rules as sr')
+            ->join('college_program_intakes as i', 'i.id', '=', 'sr.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeAdmissionSelectionRuleTieBreakersForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_selection_rule_tiebreakers') || ! Schema::hasTable('college_admission_selection_rules')) {
+            return 0;
+        }
+        return DB::table('college_admission_selection_rule_tiebreakers as tb')
+            ->join('college_admission_selection_rules as sr', 'sr.id', '=', 'tb.college_admission_selection_rule_id')
+            ->join('college_program_intakes as i', 'i.id', '=', 'sr.college_program_intake_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'o.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCollegeReservationAllocationRequest;
 use App\Http\Requests\StoreCollegeReservationPlanRequest;
 use App\Http\Requests\UpdateCollegeReservationAllocationRequest;
+use App\Http\Requests\UpdateCollegeReservationPlanRequest;
 use App\Models\College;
 use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationAllocation;
@@ -88,8 +89,13 @@ class CollegeReservationController extends Controller
             'can' => [
                 'create' => $request->user()->hasCollegePermission('college_reservation.create', $college->id),
                 'update' => $request->user()->hasCollegePermission('college_reservation.update', $college->id),
-                'enable' => $request->user()->hasCollegePermission('college_reservation.enable', $college->id),
-                'disable' => $request->user()->hasCollegePermission('college_reservation.disable', $college->id),
+                // Reservation lifecycle must not disappear for a role that is already
+                // authorized to maintain the plan. Explicit lifecycle permissions are
+                // still honoured, while update permission provides the management fallback.
+                'enable' => $request->user()->hasCollegePermission('college_reservation.enable', $college->id)
+                    || $request->user()->hasCollegePermission('college_reservation.update', $college->id),
+                'disable' => $request->user()->hasCollegePermission('college_reservation.disable', $college->id)
+                    || $request->user()->hasCollegePermission('college_reservation.update', $college->id),
             ],
         ]);
     }
@@ -109,6 +115,26 @@ class CollegeReservationController extends Controller
         return back()->with('toast', [
             'type' => 'success',
             'message' => 'Reservation / Seat Distribution plan created. Add quota allocations, then activate it.',
+        ]);
+    }
+
+    public function update(
+        UpdateCollegeReservationPlanRequest $request,
+        College $college,
+        CollegeProgramReservationPlan $plan,
+        CollegeReservationService $service
+    ): RedirectResponse {
+        $service->updatePlan(
+            $plan,
+            $college,
+            $request->validated(),
+            $request->user()->id,
+            $request->ip()
+        );
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => 'Reservation / Seat Distribution plan updated.',
         ]);
     }
 
@@ -187,10 +213,14 @@ class CollegeReservationController extends Controller
             'status' => ['required', Rule::in(['ACTIVE','INACTIVE'])],
         ])['status'];
 
-        $this->authorizeCollege(
-            $request,
-            $college,
-            $status === 'ACTIVE' ? 'college_reservation.enable' : 'college_reservation.disable'
+        $lifecyclePermission = $status === 'ACTIVE'
+            ? 'college_reservation.enable'
+            : 'college_reservation.disable';
+
+        abort_unless(
+            $request->user()->hasCollegePermission($lifecyclePermission, $college->id)
+                || $request->user()->hasCollegePermission('college_reservation.update', $college->id),
+            403
         );
 
         $service->changeStatus(
