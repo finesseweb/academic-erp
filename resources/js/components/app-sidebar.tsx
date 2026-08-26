@@ -36,6 +36,7 @@ type TreeNavItem = {
     href?: string;
     icon?: ComponentType<{ className?: string }>;
     permission?: string;
+    directNavigation?: boolean;
     children?: TreeNavItem[];
 };
 
@@ -354,10 +355,17 @@ function TreeItem({
                     tooltip={item.title}
                     className="transition-colors duration-200 ease-out motion-reduce:transition-none"
                 >
-                    <Link href={item.href} prefetch>
-                        {Icon ? <Icon className="size-4 shrink-0" /> : null}
-                        <span>{item.title}</span>
-                    </Link>
+                    {item.directNavigation ? (
+                        <a href={item.href}>
+                            {Icon ? <Icon className="size-4 shrink-0" /> : null}
+                            <span>{item.title}</span>
+                        </a>
+                    ) : (
+                        <Link href={item.href} prefetch>
+                            {Icon ? <Icon className="size-4 shrink-0" /> : null}
+                            <span>{item.title}</span>
+                        </Link>
+                    )}
                 </SidebarMenuButton>
             </SidebarMenuItem>
         );
@@ -539,6 +547,13 @@ export function AppSidebar() {
                           href: `/college/${collegeId}/admission-applications`,
                           icon: ClipboardCheck,
                           permission: 'college_admission_application.view',
+                      },
+                      {
+                          title: 'Score Capture / Normalization',
+                          href: `/college/${collegeId}/admission-scores`,
+                          icon: ClipboardCheck,
+                          permission: 'college_admission_score.view',
+                          directNavigation: true,
                       },
                   ],
               },

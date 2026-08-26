@@ -89,6 +89,7 @@ type Props = {
     academicPolicies: AcademicPolicy[];
     fullReset: FullReset;
     entities: {
+        college_admission_scores: Entity[];
         college_admission_applications: Entity[];
         college_admission_selection_rules: Entity[];
         college_program_reservation_plans: Entity[];
@@ -111,6 +112,7 @@ type Props = {
 type TabKey =
     | 'curriculum'
     | 'academic_policies'
+    | 'college_admission_scores'
     | 'college_admission_applications'
     | 'college_admission_selection_rules'
     | 'college_program_reservation_plans'
@@ -143,6 +145,7 @@ type ActionTarget = {
 };
 
 const tabs: { key: TabKey; label: string }[] = [
+    { key: 'college_admission_scores', label: 'Score Capture / Normalization' },
     { key: 'college_admission_applications', label: 'Admission Applications' },
     { key: 'college_admission_selection_rules', label: 'Merit / Roster / Selection Rules' },
     { key: 'college_program_reservation_plans', label: 'Reservation / Seat Distribution' },

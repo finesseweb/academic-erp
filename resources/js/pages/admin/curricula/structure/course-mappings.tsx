@@ -131,20 +131,29 @@ export default function CurriculumCourseMappings({
     const specializationOptions =
         selectedDiscipline?.specializations ?? [];
 
-    const mappingCourseOptions =
-        editing &&
-        !availableCourses.some(
-            (course) => course.id === editing.course_id,
-        )
-            ? [
-                  {
-                      id: editing.course_id,
-                      name: editing.course_name,
-                      code: editing.course_code,
-                  },
-                  ...availableCourses,
-              ]
-            : availableCourses;
+    const selectedSpecializationId = form.data.specialization_id
+        ? Number(form.data.specialization_id)
+        : null;
+
+    const mappingCourseOptions = availableCourses.filter((course) => {
+        if (!form.data.discipline_id) {
+            return true;
+        }
+
+        const duplicate = mappings.some((mapping) => {
+            if (editing && mapping.id === editing.id) {
+                return false;
+            }
+
+            return (
+                mapping.course_id === course.id &&
+                mapping.discipline_id === Number(form.data.discipline_id) &&
+                mapping.specialization_id === selectedSpecializationId
+            );
+        });
+
+        return !duplicate;
+    });
 
     const canChangeStructure = permissions.update && structureEditable;
 
@@ -334,8 +343,7 @@ export default function CurriculumCourseMappings({
 
                     {canChangeStructure && availableCourses.length === 0 && (
                         <div className="border-b bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                            No additional compatible active Course / Subject is
-                            available for this Slot.
+                            No compatible active Course / Subject exists for this Slot's Course Category and Course Type.
                         </div>
                     )}
 
@@ -541,6 +549,7 @@ export default function CurriculumCourseMappings({
                                     onValueChange={(value) => {
                                         form.setData('discipline_id', value);
                                         form.setData('specialization_id', '');
+                                        form.setData('course_id', '');
                                     }}
                                 >
                                     <SelectTrigger id="discipline_id" className="w-full">
@@ -567,12 +576,13 @@ export default function CurriculumCourseMappings({
                                 </label>
                                 <Select
                                     value={form.data.specialization_id || 'none'}
-                                    onValueChange={(value) =>
+                                    onValueChange={(value) => {
                                         form.setData(
                                             'specialization_id',
                                             value === 'none' ? '' : value,
-                                        )
-                                    }
+                                        );
+                                        form.setData('course_id', '');
+                                    }}
                                     disabled={!form.data.discipline_id || specializationOptions.length === 0}
                                 >
                                     <SelectTrigger id="specialization_id" className="w-full">
@@ -635,6 +645,13 @@ export default function CurriculumCourseMappings({
                                         {form.errors.course_id}
                                     </p>
                                 )}
+
+                                {form.data.discipline_id &&
+                                    mappingCourseOptions.length === 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            All compatible Course / Subject records are already mapped to this exact Discipline / Specialization for this Slot. Choose another Discipline / Specialization or create another compatible Course Master record.
+                                        </p>
+                                    )}
 
                                 <p className="text-xs text-muted-foreground">
                                     Course Master stays reusable. Discipline

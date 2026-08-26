@@ -23,6 +23,7 @@ use App\Http\Controllers\CollegeReservationController;
 use App\Http\Controllers\CollegeAdmissionSelectionRuleController;
 use App\Http\Controllers\CollegeAdmissionCycleController;
 use App\Http\Controllers\CollegeAdmissionApplicationController;
+use App\Http\Controllers\CollegeAdmissionScoreController;
 use App\Http\Controllers\CollegeProgramOfferingController;
 use App\Http\Controllers\CollegeRoleController;
 use App\Http\Controllers\CollegeRolePermissionController;
@@ -228,6 +229,8 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('college/{college}/admission-applications/{application}/submit', [CollegeAdmissionApplicationController::class, 'submit'])->name('college-admission-applications.submit');
     Route::patch('college/{college}/admission-application-choices/{choice}/eligibility', [CollegeAdmissionApplicationController::class, 'eligibility'])->name('college-admission-applications.eligibility');
     Route::patch('college/{college}/admission-applications/{application}/withdraw', [CollegeAdmissionApplicationController::class, 'withdraw'])->name('college-admission-applications.withdraw');
+    Route::get('college/{college}/admission-scores', [CollegeAdmissionScoreController::class, 'index'])->name('college-admission-scores.index');
+    Route::put('college/{college}/admission-application-choices/{choice}/scores', [CollegeAdmissionScoreController::class, 'upsert'])->name('college-admission-scores.upsert');
     Route::get('college/{college}/users', [CollegeUserController::class, 'index'])->name('college-users.index');
     Route::get('college/{college}/users/create', [CollegeUserController::class, 'create'])->name('college-users.create');
     Route::post('college/{college}/users', [CollegeUserController::class, 'store'])->name('college-users.store');

@@ -28,7 +28,12 @@ class CurriculumCourseMappingService
             $specializationId
         );
         $this->assertCompatibleCourse($curriculum, $slot, $courseId);
-        $this->assertNotAlreadyMapped($slot, $courseId);
+        $this->assertNotAlreadyMapped(
+            $slot,
+            $disciplineId,
+            $specializationId,
+            $courseId
+        );
 
         return DB::transaction(function () use (
             $slot,
@@ -80,7 +85,13 @@ class CurriculumCourseMappingService
         $this->assertStructureEditable($curriculum);
         $this->assertProgramAcademicContext($curriculum, $disciplineId, $specializationId);
         $this->assertCompatibleCourse($curriculum, $slot, $courseId);
-        $this->assertNotAlreadyMapped($slot, $courseId, $mapping->id);
+        $this->assertNotAlreadyMapped(
+            $slot,
+            $disciplineId,
+            $specializationId,
+            $courseId,
+            $mapping->id
+        );
 
         return DB::transaction(function () use (
             $mapping,
@@ -302,12 +313,21 @@ class CurriculumCourseMappingService
 
     private function assertNotAlreadyMapped(
         CurriculumSlot $slot,
+        int $disciplineId,
+        ?int $specializationId,
         int $courseId,
         ?int $ignoreMappingId = null
     ): void {
         $query = CurriculumCourseMapping::query()
             ->where('curriculum_slot_id', $slot->id)
+            ->where('discipline_id', $disciplineId)
             ->where('course_id', $courseId);
+
+        if ($specializationId === null) {
+            $query->whereNull('specialization_id');
+        } else {
+            $query->where('specialization_id', $specializationId);
+        }
 
         if ($ignoreMappingId !== null) {
             $query->whereKeyNot($ignoreMappingId);
@@ -315,7 +335,7 @@ class CurriculumCourseMappingService
 
         if ($query->exists()) {
             throw ValidationException::withMessages([
-                'course_id' => 'This Course / Subject is already mapped to the selected Slot.',
+                'course_id' => 'This Course / Subject is already mapped to the selected Discipline / Specialization in this Slot.',
             ]);
         }
     }

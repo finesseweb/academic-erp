@@ -579,6 +579,8 @@ class TestDataCleanupService
         int $universityId
     ): array {
         return [
+            'college_admission_scores' =>
+                $this->collegeAdmissionScoreRows($universityId),
             'college_admission_applications' =>
                 $this->collegeAdmissionApplicationRows($universityId),
             'college_admission_selection_rules' =>
@@ -727,6 +729,8 @@ class TestDataCleanupService
         return [
             'confirmation_code' => 'RESET-ACADEMIC-TEST-DATA',
             'counts' => [
+                'college_admission_scores' =>
+                    $this->countCollegeAdmissionScoresForUniversity($universityId),
                 'college_admission_application_choices' =>
                     $this->countCollegeAdmissionApplicationChoicesForUniversity($universityId),
                 'college_admission_applications' =>
@@ -884,6 +888,7 @@ class TestDataCleanupService
                 $applicationIds = Schema::hasTable('college_admission_applications')
                     ? DB::table('college_admission_applications')->whereIn('college_id', $collegeIds)->pluck('id')
                     : collect();
+                $this->deleteWhereIn('college_admission_scores', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_application_choices', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_applications', 'id', $applicationIds);
 
@@ -1241,6 +1246,8 @@ class TestDataCleanupService
         $this->assertCleanupEnabled();
 
         return match ($type) {
+            'college_admission_scores' =>
+                $this->cleanupCollegeAdmissionScore($id, $universityId, $actorId),
             'college_admission_applications' =>
                 $this->cleanupCollegeAdmissionApplication(
                     $id,
@@ -1396,6 +1403,46 @@ class TestDataCleanupService
                 'type' => 'Unsupported cleanup type.',
             ]),
         };
+    }
+
+    private function cleanupCollegeAdmissionScore(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('college_admission_scores')) abort(404);
+        $record = DB::table('college_admission_scores as s')
+            ->join('college_admission_applications as a', 'a.id', '=', 's.college_admission_application_id')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('s.id', $id)->where('c.university_id', $universityId)
+            ->select('s.*', 'a.application_no', 'a.candidate_name', 'c.name as college_name')->first();
+        if (! $record) abort(404);
+        $downstream = $this->downstreamReferences($id, [
+            ['college_admission_merit_entries', 'college_admission_score_id'],
+            ['college_admission_seat_allocations', 'college_admission_score_id'],
+            ['admissions', 'college_admission_score_id'],
+        ]);
+        if (count($downstream) > 0) throw ValidationException::withMessages(['record'=>'This normalized Score is already consumed by downstream Merit / Seat / Admission records. Clean those dependent test records first.']);
+        DB::table('college_admission_scores')->where('id', $record->id)->delete();
+        $result=['record'=>(array)$record];
+        $this->audit('TEST_COLLEGE_ADMISSION_SCORE_CLEANED','test_data_cleanup',$record->id,$result,$actorId);
+        return $result;
+    }
+
+    private function collegeAdmissionScoreRows(int $universityId): array
+    {
+        if (! Schema::hasTable('college_admission_scores')) return [];
+        return DB::table('college_admission_scores as s')
+            ->join('college_admission_applications as a','a.id','=','s.college_admission_application_id')
+            ->join('college_admission_application_choices as ch','ch.id','=','s.college_admission_application_choice_id')
+            ->join('colleges as c','c.id','=','a.college_id')
+            ->where('c.university_id',$universityId)->orderByDesc('s.id')
+            ->get(['s.id','s.qualification_status','s.final_weighted_score','a.application_no','a.candidate_name','ch.preference_no','c.name as college_name'])
+            ->map(function($row){
+                $downstream=$this->downstreamReferences($row->id,[
+                    ['college_admission_merit_entries','college_admission_score_id'],
+                    ['college_admission_seat_allocations','college_admission_score_id'],
+                    ['admissions','college_admission_score_id'],
+                ]);
+                return ['id'=>$row->id,'code'=>$row->application_no.'-P'.$row->preference_no,'name'=>$row->candidate_name.' · '.$row->college_name,'status'=>$row->qualification_status,'kind'=>'NORMALIZED_SCORE','dependencies'=>[],'blocked'=>count($downstream)>0,'blocking_references'=>$downstream];
+            })->values()->all();
     }
 
     private function cleanupCollegeAdmissionApplication(
@@ -3115,6 +3162,15 @@ class TestDataCleanupService
             'ip_address' => request()->ip(),
             'created_at' => now(),
         ]);
+    }
+
+    private function countCollegeAdmissionScoresForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_scores') || ! Schema::hasTable('college_admission_applications')) return 0;
+        return DB::table('college_admission_scores as s')
+            ->join('college_admission_applications as a','a.id','=','s.college_admission_application_id')
+            ->join('colleges as c','c.id','=','a.college_id')
+            ->where('c.university_id',$universityId)->count();
     }
 
     private function countCollegeAdmissionApplicationsForUniversity(int $universityId): int

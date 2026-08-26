@@ -385,20 +385,15 @@ class CurriculumStructureController extends Controller
                 'specialization.name as specialization_name',
             ]);
 
-        $mappedCourseIds = $mappings
-            ->pluck('course_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
+        // Course Master records remain reusable across Discipline / Specialization
+        // contexts. Do not remove a Course merely because it is already mapped
+        // elsewhere in the same Slot; the frontend and service enforce uniqueness
+        // on the exact Slot + Discipline + Specialization + Course combination.
         $availableCourses = DB::table('courses')
             ->where('university_id', $curriculum->university_id)
             ->where('course_category_id', $slot->course_category_id)
             ->where('course_type_id', $slot->course_type_id)
             ->where('status', 'ACTIVE')
-            ->when(
-                count($mappedCourseIds) > 0,
-                fn ($query) => $query->whereNotIn('id', $mappedCourseIds)
-            )
             ->orderBy('display_order')
             ->orderBy('name')
             ->get([
