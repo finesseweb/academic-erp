@@ -24,9 +24,12 @@ class UpdateCollegeAdmissionApplicationRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:40'],
             'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
             'remarks' => ['nullable', 'string', 'max:3000'],
-            'choices' => ['required', 'array', 'min:1', 'max:10'],
-            'choices.*.college_program_intake_id' => ['required', 'integer'],
-            'choices.*.bucket_key' => ['required', 'string', 'max:80'],
+            'academic_preference' => ['required', 'array'],
+            'academic_preference.discipline_id' => ['nullable', 'integer'],
+            'academic_preference.specialization_id' => ['nullable', 'integer'],
+            'academic_preference.course_choices' => ['nullable', 'array'],
+            'academic_preference.course_choices.*' => ['nullable', 'array'],
+            'academic_preference.course_choices.*.*' => ['integer'],
         ];
     }
 }

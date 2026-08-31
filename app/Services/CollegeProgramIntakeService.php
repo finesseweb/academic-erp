@@ -11,6 +11,11 @@ use Illuminate\Validation\ValidationException;
 
 class CollegeProgramIntakeService
 {
+    public function __construct(
+        private EffectiveCurriculumScopeService $effectiveScope,
+    ) {
+    }
+
     public function create(
         College $college,
         array $data,
@@ -379,7 +384,7 @@ class CollegeProgramIntakeService
         CollegeProgramIntake $intake,
         array $data
     ): void {
-        $intake->loadMissing('offering');
+        $intake->loadMissing('offering.curriculum');
 
         if ($intake->allocation_mode !== 'DISCIPLINE') {
             throw ValidationException::withMessages([
@@ -388,34 +393,15 @@ class CollegeProgramIntakeService
             ]);
         }
 
-        $programTemplateId =
-            $intake->offering->program_template_id;
+        $discipline = $this->effectiveScope->discipline(
+            $intake->offering,
+            (int) $data['discipline_id']
+        );
 
-        $mapping = DB::table(
-            'program_template_disciplines as ptd'
-        )
-            ->join(
-                'academic_disciplines as d',
-                'd.id',
-                '=',
-                'ptd.discipline_id'
-            )
-            ->where(
-                'ptd.program_template_id',
-                $programTemplateId
-            )
-            ->where(
-                'ptd.discipline_id',
-                (int) $data['discipline_id']
-            )
-            ->where('d.kind', 'DISCIPLINE')
-            ->where('d.status', 'ACTIVE')
-            ->first(['ptd.id']);
-
-        if (! $mapping) {
+        if (! $discipline) {
             throw ValidationException::withMessages([
                 'discipline_id' =>
-                    'Select an ACTIVE Discipline mapped to this Program Template.',
+                    'This Discipline has no active Course / Paper mapping in the current Program Offering Curriculum.',
             ]);
         }
 
@@ -466,39 +452,18 @@ class CollegeProgramIntakeService
         if (empty($data['specialization_id'])) {
             throw ValidationException::withMessages([
                 'specialization_id' =>
-                    'Select a Specialization under the parent Discipline.',
+                    'Select a Specialization that is actually used by the current Curriculum.',
             ]);
         }
 
-        $specializationValid = DB::table(
-            'program_template_discipline_specializations as ptds'
-        )
-            ->join(
-                'academic_disciplines as sp',
-                'sp.id',
-                '=',
-                'ptds.specialization_id'
-            )
-            ->where(
-                'ptds.program_template_discipline_id',
-                $mapping->id
-            )
-            ->where(
-                'ptds.specialization_id',
-                (int) $data['specialization_id']
-            )
-            ->where('sp.kind', 'SPECIALIZATION')
-            ->where(
-                'sp.parent_id',
-                (int) $data['discipline_id']
-            )
-            ->where('sp.status', 'ACTIVE')
-            ->exists();
-
-        if (! $specializationValid) {
+        if (! $this->effectiveScope->specialization(
+            $intake->offering,
+            (int) $data['discipline_id'],
+            (int) $data['specialization_id']
+        )) {
             throw ValidationException::withMessages([
                 'specialization_id' =>
-                    'Select an ACTIVE Specialization mapped under this Discipline for the Program Template.',
+                    'This Specialization has no active Course / Paper mapping for the selected Discipline in the current Curriculum.',
             ]);
         }
     }
@@ -639,6 +604,39 @@ class CollegeProgramIntakeService
                 'allocations' =>
                     'Add at least one Discipline capacity before activating a Discipline-wise Intake.',
             ]);
+        }
+
+        $intake->loadMissing('offering.curriculum');
+
+        foreach ($disciplines as $discipline) {
+            if (! $this->effectiveScope->discipline(
+                $intake->offering,
+                (int) $discipline->discipline_id
+            )) {
+                throw ValidationException::withMessages([
+                    'allocations' =>
+                        "Discipline allocation #{$discipline->id} is no longer used by the current Curriculum. Remove it before activating this Intake.",
+                ]);
+            }
+
+            $specializationRows = $intake->allocations()
+                ->where('parent_allocation_id', $discipline->id)
+                ->where('seat_scope_type', 'ADMISSION_SPECIALIZATION')
+                ->where('status', 'ACTIVE')
+                ->get();
+
+            foreach ($specializationRows as $specializationRow) {
+                if (! $this->effectiveScope->specialization(
+                    $intake->offering,
+                    (int) $discipline->discipline_id,
+                    (int) $specializationRow->specialization_id
+                )) {
+                    throw ValidationException::withMessages([
+                        'allocations' =>
+                            "Specialization allocation #{$specializationRow->id} is no longer used by the current Curriculum. Remove it before activating this Intake.",
+                    ]);
+                }
+            }
         }
 
         $disciplineTotal =

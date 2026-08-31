@@ -22,6 +22,7 @@ class TestDataCleanupService
         ['admission_applications', 'curriculum_id'],
         ['academic_policies', 'curriculum_id'],
         ['college_program_offerings', 'curriculum_id'],
+        ['college_admission_application_academic_preferences', 'curriculum_id'],
         ['academic_policy_progression_rule_sets', 'curriculum_id'],
     ];
 
@@ -741,6 +742,12 @@ class TestDataCleanupService
                     $this->countUniversityRows('college_application_fee_rules', $universityId),
                 'college_admission_application_field_values' =>
                     $this->countCollegeAdmissionApplicationFieldValuesForUniversity($universityId),
+                'college_admission_application_academic_preferences' =>
+                    $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_academic_preferences', $universityId),
+                'college_admission_application_course_choices' =>
+                    $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_course_choices', $universityId),
+                'college_applicant_registration_settings' =>
+                    $this->countCollegeScopedRowsForUniversity('college_applicant_registration_settings', $universityId),
                 'college_admission_interviews' =>
                     $this->countCollegeAdmissionInterviewsForUniversity($universityId),
                 'college_admission_scores' =>
@@ -800,6 +807,7 @@ class TestDataCleanupService
                 'University Profile',
                 'Affiliated Colleges',
                 'Users and login accounts',
+                'Applicant login identities/profiles (applications are cleared, identities are preserved)',
                 'Protected/system Roles',
                 'Permissions and Role-Permission grants',
                 'College role/scope assignments',
@@ -908,6 +916,9 @@ class TestDataCleanupService
                 $this->deleteWhereIn('college_admission_interview_evaluators', 'college_admission_interview_id', $interviewIds);
                 $this->deleteWhereIn('college_admission_interviews', 'id', $interviewIds);
                 $this->deleteWhereIn('college_admission_scores', 'college_admission_application_id', $applicationIds);
+                $this->deleteWhereIn('college_admission_application_field_values', 'college_admission_application_id', $applicationIds);
+                $this->deleteWhereIn('college_admission_application_course_choices', 'college_admission_application_id', $applicationIds);
+                $this->deleteWhereIn('college_admission_application_academic_preferences', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_application_choices', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_applications', 'id', $applicationIds);
 
@@ -941,6 +952,12 @@ class TestDataCleanupService
                     // Break parent inheritance links before deleting the template tree.
                     DB::table('college_admission_form_templates')->where('university_id', $universityId)->update(['parent_template_id' => null]);
                     DB::table('college_admission_form_templates')->where('university_id', $universityId)->delete();
+                }
+
+                if (Schema::hasTable('college_applicant_registration_settings')) {
+                    DB::table('college_applicant_registration_settings')
+                        ->whereIn('college_id', $collegeIds)
+                        ->delete();
                 }
 
                 $selectionRuleIds = Schema::hasTable('college_admission_selection_rules')
@@ -1667,16 +1684,35 @@ class TestDataCleanupService
                 'college_admission_application_id',
                 $record->id
             );
-            $this->deleteWhereIn(
-                'college_admission_application_choices',
+            $fieldValueCount = $this->countIfExists(
+                'college_admission_application_field_values',
                 'college_admission_application_id',
-                collect([$record->id])
+                $record->id
             );
+            $academicPreferenceCount = $this->countIfExists(
+                'college_admission_application_academic_preferences',
+                'college_admission_application_id',
+                $record->id
+            );
+            $courseChoiceCount = $this->countIfExists(
+                'college_admission_application_course_choices',
+                'college_admission_application_id',
+                $record->id
+            );
+
+            $applicationIds = collect([$record->id]);
+            $this->deleteWhereIn('college_admission_application_field_values', 'college_admission_application_id', $applicationIds);
+            $this->deleteWhereIn('college_admission_application_course_choices', 'college_admission_application_id', $applicationIds);
+            $this->deleteWhereIn('college_admission_application_academic_preferences', 'college_admission_application_id', $applicationIds);
+            $this->deleteWhereIn('college_admission_application_choices', 'college_admission_application_id', $applicationIds);
             DB::table('college_admission_applications')->where('id', $record->id)->delete();
 
             $result = [
                 'record' => (array) $record,
                 'deleted_choices' => $choiceCount,
+                'deleted_dynamic_field_values' => $fieldValueCount,
+                'deleted_academic_preferences' => $academicPreferenceCount,
+                'deleted_course_choices' => $courseChoiceCount,
             ];
             $this->audit(
                 'TEST_COLLEGE_ADMISSION_APPLICATION_CLEANED',
@@ -1726,6 +1762,21 @@ class TestDataCleanupService
                     'dependencies' => [
                         'program_choices' => $this->countIfExists(
                             'college_admission_application_choices',
+                            'college_admission_application_id',
+                            $row->id
+                        ),
+                        'dynamic_field_values' => $this->countIfExists(
+                            'college_admission_application_field_values',
+                            'college_admission_application_id',
+                            $row->id
+                        ),
+                        'academic_preferences' => $this->countIfExists(
+                            'college_admission_application_academic_preferences',
+                            'college_admission_application_id',
+                            $row->id
+                        ),
+                        'curriculum_course_choices' => $this->countIfExists(
+                            'college_admission_application_course_choices',
                             'college_admission_application_id',
                             $row->id
                         ),
@@ -3364,6 +3415,31 @@ class TestDataCleanupService
         }
         return DB::table('college_admission_applications as a')
             ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeAdmissionApplicationChildForUniversity(string $table, int $universityId): int
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasTable('college_admission_applications')) {
+            return 0;
+        }
+
+        return DB::table($table.' as child')
+            ->join('college_admission_applications as a', 'a.id', '=', 'child.college_admission_application_id')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeScopedRowsForUniversity(string $table, int $universityId): int
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasTable('colleges')) {
+            return 0;
+        }
+
+        return DB::table($table.' as scoped')
+            ->join('colleges as c', 'c.id', '=', 'scoped.college_id')
             ->where('c.university_id', $universityId)
             ->count();
     }

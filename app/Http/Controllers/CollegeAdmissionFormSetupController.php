@@ -438,6 +438,8 @@ class CollegeAdmissionFormSetupController extends Controller
             'registration_enabled'=>['required','boolean'],
             'email_verification_required'=>['required','boolean'],
             'captcha_required'=>['required','boolean'],
+            'registration_number_format'=>['required','string','max:120','regex:/\{SEQ(?::\d{1,2})?\}/'],
+            'application_help_text'=>['nullable','string','max:2000'],
         ]);
         $settings = CollegeApplicantRegistrationSetting::forCollege($college->id);
         $before = $settings->toArray();

@@ -8,6 +8,7 @@ use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationPlan;
 use App\Services\CollegeAdmissionApplicationService;
 use App\Services\ApplicantAcademicPreferenceService;
+use App\Services\ApplicantRegistrationNumberService;
 use App\Services\CollegeAdmissionFormResolver;
 use App\Services\CollegeReservationService;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +26,7 @@ class PublicAdmissionApplicationController extends Controller
         CollegeReservationService $reservationService,
         CollegeAdmissionFormResolver $formResolver,
         ApplicantAcademicPreferenceService $academicPreferenceService,
+        ApplicantRegistrationNumberService $registrationNumbers,
     ): Response|RedirectResponse {
         if (! $request->user() || $request->user()->account_type !== 'APPLICANT') return redirect()->route('applicant.gateway', ['slug'=>$slug]);
         $mapping = $this->publicMapping($slug);
@@ -57,6 +59,10 @@ class PublicAdmissionApplicationController extends Controller
         $academicOptions = $academicPreferenceService->options($cycle);
         $fee = $formResolver->resolveFee(\App\Models\College::query()->findOrFail($mapping->college_id), $cycle);
 
+        $applicantProfile = \App\Models\ApplicantProfile::where('user_id',$request->user()->id)->firstOrFail();
+        $registrationNo = $registrationNumbers->ensure($applicantProfile);
+        $portalSettings = \App\Models\CollegeApplicantRegistrationSetting::forCollege($mapping->college_id);
+
         return Inertia::render('public/admission-application', [
             'publicForm' => [
                 'slug' => $mapping->public_slug,
@@ -79,8 +85,9 @@ class PublicAdmissionApplicationController extends Controller
                 'choices' => [],
                 'academic_options' => $academicOptions,
                 'availability' => $availability,
+                'help_text' => $portalSettings->application_help_text,
             ],
-            'applicant' => ['name'=>$request->user()->name,'email'=>$request->user()->email,'phone'=>$request->user()->mobile,'date_of_birth'=>optional(\App\Models\ApplicantProfile::where('user_id',$request->user()->id)->first())->date_of_birth?->toDateString()],
+            'applicant' => ['name'=>$request->user()->name,'email'=>$request->user()->email,'phone'=>$request->user()->mobile,'date_of_birth'=>$applicantProfile->date_of_birth?->toDateString(),'registration_no'=>$registrationNo],
             'successApplicationNo' => $request->session()->pull('public_application_success'),
         ]);
     }

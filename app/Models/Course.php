@@ -11,6 +11,7 @@ class Course extends Model
         'university_id',
         'course_category_id',
         'course_type_id',
+        'source_discipline_id',
         'name',
         'code',
         'description',
@@ -21,6 +22,12 @@ class Course extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(CourseCategory::class, 'course_category_id');
+    }
+
+
+    public function sourceDiscipline(): BelongsTo
+    {
+        return $this->belongsTo(AcademicDiscipline::class, 'source_discipline_id');
     }
 
     public function type(): BelongsTo

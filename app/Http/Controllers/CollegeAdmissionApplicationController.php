@@ -12,6 +12,7 @@ use App\Models\CollegeAdmissionSelectionRule;
 use App\Models\CollegeProgramIntake;
 use App\Services\CollegeAdmissionApplicationService;
 use App\Services\CollegeAdmissionFormResolver;
+use App\Services\ApplicantAcademicPreferenceService;
 use App\Services\CollegeReservationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ use Inertia\Response;
 
 class CollegeAdmissionApplicationController extends Controller
 {
-    public function index(Request $request, College $college, CollegeReservationService $reservationService, CollegeAdmissionFormResolver $formResolver): Response
+    public function index(Request $request, College $college, CollegeReservationService $reservationService, CollegeAdmissionFormResolver $formResolver, ApplicantAcademicPreferenceService $academicPreferenceService): Response
     {
         $this->authorizeCollege($request, $college, 'college_admission_application.view');
 
@@ -131,6 +132,9 @@ class CollegeAdmissionApplicationController extends Controller
                 'choices.selectionRule:id,name,code,version_no,selection_mode,status,merit_weight_percent,entrance_weight_percent,interview_weight_percent',
                 'fieldValues.field:id,label,field_type',
                 'formTemplate:id,name,code',
+                'academicPreference.discipline:id,name,code',
+                'academicPreference.specialization:id,name,code',
+                'courseChoices.course:id,name,code',
             ])
             ->where('college_id', $college->id)
             ->when($search !== '', function ($query) use ($search) {
@@ -165,12 +169,18 @@ class CollegeAdmissionApplicationController extends Controller
             }
         }
 
+        $academicOptions = [];
+        foreach ($cycles->where('status', 'ACTIVE')->whereNotNull('college_program_offering_id') as $cycle) {
+            $academicOptions[$cycle->id] = $academicPreferenceService->options($cycle);
+        }
+
         return Inertia::render('college-admission-applications/index', [
             'college' => $college->only(['id', 'name', 'code', 'status']),
             'cycles' => $cycles,
             'selectionContexts' => $selectionContexts,
             'directSelectionContexts' => $directSelectionContexts,
             'formConfigs' => $formConfigs,
+            'academicOptions' => $academicOptions,
             'applications' => $applications,
             'filters' => ['search' => $search],
             'can' => [

@@ -12,6 +12,7 @@ class CurriculumCourseMapping extends Model
         'course_id',
         'discipline_id',
         'specialization_id',
+        'source_discipline_id',
         'display_order',
         'status',
         'created_by',

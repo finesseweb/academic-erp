@@ -369,6 +369,12 @@ class CurriculumStructureController extends Controller
                 '=',
                 'mapping.specialization_id'
             )
+            ->leftJoin(
+                'academic_disciplines as source_discipline',
+                'source_discipline.id',
+                '=',
+                'mapping.source_discipline_id'
+            )
             ->where('mapping.curriculum_slot_id', $slot->id)
             ->orderByRaw('COALESCE(mapping.display_order, 65535)')
             ->orderBy('mapping.id')
@@ -377,12 +383,15 @@ class CurriculumStructureController extends Controller
                 'mapping.course_id',
                 'mapping.discipline_id',
                 'mapping.specialization_id',
+                'mapping.source_discipline_id',
                 'mapping.display_order',
                 'mapping.status',
                 'courses.code as course_code',
                 'courses.name as course_name',
                 'discipline.name as discipline_name',
                 'specialization.name as specialization_name',
+                'source_discipline.name as source_discipline_name',
+                'source_discipline.code as source_discipline_code',
             ]);
 
         // Course Master records remain reusable across Discipline / Specialization
@@ -447,6 +456,14 @@ class CurriculumStructureController extends Controller
                 'specialization.code',
             ]);
 
+        $sourceDisciplineOptions = DB::table('academic_disciplines')
+            ->where('university_id', $curriculum->university_id)
+            ->where('kind', 'DISCIPLINE')
+            ->where('status', 'ACTIVE')
+            ->orderBy('display_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
+
         $disciplineOptions = $programDisciplines->map(
             fn ($discipline) => [
                 'id' => $discipline->id,
@@ -500,6 +517,7 @@ class CurriculumStructureController extends Controller
                 'mappings' => $mappings,
                 'availableCourses' => $availableCourses,
                 'disciplineOptions' => $disciplineOptions,
+                'sourceDisciplineOptions' => $sourceDisciplineOptions,
                 'permissions' => [
                     'update' => $request
                         ->user()
@@ -526,6 +544,9 @@ class CurriculumStructureController extends Controller
             (int) $validated['discipline_id'],
             isset($validated['specialization_id'])
                 ? (int) $validated['specialization_id']
+                : null,
+            isset($validated['source_discipline_id'])
+                ? (int) $validated['source_discipline_id']
                 : null,
             (int) $validated['course_id'],
             $request->user()->id
@@ -605,6 +626,7 @@ class CurriculumStructureController extends Controller
             $mapping,
             (int) $validated['discipline_id'],
             isset($validated['specialization_id']) ? (int) $validated['specialization_id'] : null,
+            isset($validated['source_discipline_id']) ? (int) $validated['source_discipline_id'] : null,
             (int) $validated['course_id'],
             $request->user()->id
         );

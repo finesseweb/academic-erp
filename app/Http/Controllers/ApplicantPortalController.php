@@ -9,6 +9,7 @@ use App\Models\CollegeProgramOffering;
 use App\Models\CollegeAdmissionCycle;
 use App\Models\User;
 use App\Notifications\ApplicantVerifyEmail;
+use App\Services\ApplicantRegistrationNumberService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -48,13 +49,14 @@ class ApplicantPortalController extends Controller {
    ],
   ]]);
  }
- public function register(Request $request,string $slug): RedirectResponse {
+ public function register(Request $request,string $slug, ApplicantRegistrationNumberService $registrationNumbers): RedirectResponse {
   $mapping=$this->mapping($slug); $settings=CollegeApplicantRegistrationSetting::forCollege($mapping->college_id);
   if (!$settings->registration_enabled) throw ValidationException::withMessages(['registration'=>'Applicant registration is currently disabled by the College.']);
   $data=$request->validate(['name'=>['required','string','max:180'],'date_of_birth'=>['required','date','before_or_equal:today'],'email'=>['required','email','max:190','unique:users,email'],'phone'=>['required','string','max:40'],'password'=>['required','confirmed',Password::min(8)],'captcha_answer'=>['nullable','string','max:20']]);
   if ($settings->captcha_required && !$this->captchaValid($request,$data['captcha_answer']??'')) throw ValidationException::withMessages(['captcha_answer'=>'CAPTCHA answer is incorrect. Please try the new challenge.']);
   $user=User::create(['name'=>trim($data['name']),'email'=>strtolower(trim($data['email'])),'mobile'=>$data['phone'],'account_type'=>'APPLICANT','primary_college_id'=>$mapping->college_id,'status'=>'ACTIVE','password'=>$data['password']]);
-  ApplicantProfile::create(['user_id'=>$user->id,'college_id'=>$mapping->college_id,'date_of_birth'=>$data['date_of_birth'],'phone'=>$data['phone']]);
+  $profile=ApplicantProfile::create(['user_id'=>$user->id,'college_id'=>$mapping->college_id,'date_of_birth'=>$data['date_of_birth'],'phone'=>$data['phone']]);
+  $registrationNumbers->ensure($profile);
   if (!$settings->email_verification_required) { $user->forceFill(['email_verified_at'=>now()])->save(); }
   else { $user->notify(new ApplicantVerifyEmail($slug)); }
   Auth::login($user); $request->session()->regenerate();

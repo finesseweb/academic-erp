@@ -83,3 +83,11 @@ Before continuing Applicant Registration QA, verify `/college/{college}/admissio
 8. Confirm final Review & Submit displays academic selection, applicant profile, entered template values and fee context.
 9. Confirm persisted academic preference/course choices match the exact mapped Program Offering Curriculum.
 10. After Stage 1 QA, return to Interview QA, then Merit/Roster as already frozen; do not pull seat allocation into the public form.
+
+- QA Test Data Cleanup after applicant academic-choice changes: preview counts, clean one Admission Application, then verify Full Academic Reset removes academic preferences/course choices/dynamic field values/registration settings without FK errors.
+
+- QA Admission academic packages: configure a CHOICE category with fixed History papers across multiple curriculum terms and verify Public + Internal application show only `History`; selecting it must persist all underlying mappings. Configure another source with more offered papers than the slot selection count and verify individual papers remain selectable. No semester headings should appear.
+
+- QA Specialization visibility: template-only specialization with no mapped curriculum paper must stay hidden in both Public Application and College Admin Add Application; mapping the first active specialization-specific paper should make only that specialization appear.
+
+- QA ADR 050: create a template specialization with no curriculum paper and confirm it remains available in Curriculum Mapping authoring but is absent from Applicant/Internal Application, Intake/Capacity, Reservation and Selection Rule screens. Add one active specialization-specific paper and confirm it becomes available downstream.

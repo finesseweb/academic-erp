@@ -14,10 +14,16 @@ use Illuminate\Validation\ValidationException;
 
 class CollegeReservationService
 {
+    public function __construct(
+        private EffectiveCurriculumScopeService $effectiveScope,
+    ) {
+    }
+
     public function availableBuckets(CollegeProgramIntake $intake): Collection
     {
         $intake->loadMissing([
             'offering.programTemplate:id,name,code',
+            'offering.curriculum:id',
             'allocations.discipline:id,name,code',
             'allocations.specialization:id,name,code',
         ]);
@@ -54,9 +60,22 @@ class CollegeReservationService
         $buckets = collect();
 
         foreach ($disciplines as $discipline) {
+            if (! $this->effectiveScope->discipline(
+                $intake->offering,
+                (int) $discipline->discipline_id
+            )) {
+                continue;
+            }
+
             $children = $all
                 ->where('parent_allocation_id', $discipline->id)
-                ->where('seat_scope_type', 'ADMISSION_SPECIALIZATION');
+                ->where('seat_scope_type', 'ADMISSION_SPECIALIZATION')
+                ->filter(fn ($child) => $child->specialization_id
+                    && $this->effectiveScope->specialization(
+                        $intake->offering,
+                        (int) $discipline->discipline_id,
+                        (int) $child->specialization_id
+                    ));
 
             $specializationTotal = (int) $children->sum('seat_capacity');
             $generalRemaining = (int) $discipline->seat_capacity - $specializationTotal;

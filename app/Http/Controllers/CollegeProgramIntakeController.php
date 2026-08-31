@@ -11,6 +11,7 @@ use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramIntakeAllocation;
 use App\Models\CollegeProgramOffering;
 use App\Services\CollegeProgramIntakeService;
+use App\Services\EffectiveCurriculumScopeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,8 @@ class CollegeProgramIntakeController extends Controller
 {
     public function index(
         Request $request,
-        College $college
+        College $college,
+        EffectiveCurriculumScopeService $effectiveScope
     ): Response {
         $this->authorizeCollege(
             $request,
@@ -74,86 +76,23 @@ class CollegeProgramIntakeController extends Controller
             ])
             ->values();
 
-        $programTemplateIds = $intakes
-            ->pluck('offering.program_template_id')
-            ->merge(
-                $availableOfferings
-                    ->pluck('program_template_id')
-            )
+        $scopeOfferings = $intakes
+            ->pluck('offering')
+            ->merge($availableOfferings)
             ->filter()
-            ->unique()
+            ->unique('id')
             ->values();
 
-        $disciplineMappings = DB::table(
-            'program_template_disciplines as ptd'
-        )
-            ->join(
-                'academic_disciplines as d',
-                'd.id',
-                '=',
-                'ptd.discipline_id'
-            )
-            ->whereIn(
-                'ptd.program_template_id',
-                $programTemplateIds
-            )
-            ->where('d.status', 'ACTIVE')
-            ->where('d.kind', 'DISCIPLINE')
-            ->orderBy('d.name')
-            ->get([
-                'ptd.id as mapping_id',
-                'ptd.program_template_id',
-                'd.id',
-                'd.name',
-                'd.code',
-            ]);
-
-        $mappingIds = $disciplineMappings
-            ->pluck('mapping_id');
-
-        $specializationMappings = DB::table(
-            'program_template_discipline_specializations as ptds'
-        )
-            ->join(
-                'academic_disciplines as s',
-                's.id',
-                '=',
-                'ptds.specialization_id'
-            )
-            ->whereIn(
-                'ptds.program_template_discipline_id',
-                $mappingIds
-            )
-            ->where('s.status', 'ACTIVE')
-            ->where('s.kind', 'SPECIALIZATION')
-            ->orderBy('s.name')
-            ->get([
-                'ptds.program_template_discipline_id as mapping_id',
-                's.id',
-                's.parent_id',
-                's.name',
-                's.code',
-            ]);
-
-        $disciplines = $disciplineMappings
-            ->map(function ($discipline) use (
-                $specializationMappings
-            ) {
-                return [
-                    'mapping_id' => $discipline->mapping_id,
-                    'program_template_id' =>
-                        $discipline->program_template_id,
-                    'id' => $discipline->id,
-                    'name' => $discipline->name,
-                    'code' => $discipline->code,
-                    'specializations' =>
-                        $specializationMappings
-                            ->where(
-                                'mapping_id',
-                                $discipline->mapping_id
-                            )
-                            ->values(),
-                ];
+        $disciplines = $scopeOfferings
+            ->flatMap(function ($offering) use ($effectiveScope) {
+                return collect($effectiveScope->options($offering))
+                    ->map(function (array $discipline) use ($offering) {
+                        return [
+                            ...$discipline,
+                            'college_program_offering_id' => (int) $offering->id,
+                            'program_template_id' => (int) $offering->program_template_id,
+                        ];
+                    });
             })
             ->values();
 

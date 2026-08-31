@@ -11,6 +11,7 @@ class ProgramTemplateDiscipline extends Model
     protected $fillable = [
         'program_template_id',
         'discipline_id',
+        'specialization_required',
     ];
 
     public function programTemplate(): BelongsTo

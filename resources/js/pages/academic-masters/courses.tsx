@@ -72,7 +72,7 @@ export default function Courses({ courses, categories, types, can }: Props) {
                     type: 'textarea',
                 },
             ]}
-           meta={(r) =>
+            meta={(r) =>
                 `${(r.category as { name: string }).name} / ${(r.type as { name: string }).name}`
             }
         />

@@ -32,8 +32,11 @@ type Mapping = {
     course_id: number;
     discipline_id: number | null;
     specialization_id: number | null;
+    source_discipline_id: number | null;
     discipline_name: string | null;
     specialization_name: string | null;
+    source_discipline_name: string | null;
+    source_discipline_code: string | null;
     course_code: string;
     course_name: string;
     display_order: number | null;
@@ -88,6 +91,7 @@ type Props = {
     mappings: Mapping[];
     availableCourses: CourseOption[];
     disciplineOptions: DisciplineOption[];
+    sourceDisciplineOptions: { id: number; name: string; code: string }[];
     permissions: { update: boolean };
     structureEditable: boolean;
 };
@@ -112,6 +116,7 @@ export default function CurriculumCourseMappings({
     mappings,
     availableCourses,
     disciplineOptions,
+    sourceDisciplineOptions,
     permissions,
     structureEditable,
 }: Props) {
@@ -120,6 +125,7 @@ export default function CurriculumCourseMappings({
     const form = useForm({
         discipline_id: '',
         specialization_id: '',
+        source_discipline_id: '',
         course_id: '',
     });
 
@@ -163,6 +169,7 @@ export default function CurriculumCourseMappings({
         form.setData({
             discipline_id: '',
             specialization_id: '',
+            source_discipline_id: '',
             course_id: '',
         });
         setOpen(true);
@@ -175,6 +182,9 @@ export default function CurriculumCourseMappings({
             discipline_id: mapping.discipline_id ? String(mapping.discipline_id) : '',
             specialization_id: mapping.specialization_id
                 ? String(mapping.specialization_id)
+                : '',
+            source_discipline_id: mapping.source_discipline_id
+                ? String(mapping.source_discipline_id)
                 : '',
             course_id: String(mapping.course_id),
         });
@@ -373,6 +383,9 @@ export default function CurriculumCourseMappings({
                                             Specialization
                                         </th>
                                         <th className="px-4 py-3">
+                                            Offered From
+                                        </th>
+                                        <th className="px-4 py-3">
                                             Course / Paper
                                         </th>
                                         <th className="px-4 py-3">
@@ -422,7 +435,10 @@ export default function CurriculumCourseMappings({
                                                 {mapping.discipline_name ?? '—'}
                                             </td>
                                             <td className="px-4 py-4 text-muted-foreground">
-                                                {mapping.specialization_name ?? '—'}
+                                                {mapping.specialization_name ?? 'Entire Discipline'}
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                {mapping.source_discipline_name ?? 'Common / Interdisciplinary'}
                                             </td>
                                             <td className="px-4 py-4 font-medium">
                                                 {mapping.course_name}
@@ -570,9 +586,9 @@ export default function CurriculumCourseMappings({
                                 )}
                             </div>
 
-                            <div className="space-y-2">
+                            {specializationOptions.length>0&&(<div className="space-y-2">
                                 <label htmlFor="specialization_id" className="text-sm font-medium">
-                                    Specialization
+                                    Applies to Specialization
                                 </label>
                                 <Select
                                     value={form.data.specialization_id || 'none'}
@@ -602,6 +618,39 @@ export default function CurriculumCourseMappings({
                                         {form.errors.specialization_id}
                                     </p>
                                 )}
+                                <p className="text-xs text-muted-foreground">
+                                    Optional. Leave this blank when the paper applies to every student of the selected Discipline. Select a Specialization only for a specialization-specific paper.
+                                </p>
+                            </div>)}
+
+                            <div className="space-y-2">
+                                <label htmlFor="source_discipline_id" className="text-sm font-medium">
+                                    Offered From Discipline
+                                </label>
+                                <Select
+                                    value={form.data.source_discipline_id || 'common'}
+                                    onValueChange={(value) =>
+                                        form.setData('source_discipline_id', value === 'common' ? '' : value)
+                                    }
+                                >
+                                    <SelectTrigger id="source_discipline_id" className="w-full">
+                                        <SelectValue placeholder="Common / Interdisciplinary" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="common">Common / Interdisciplinary</SelectItem>
+                                        {sourceDisciplineOptions.map((discipline) => (
+                                            <SelectItem key={discipline.id} value={String(discipline.id)}>
+                                                {discipline.name} ({discipline.code})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.source_discipline_id && (
+                                    <p className="text-xs text-destructive">{form.errors.source_discipline_id}</p>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    Use this for cross-discipline electives. Example: an English applicant may receive Psychology or Sociology papers in an elective category.
+                                </p>
                             </div>
 
                             <div className="space-y-2">
@@ -654,10 +703,11 @@ export default function CurriculumCourseMappings({
                                     )}
 
                                 <p className="text-xs text-muted-foreground">
-                                    Course Master stays reusable. Discipline
-                                    and optional Specialization are assigned by
-                                    this Curriculum mapping; Course Category and
-                                    Course Type must still match the Slot.
+                                    Course Master stays reusable. Applicant Discipline,
+                                    optional Specialization applicability, and the paper's
+                                    Offered From Discipline are defined here in the
+                                    Curriculum mapping. Course Category and Course Type
+                                    must still match the Slot.
                                 </p>
                             </div>
 

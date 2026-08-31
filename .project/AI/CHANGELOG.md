@@ -294,3 +294,11 @@ Approved prerequisite branch added before Merit/Roster continuation. Added scope
 - Public Regular Admission submission is no longer seat-capacity/bucket gated; seat/reservation/allocation remains downstream.
 - Added academic-preference/course-choice persistence separate from seat choices.
 - Added ADR 043.
+
+- 2026-08-31: Reconciled Test Data Cleanup with Applicant Academic Preference/Course Choice and registration-setting data. Individual Admission Application cleanup and Full Academic Reset now delete new application children in FK-safe order; applicant identities remain preserved. ADR 047.
+
+- 2026-08-31: Admission academic selection no longer exposes semester headings. Added category/source-discipline package selection: when all papers under a source are fixed, applicant/admin selects the source (for example History) once and underlying papers are linked automatically; genuine paper choices remain individually selectable. Backend enforces coherent packages. ADR 048.
+
+- 2026-08-31: Applicant/internal application Specialization options now require actual ACTIVE specialization-specific Curriculum Course Mapping usage in the selected Program Offering Curriculum. Empty template-only specializations no longer appear. ADR 049.
+
+- 2026-08-31: Added shared Effective Curriculum Scope authority. Unused Program Template Disciplines/Specializations are excluded from Applicant/Internal Application, Intake/Capacity, Reservation buckets and Selection Rules; Intake activation and Student handoff revalidate current curriculum scope. ADR 050.

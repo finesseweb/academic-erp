@@ -9,6 +9,11 @@ use Illuminate\Validation\ValidationException;
 
 class ApplicantAcademicPreferenceService
 {
+    public function __construct(
+        private EffectiveCurriculumScopeService $effectiveScope,
+    ) {
+    }
+
     public function options(CollegeAdmissionCycle $cycle): array
     {
         $cycle->loadMissing(['programOffering.curriculum', 'programOffering.programTemplate']);
@@ -17,29 +22,7 @@ class ApplicantAcademicPreferenceService
             return ['disciplines' => [], 'terms' => [], 'curriculum' => null];
         }
 
-        $disciplines = DB::table('program_template_disciplines as ptd')
-            ->join('academic_disciplines as d', 'd.id', '=', 'ptd.discipline_id')
-            ->where('ptd.program_template_id', $offering->program_template_id)
-            ->where('d.status', 'ACTIVE')
-            ->where('d.kind', 'DISCIPLINE')
-            ->orderBy('d.display_order')->orderBy('d.name')
-            ->get(['ptd.id as mapping_id', 'd.id', 'd.name', 'd.code'])
-            ->map(function ($discipline) {
-                $specializations = DB::table('program_template_discipline_specializations as ptds')
-                    ->join('academic_disciplines as s', 's.id', '=', 'ptds.specialization_id')
-                    ->where('ptds.program_template_discipline_id', $discipline->mapping_id)
-                    ->where('s.status', 'ACTIVE')
-                    ->where('s.kind', 'SPECIALIZATION')
-                    ->orderBy('s.display_order')->orderBy('s.name')
-                    ->get(['s.id', 's.name', 's.code'])
-                    ->map(fn ($row) => (array) $row)->values()->all();
-                return [
-                    'id' => (int) $discipline->id,
-                    'name' => $discipline->name,
-                    'code' => $discipline->code,
-                    'specializations' => $specializations,
-                ];
-            })->values()->all();
+        $disciplines = $this->effectiveScope->options($offering);
 
         $terms = DB::table('curriculum_terms')
             ->where('curriculum_id', $offering->curriculum_id)
@@ -60,6 +43,7 @@ class ApplicantAcademicPreferenceService
                     ->map(function ($slot) {
                         $mappings = DB::table('curriculum_course_mappings as mapping')
                             ->join('courses as course', 'course.id', '=', 'mapping.course_id')
+                            ->leftJoin('academic_disciplines as source_discipline', 'source_discipline.id', '=', 'mapping.source_discipline_id')
                             ->where('mapping.curriculum_slot_id', $slot->id)
                             ->where('mapping.status', 'ACTIVE')
                             ->where('course.status', 'ACTIVE')
@@ -67,6 +51,7 @@ class ApplicantAcademicPreferenceService
                             ->get([
                                 'mapping.id', 'mapping.course_id', 'mapping.discipline_id', 'mapping.specialization_id',
                                 'course.name as course_name', 'course.code as course_code',
+                                'source_discipline.id as source_discipline_id', 'source_discipline.name as source_discipline_name', 'source_discipline.code as source_discipline_code',
                             ])->map(fn ($row) => [
                                 'id' => (int) $row->id,
                                 'course_id' => (int) $row->course_id,
@@ -74,6 +59,9 @@ class ApplicantAcademicPreferenceService
                                 'specialization_id' => $row->specialization_id ? (int) $row->specialization_id : null,
                                 'course_name' => $row->course_name,
                                 'course_code' => $row->course_code,
+                                'source_discipline_id' => $row->source_discipline_id ? (int) $row->source_discipline_id : null,
+                                'source_discipline_name' => $row->source_discipline_name,
+                                'source_discipline_code' => $row->source_discipline_code,
                             ])->values()->all();
 
                         return [
@@ -106,32 +94,65 @@ class ApplicantAcademicPreferenceService
     public function resolve(CollegeAdmissionCycle $cycle, array $input): array
     {
         $options = $this->options($cycle);
+        if (! $options['curriculum']) {
+            throw ValidationException::withMessages([
+                'academic_preference' => 'The selected Program Offering does not have an active Curriculum configured yet.',
+            ]);
+        }
+
         $disciplines = collect($options['disciplines']);
         $disciplineId = (int) ($input['discipline_id'] ?? 0);
         $discipline = $disciplines->firstWhere('id', $disciplineId);
         if ($disciplines->isNotEmpty() && ! $discipline) {
-            throw ValidationException::withMessages(['academic_preference.discipline_id' => 'Select a Discipline available in this Program Offering.']);
+            throw ValidationException::withMessages([
+                'academic_preference.discipline_id' => 'Select a Discipline available in this Program Offering.',
+            ]);
         }
 
-        $specializationId = filled($input['specialization_id'] ?? null) ? (int) $input['specialization_id'] : null;
+        $specializationId = filled($input['specialization_id'] ?? null)
+            ? (int) $input['specialization_id']
+            : null;
         $specializations = collect($discipline['specializations'] ?? []);
-        if ($specializations->isNotEmpty() && ! $specializationId) {
-            throw ValidationException::withMessages(['academic_preference.specialization_id' => 'Select a Specialization for the selected Discipline.']);
+        if (($discipline['specialization_required'] ?? false) && $specializations->isNotEmpty() && ! $specializationId) {
+            throw ValidationException::withMessages([
+                'academic_preference.specialization_id' => 'Select a Specialization for the selected Discipline.',
+            ]);
         }
         if ($specializationId && ! $specializations->firstWhere('id', $specializationId)) {
-            throw ValidationException::withMessages(['academic_preference.specialization_id' => 'Select a Specialization available under the selected Discipline.']);
+            throw ValidationException::withMessages([
+                'academic_preference.specialization_id' => 'Select a Specialization available under the selected Discipline.',
+            ]);
         }
 
-        $submittedChoices = collect($input['course_choices'] ?? [])->mapWithKeys(fn ($ids, $slotId) => [(int)$slotId => collect((array)$ids)->map(fn ($id)=>(int)$id)->filter()->unique()->values()->all()]);
+        $submittedChoices = collect($input['course_choices'] ?? [])->mapWithKeys(
+            fn ($ids, $slotId) => [
+                (int) $slotId => collect((array) $ids)
+                    ->map(fn ($id) => (int) $id)
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all(),
+            ]
+        );
+
         $resolvedCourses = [];
+        $choiceSlots = collect();
 
         foreach ($options['terms'] as $term) {
             foreach ($term['slots'] as $slot) {
                 $applicable = collect($slot['mappings'])->filter(function ($mapping) use ($disciplineId, $specializationId) {
-                    if ($mapping['discipline_id'] === null) return $mapping['specialization_id'] === null;
-                    if ((int)$mapping['discipline_id'] !== $disciplineId) return false;
-                    if ($mapping['specialization_id'] === null) return true;
-                    return $specializationId !== null && (int)$mapping['specialization_id'] === $specializationId;
+                    if ($mapping['discipline_id'] === null) {
+                        return $mapping['specialization_id'] === null;
+                    }
+                    if ((int) $mapping['discipline_id'] !== $disciplineId) {
+                        return false;
+                    }
+                    if ($mapping['specialization_id'] === null) {
+                        return true;
+                    }
+                    return $specializationId !== null
+                        && (int) $mapping['specialization_id'] === $specializationId;
                 })->values();
 
                 if ($slot['selection_mode'] === 'MANDATORY') {
@@ -141,20 +162,86 @@ class ApplicantAcademicPreferenceService
                     continue;
                 }
 
-                if ($slot['selection_mode'] !== 'CHOICE' || $applicable->isEmpty()) continue;
-                $selectedIds = collect($submittedChoices->get((int)$slot['id'], []));
-                $allowedIds = $applicable->pluck('id')->map(fn ($id)=>(int)$id);
-                if ($selectedIds->diff($allowedIds)->isNotEmpty()) {
-                    throw ValidationException::withMessages(["academic_preference.course_choices.{$slot['id']}" => 'One selected Choice Subject is not available for this Discipline / Specialization.']);
+                if ($slot['selection_mode'] === 'CHOICE' && $applicable->isNotEmpty()) {
+                    $choiceSlots->push([
+                        'term' => $term,
+                        'slot' => $slot,
+                        'mappings' => $applicable,
+                    ]);
                 }
-                $min = (int) ($slot['min_selection'] ?? 1);
-                $max = (int) ($slot['max_selection'] ?? $min);
-                if ($selectedIds->count() < $min || $selectedIds->count() > $max) {
-                    throw ValidationException::withMessages(["academic_preference.course_choices.{$slot['id']}" => "Select between {$min} and {$max} subject(s) for {$slot['name']}."]);
+            }
+        }
+
+        // Applicant-facing selection is category-first, not semester-first. If every
+        // slot in the category can be completely satisfied by choosing one Offered From
+        // Discipline, that discipline behaves as an academic package. The UI may show
+        // only "History", while all of History's underlying term papers remain linked.
+        $processedSlotIds = [];
+        foreach ($choiceSlots->groupBy(fn ($row) => (string) ($row['slot']['category_name'] ?? 'Choice / Elective')) as $categoryName => $categoryRows) {
+            $packageCandidates = $this->sourcePackageCandidates($categoryRows);
+
+            if ($packageCandidates->isNotEmpty()) {
+                $matchingPackage = $packageCandidates->first(function ($package) use ($categoryRows, $submittedChoices) {
+                    foreach ($categoryRows as $row) {
+                        $slotId = (int) $row['slot']['id'];
+                        $expected = collect($package['by_slot'][$slotId] ?? [])->sort()->values()->all();
+                        $submitted = collect($submittedChoices->get($slotId, []))->sort()->values()->all();
+                        if ($expected !== $submitted) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+
+                if (! $matchingPackage) {
+                    throw ValidationException::withMessages([
+                        'academic_preference.course_choices' => "Select one complete {$categoryName} academic option. Its linked curriculum papers will be attached automatically.",
+                    ]);
                 }
-                foreach ($applicable->whereIn('id', $selectedIds) as $mapping) {
-                    $resolvedCourses[] = $this->courseRow($term, $slot, $mapping, 'APPLICANT_CHOICE');
+
+                foreach ($categoryRows as $row) {
+                    $slot = $row['slot'];
+                    $term = $row['term'];
+                    $slotId = (int) $slot['id'];
+                    $processedSlotIds[] = $slotId;
+                    $mappingIds = collect($matchingPackage['by_slot'][$slotId] ?? []);
+                    foreach ($row['mappings']->whereIn('id', $mappingIds) as $mapping) {
+                        $resolvedCourses[] = $this->courseRow($term, $slot, $mapping, 'APPLICANT_CHOICE');
+                    }
                 }
+            }
+        }
+
+        // Categories that are not a complete source-discipline package remain genuine
+        // course-level choices. Validation still follows each Curriculum Slot's min/max.
+        foreach ($choiceSlots as $row) {
+            $term = $row['term'];
+            $slot = $row['slot'];
+            $applicable = $row['mappings'];
+            $slotId = (int) $slot['id'];
+
+            if (in_array($slotId, $processedSlotIds, true)) {
+                continue;
+            }
+
+            $selectedIds = collect($submittedChoices->get($slotId, []));
+            $allowedIds = $applicable->pluck('id')->map(fn ($id) => (int) $id);
+            if ($selectedIds->diff($allowedIds)->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    "academic_preference.course_choices.{$slotId}" => 'One selected Choice Subject is not available for this Discipline / Specialization.',
+                ]);
+            }
+
+            $min = (int) ($slot['min_selection'] ?? 1);
+            $max = (int) ($slot['max_selection'] ?? $min);
+            if ($selectedIds->count() < $min || $selectedIds->count() > $max) {
+                throw ValidationException::withMessages([
+                    "academic_preference.course_choices.{$slotId}" => "Select between {$min} and {$max} subject(s) for ".($slot['category_name'] ?? $slot['name']).'.',
+                ]);
+            }
+
+            foreach ($applicable->whereIn('id', $selectedIds) as $mapping) {
+                $resolvedCourses[] = $this->courseRow($term, $slot, $mapping, 'APPLICANT_CHOICE');
             }
         }
 
@@ -166,6 +253,79 @@ class ApplicantAcademicPreferenceService
             'snapshot' => $options,
             'courses' => $resolvedCourses,
         ];
+    }
+
+    /**
+     * Return source-discipline packages only when each source can fully satisfy every
+     * Choice slot in the category with an exact configured selection count.
+     *
+     * Example: Minor -> History has one fixed History paper in every relevant term.
+     * The applicant selects History once; all those papers are linked internally.
+     * If a History slot offers three papers but only one must be chosen, this method
+     * returns no package and the individual papers remain visible for selection.
+     */
+    private function sourcePackageCandidates($categoryRows)
+    {
+        $allSourceKeys = $categoryRows
+            ->flatMap(fn ($row) => $row['mappings']->map(fn ($mapping) => $this->sourceKey($mapping)))
+            ->unique()
+            ->values();
+
+        if ($allSourceKeys->isEmpty()) {
+            return collect();
+        }
+
+        $candidates = collect();
+        foreach ($allSourceKeys as $sourceKey) {
+            $bySlot = [];
+            $valid = true;
+
+            foreach ($categoryRows as $row) {
+                $slot = $row['slot'];
+                $min = (int) ($slot['min_selection'] ?? 1);
+                $max = (int) ($slot['max_selection'] ?? $min);
+                if ($min !== $max) {
+                    $valid = false;
+                    break;
+                }
+
+                $mappingIds = $row['mappings']
+                    ->filter(fn ($mapping) => $this->sourceKey($mapping) === $sourceKey)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->sort()
+                    ->values()
+                    ->all();
+
+                if (count($mappingIds) !== $min || count($mappingIds) === 0) {
+                    $valid = false;
+                    break;
+                }
+
+                $bySlot[(int) $slot['id']] = $mappingIds;
+            }
+
+            if ($valid) {
+                $sample = $categoryRows->flatMap(fn ($row) => $row['mappings'])
+                    ->first(fn ($mapping) => $this->sourceKey($mapping) === $sourceKey);
+                $candidates->push([
+                    'source_key' => $sourceKey,
+                    'source_name' => $sample['source_discipline_name'] ?? 'Common / Interdisciplinary',
+                    'by_slot' => $bySlot,
+                ]);
+            }
+        }
+
+        // Package mode is safe only when every offered source in the category can be
+        // represented as a complete package. Otherwise keep granular course choices.
+        return $candidates->count() === $allSourceKeys->count() ? $candidates : collect();
+    }
+
+    private function sourceKey(array $mapping): string
+    {
+        return $mapping['source_discipline_id']
+            ? 'discipline:'.(int) $mapping['source_discipline_id']
+            : 'common';
     }
 
     public function persist(CollegeAdmissionApplication $application, array $resolved): void
