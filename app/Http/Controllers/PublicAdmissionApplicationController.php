@@ -7,6 +7,7 @@ use App\Models\CollegeAdmissionSelectionRule;
 use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationPlan;
 use App\Services\CollegeAdmissionApplicationService;
+use App\Services\ApplicantAcademicPreferenceService;
 use App\Services\CollegeAdmissionFormResolver;
 use App\Services\CollegeReservationService;
 use Illuminate\Http\RedirectResponse;
@@ -23,8 +24,11 @@ class PublicAdmissionApplicationController extends Controller
         string $slug,
         CollegeReservationService $reservationService,
         CollegeAdmissionFormResolver $formResolver,
-    ): Response {
+        ApplicantAcademicPreferenceService $academicPreferenceService,
+    ): Response|RedirectResponse {
+        if (! $request->user() || $request->user()->account_type !== 'APPLICANT') return redirect()->route('applicant.gateway', ['slug'=>$slug]);
         $mapping = $this->publicMapping($slug);
+        abort_unless((int)$request->user()->primary_college_id === (int)$mapping->college_id, 403);
         $mapping->loadMissing([
             'template.parent.steps.panels',
             'template.parent.steps.fields.options',
@@ -47,15 +51,17 @@ class PublicAdmissionApplicationController extends Controller
             ->firstOrFail();
 
         $availability = $this->availability($mapping, $cycle);
-        $contexts = $availability['can_submit']
-            ? $this->selectionContexts($mapping, $cycle, $reservationService)
-            : collect();
+        // Public applications are intentionally NOT seat-capacity gated.
+        // Discipline / specialization / curriculum choices are collected now; seat allocation is downstream.
+        $contexts = collect();
+        $academicOptions = $academicPreferenceService->options($cycle);
         $fee = $formResolver->resolveFee(\App\Models\College::query()->findOrFail($mapping->college_id), $cycle);
 
         return Inertia::render('public/admission-application', [
             'publicForm' => [
                 'slug' => $mapping->public_slug,
                 'step_display_mode' => ($mapping->public_open_mode ?? 'SAME_WINDOW'),
+                'seat_selection_required' => false,
                 'college' => ['id'=>$college->id,'name'=>$college->name,'code'=>$college->code],
                 'cycle' => [
                     'id'=>$cycle->id,'name'=>$cycle->name,'code'=>$cycle->code,
@@ -70,9 +76,11 @@ class PublicAdmissionApplicationController extends Controller
                 ],
                 'template' => $formResolver->templatePayload($mapping->template, $cycle),
                 'fee' => ['required'=>$fee['required'],'amount'=>$fee['amount'],'currency'=>$fee['currency']],
-                'choices' => $contexts->values(),
+                'choices' => [],
+                'academic_options' => $academicOptions,
                 'availability' => $availability,
             ],
+            'applicant' => ['name'=>$request->user()->name,'email'=>$request->user()->email,'phone'=>$request->user()->mobile,'date_of_birth'=>optional(\App\Models\ApplicantProfile::where('user_id',$request->user()->id)->first())->date_of_birth?->toDateString()],
             'successApplicationNo' => $request->session()->pull('public_application_success'),
         ]);
     }
@@ -82,8 +90,13 @@ class PublicAdmissionApplicationController extends Controller
         string $slug,
         CollegeReservationService $reservationService,
         CollegeAdmissionApplicationService $applicationService,
+        ApplicantAcademicPreferenceService $academicPreferenceService,
     ): RedirectResponse {
+        abort_unless($request->user() && $request->user()->account_type === 'APPLICANT', 403);
         $mapping = $this->publicMapping($slug);
+        abort_unless((int)$request->user()->primary_college_id === (int)$mapping->college_id, 403);
+        $settings = \App\Models\CollegeApplicantRegistrationSetting::forCollege($mapping->college_id);
+        if ($settings->email_verification_required && ! $request->user()->email_verified_at) return redirect()->route('applicant.verify.notice',['slug'=>$slug]);
         $college = \App\Models\College::query()->whereKey($mapping->college_id)->where('status','ACTIVE')->firstOrFail();
         $cycle = \App\Models\CollegeAdmissionCycle::query()
             ->whereKey($mapping->college_admission_cycle_id)
@@ -96,32 +109,28 @@ class PublicAdmissionApplicationController extends Controller
             throw ValidationException::withMessages(['application' => $availability['message']]);
         }
 
-        $validContexts = $this->selectionContexts($mapping, $cycle, $reservationService);
-        if ($validContexts->isEmpty()) {
-            throw ValidationException::withMessages(['choices' => 'No public Regular Admission seat category is currently available for this Program Offering.']);
-        }
-
         $data = $request->validate([
-            'candidate_name' => ['required','string','max:180'],
-            'email' => ['nullable','email:rfc','max:190'],
-            'phone' => ['nullable','string','max:40'],
-            'date_of_birth' => ['required','date','before_or_equal:today'],
             'external_reference' => ['nullable','string','max:120'],
             'remarks' => ['nullable','string','max:3000'],
             'custom_fields' => ['nullable','array'],
-            'choices' => ['required','array','min:1','max:1'],
-            'choices.0.college_program_intake_id' => ['required','integer'],
-            'choices.0.bucket_key' => ['required','string','max:80'],
+            'academic_preference' => ['required','array'],
+            'academic_preference.discipline_id' => ['nullable','integer'],
+            'academic_preference.specialization_id' => ['nullable','integer'],
+            'academic_preference.course_choices' => ['nullable','array'],
+            'academic_preference.course_choices.*' => ['nullable','array'],
+            'academic_preference.course_choices.*.*' => ['integer'],
+            'preview_confirmed' => ['accepted'],
         ]);
+        // Public application intake is never limited by seat capacity. Seat/reservation/allocation happens later.
+        $data['choices'] = [];
+        $resolvedAcademicPreference = $academicPreferenceService->resolve($cycle, $data['academic_preference'] ?? []);
 
-        $requestedChoice = $data['choices'][0];
-        $allowed = $validContexts->contains(fn ($context) =>
-            (int) $context['college_program_intake_id'] === (int) $requestedChoice['college_program_intake_id']
-            && (string) $context['bucket_key'] === (string) $requestedChoice['bucket_key']
-        );
-        if (! $allowed) {
-            throw ValidationException::withMessages(['choices' => 'Select a currently available admission seat category.']);
-        }
+        $profile = \App\Models\ApplicantProfile::query()->where('user_id',$request->user()->id)->where('college_id',$mapping->college_id)->firstOrFail();
+        $data['candidate_name'] = $request->user()->name;
+        $data['email'] = $request->user()->email;
+        $data['phone'] = $profile->phone ?: $request->user()->mobile;
+        $data['date_of_birth'] = $profile->date_of_birth->toDateString();
+        $data['applicant_user_id'] = $request->user()->id;
 
         $payload = [
             ...$data,
@@ -129,12 +138,13 @@ class PublicAdmissionApplicationController extends Controller
             'admission_mode' => 'REGULAR',
         ];
 
-        $application = DB::transaction(function () use ($applicationService, $college, $payload, $request) {
+        $application = DB::transaction(function () use ($applicationService, $academicPreferenceService, $resolvedAcademicPreference, $college, $payload, $request) {
             $application = $applicationService->create($college, $payload, null, $request->ip(), 'PUBLIC');
+            $academicPreferenceService->persist($application, $resolvedAcademicPreference);
             return $applicationService->submit($application, $college, null, $request->ip());
         });
 
-        return redirect()->route('public-admission.show', ['slug'=>$slug])
+        return redirect()->route('applicant.application', ['slug'=>$slug])
             ->with('public_application_success', $application->application_no);
     }
 

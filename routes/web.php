@@ -27,6 +27,9 @@ use App\Http\Controllers\CollegeAdmissionFormSetupController;
 use App\Http\Controllers\UniversityAdmissionFormSetupController;
 use App\Http\Controllers\CollegeAdmissionScoreController;
 use App\Http\Controllers\CollegeAdmissionInterviewController;
+use App\Http\Controllers\ApplicantPortalController;
+use App\Http\Controllers\PublicAdmissionApplicationController;
+use App\Http\Controllers\StudentPortalController;
 use App\Http\Controllers\CollegeProgramOfferingController;
 use App\Http\Controllers\CollegeRoleController;
 use App\Http\Controllers\CollegeRolePermissionController;
@@ -46,14 +49,21 @@ use App\Http\Controllers\UniversityController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserRoleController;
 use App\Http\Controllers\TestDataCleanupController;
-use App\Http\Controllers\PublicAdmissionApplicationController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
 
+Route::get('/apply/{slug}', [ApplicantPortalController::class, 'gateway'])->name('applicant.gateway');
+Route::post('/apply/{slug}/register', [ApplicantPortalController::class, 'register'])->name('applicant.register');
+Route::post('/apply/{slug}/login', [ApplicantPortalController::class, 'login'])->name('applicant.login');
+Route::get('/apply/{slug}/verify-email', [ApplicantPortalController::class, 'verificationNotice'])->name('applicant.verify.notice');
+Route::get('/apply/{slug}/verify-email/{id}/{hash}', [ApplicantPortalController::class, 'verifyEmail'])->middleware('signed')->name('applicant.verify.confirm');
+Route::post('/apply/{slug}/verify-email/resend', [ApplicantPortalController::class, 'resendVerification'])->middleware('throttle:6,1')->name('applicant.verify.resend');
+Route::post('/apply/{slug}/logout', [ApplicantPortalController::class, 'logout'])->name('applicant.logout');
+Route::get('/apply/{slug}/application', [PublicAdmissionApplicationController::class, 'show'])->name('applicant.application');
+Route::post('/apply/{slug}/application', [PublicAdmissionApplicationController::class, 'store'])->name('applicant.application.store');
+Route::get('/student', [StudentPortalController::class, 'index'])->middleware('auth')->name('student.portal');
 
-Route::get('apply/{slug}', [PublicAdmissionApplicationController::class, 'show'])->name('public-admission.show');
-Route::post('apply/{slug}', [PublicAdmissionApplicationController::class, 'store'])->middleware('throttle:20,1')->name('public-admission.store');
 
 
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
@@ -69,19 +79,9 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('admin/colleges/{college}/status', [CollegeController::class, 'status'])->name('colleges.status');
     Route::get('admin/admission-form-setup', [UniversityAdmissionFormSetupController::class, 'index'])->name('university-admission-form-setup.index');
     Route::post('admin/admission-form-setup/templates', [UniversityAdmissionFormSetupController::class, 'storeTemplate'])->name('university-admission-form-setup.templates.store');
-    Route::patch('admin/admission-form-setup/templates/{template}', [UniversityAdmissionFormSetupController::class, 'updateTemplate'])->name('university-admission-form-setup.templates.update');
-    Route::delete('admin/admission-form-setup/templates/{template}', [UniversityAdmissionFormSetupController::class, 'destroyTemplate'])->name('university-admission-form-setup.templates.destroy');
     Route::patch('admin/admission-form-setup/templates/{template}/status', [UniversityAdmissionFormSetupController::class, 'statusTemplate'])->name('university-admission-form-setup.templates.status');
-    Route::patch('admin/admission-form-setup/templates/{template}/override-control', [UniversityAdmissionFormSetupController::class, 'overrideControl'])->name('university-admission-form-setup.templates.override-control');
     Route::post('admin/admission-form-setup/templates/{template}/steps', [UniversityAdmissionFormSetupController::class, 'storeStep'])->name('university-admission-form-setup.steps.store');
-    Route::patch('admin/admission-form-setup/templates/{template}/steps/{step}', [UniversityAdmissionFormSetupController::class, 'updateStep'])->name('university-admission-form-setup.steps.update');
-    Route::delete('admin/admission-form-setup/templates/{template}/steps/{step}', [UniversityAdmissionFormSetupController::class, 'destroyStep'])->name('university-admission-form-setup.steps.destroy');
-    Route::post('admin/admission-form-setup/templates/{template}/steps/{step}/panels', [UniversityAdmissionFormSetupController::class, 'storePanel'])->name('university-admission-form-setup.panels.store');
-    Route::patch('admin/admission-form-setup/templates/{template}/steps/{step}/panels/{panel}', [UniversityAdmissionFormSetupController::class, 'updatePanel'])->name('university-admission-form-setup.panels.update');
-    Route::delete('admin/admission-form-setup/templates/{template}/steps/{step}/panels/{panel}', [UniversityAdmissionFormSetupController::class, 'destroyPanel'])->name('university-admission-form-setup.panels.destroy');
     Route::post('admin/admission-form-setup/templates/{template}/steps/{step}/fields', [UniversityAdmissionFormSetupController::class, 'storeField'])->name('university-admission-form-setup.fields.store');
-    Route::patch('admin/admission-form-setup/templates/{template}/steps/{step}/fields/{field}', [UniversityAdmissionFormSetupController::class, 'updateField'])->name('university-admission-form-setup.fields.update');
-    Route::delete('admin/admission-form-setup/templates/{template}/steps/{step}/fields/{field}', [UniversityAdmissionFormSetupController::class, 'destroyField'])->name('university-admission-form-setup.fields.destroy');
     Route::post('admin/admission-form-setup/fee-rules', [UniversityAdmissionFormSetupController::class, 'storeFeeRule'])->name('university-admission-form-setup.fee-rules.store');
     Route::redirect('super-admin/colleges', '/admin/colleges');
     Route::get('admin/university/signatories', [AuthorizedSignatoryController::class, 'index'])->name('signatories.index');
@@ -249,6 +249,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('college/{college}/admission-cycles/{cycle}', [CollegeAdmissionCycleController::class, 'update'])->name('college-admission-cycles.update');
     Route::patch('college/{college}/admission-cycles/{cycle}/status', [CollegeAdmissionCycleController::class, 'status'])->name('college-admission-cycles.status');
     Route::get('college/{college}/admission-form-setup', [CollegeAdmissionFormSetupController::class, 'index'])->name('college-admission-form-setup.index');
+    Route::patch('college/{college}/admission-form-setup/applicant-registration-settings', [CollegeAdmissionFormSetupController::class, 'updateApplicantRegistrationSettings'])->name('college-admission-form-setup.applicant-registration-settings.update');
     Route::post('college/{college}/admission-form-setup/templates', [CollegeAdmissionFormSetupController::class, 'storeTemplate'])->name('college-admission-form-setup.templates.store');
     Route::patch('college/{college}/admission-form-setup/templates/{template}', [CollegeAdmissionFormSetupController::class, 'updateTemplate'])->name('college-admission-form-setup.templates.update');
     Route::delete('college/{college}/admission-form-setup/templates/{template}', [CollegeAdmissionFormSetupController::class, 'destroyTemplate'])->name('college-admission-form-setup.templates.destroy');

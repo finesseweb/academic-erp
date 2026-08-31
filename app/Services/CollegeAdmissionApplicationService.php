@@ -36,6 +36,7 @@ class CollegeAdmissionApplicationService
         return DB::transaction(function () use ($college, $cycle, $data, $contexts, $actorId, $ip, $template, $customValues, $fee, $admissionMode, $entrySource) {
             $application = CollegeAdmissionApplication::create([
                 'college_id' => $college->id,
+                'applicant_user_id' => $data['applicant_user_id'] ?? null,
                 'college_admission_cycle_id' => $cycle->id,
                 'application_no' => 'PENDING-'.Str::uuid(),
                 'college_admission_form_template_id' => $template?->id,

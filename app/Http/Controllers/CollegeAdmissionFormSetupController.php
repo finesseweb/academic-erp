@@ -10,6 +10,7 @@ use App\Models\CollegeAdmissionFormMapping;
 use App\Models\CollegeAdmissionFormStep;
 use App\Models\CollegeAdmissionFormTemplate;
 use App\Models\CollegeApplicationFeeRule;
+use App\Models\CollegeApplicantRegistrationSetting;
 use App\Models\Curriculum;
 use App\Models\Degree;
 use App\Models\DegreeLevel;
@@ -82,6 +83,7 @@ class CollegeAdmissionFormSetupController extends Controller
             'cycles' => $cycles,
             'curricula' => $curricula,
             'feeRules' => $feeRules,
+            'registrationSettings' => CollegeApplicantRegistrationSetting::forCollege($college->id),
             'can' => [
                 'create' => $this->canAny($request, $college, 'college_admission_form.create'),
                 'update' => $this->canAny($request, $college, 'college_admission_form.update'),
@@ -98,6 +100,7 @@ class CollegeAdmissionFormSetupController extends Controller
                 'fieldDelete' => $this->canAny($request,$college,'college_admission_form.field_delete'),
                 'map' => $this->canAny($request, $college, 'college_admission_form.map'),
                 'fee' => $this->canAny($request, $college, 'college_application_fee.manage'),
+                'registrationSettings' => $this->canAny($request, $college, 'college_applicant_registration.settings'),
                 'universityManage' => false,
             ],
         ]);
@@ -190,20 +193,12 @@ class CollegeAdmissionFormSetupController extends Controller
             'degree_level_id'=>['nullable','integer','exists:degree_levels,id'],'degree_id'=>['nullable','integer','exists:degrees,id'],
             'program_template_id'=>['nullable','integer','exists:program_templates,id'],'college_program_offering_id'=>['nullable','integer','exists:college_program_offerings,id'],
             'curriculum_id'=>['nullable','integer','exists:curricula,id'],'college_admission_cycle_id'=>['nullable','integer','exists:college_admission_cycles,id'],
-        ], [
-            'label.required'=>'Enter a field label.',
-            'field_key.required'=>'Enter a field key.',
-            'field_key.regex'=>'Field key must start with a lowercase letter and contain only lowercase letters, numbers and underscores (example: caste_category).',
-            'field_type.required'=>'Select an input type.',
-            'max_kb.integer'=>'File Max KB must be a whole number.',
-            'max_kb.min'=>'File Max KB must be at least 1 KB.',
-            'max_kb.max'=>'File Max KB cannot exceed 51200 KB.',
         ]);
         if ($step->fields()->where('field_key',$data['field_key'])->exists()) throw ValidationException::withMessages(['field_key'=>'This field key already exists in the step.']);
         if (in_array($data['field_type'],['SELECT','RADIO','CHECKBOX','MULTISELECT'],true) && blank($data['options']??null)) throw ValidationException::withMessages(['options'=>'Add at least one option for this field type.']);
         $this->assertAcademicScopeIds($college,$data);
         if (filled($data['college_admission_form_panel_id'] ?? null) && ! CollegeAdmissionFormPanel::query()->whereKey($data['college_admission_form_panel_id'])->where('college_admission_form_step_id',$step->id)->exists()) throw ValidationException::withMessages(['college_admission_form_panel_id'=>'Selected panel is outside this step.']);
-        $sourceField = $this->conditionSourceForTemplate($template, $step, $data['condition_source_field_id'] ?? null);
+        $sourceField = $this->conditionSourceForTemplate($template, $data['condition_source_field_id'] ?? null);
         if ($sourceField && in_array($sourceField->field_type,['FILE','IMAGE'],true)) throw ValidationException::withMessages(['condition_source_field_id'=>'File/Image fields cannot be used as a condition source.']);
         if ($sourceField && ! in_array($data['condition_operator']??'EQUALS',['IS_EMPTY','IS_NOT_EMPTY'],true) && blank($data['condition_values']??null)) throw ValidationException::withMessages(['condition_values'=>'Enter the value that should make this field appear.']);
         $field = DB::transaction(function() use($step,$data,$sourceField){
@@ -310,6 +305,7 @@ class CollegeAdmissionFormSetupController extends Controller
         $data = $request->validate([
             'college_program_offering_id'=>['required','integer','exists:college_program_offerings,id'],
             'college_admission_cycle_id'=>['required','integer','exists:college_admission_cycles,id'],
+            'seat_selection_required'=>['nullable','boolean'],
         ]);
 
         $offering = $college->programOfferings()
@@ -354,6 +350,7 @@ class CollegeAdmissionFormSetupController extends Controller
             'college_admission_form_template_id'=>$template->id,
             ...$mappingScope,
             'status'=>'ACTIVE',
+            'seat_selection_required'=>(bool) ($data['seat_selection_required'] ?? false),
         ]);
 
         $this->audit($request,$college,'COLLEGE_ADMISSION_FORM_MAPPING_CREATED','CollegeAdmissionFormMapping',$mapping->id,$mapping->toArray());
@@ -434,6 +431,21 @@ class CollegeAdmissionFormSetupController extends Controller
         return back()->with('toast', ['type'=>'success','message'=>$enable ? 'Public application link enabled. Admission Cycle dates control when submissions are accepted.' : 'Public application link disabled.']);
     }
 
+    public function updateApplicantRegistrationSettings(Request $request, College $college): RedirectResponse
+    {
+        $this->authorizeAny($request, $college, 'college_applicant_registration.settings');
+        $data = $request->validate([
+            'registration_enabled'=>['required','boolean'],
+            'email_verification_required'=>['required','boolean'],
+            'captcha_required'=>['required','boolean'],
+        ]);
+        $settings = CollegeApplicantRegistrationSetting::forCollege($college->id);
+        $before = $settings->toArray();
+        $settings->update([...$data, 'updated_by'=>$request->user()->id]);
+        $this->audit($request,$college,'COLLEGE_APPLICANT_REGISTRATION_SETTINGS_UPDATED','CollegeApplicantRegistrationSetting',$settings->id,['before'=>$before,'after'=>$settings->fresh()->toArray()]);
+        return back()->with('toast',['type'=>'success','message'=>'Applicant registration settings updated.']);
+    }
+
     public function storeFeeRule(Request $request, College $college): RedirectResponse
     {
         $this->authorizeAny($request,$college,'college_application_fee.manage');
@@ -492,7 +504,7 @@ class CollegeAdmissionFormSetupController extends Controller
     }
 
 
-    private function conditionSourceForTemplate(CollegeAdmissionFormTemplate $template, CollegeAdmissionFormStep $targetStep, mixed $fieldId): ?CollegeAdmissionFormField
+    private function conditionSourceForTemplate(CollegeAdmissionFormTemplate $template, mixed $fieldId): ?CollegeAdmissionFormField
     {
         if (! filled($fieldId)) return null;
         $allowedTemplateIds = collect([$template->id]);
@@ -500,10 +512,6 @@ class CollegeAdmissionFormSetupController extends Controller
         while ($parent) { $allowedTemplateIds->push($parent->id); $parent = $parent->parent; }
         $field = CollegeAdmissionFormField::query()->whereKey($fieldId)->whereHas('step', fn($q)=>$q->whereIn('college_admission_form_template_id',$allowedTemplateIds->all()))->first();
         if (! $field) throw ValidationException::withMessages(['condition_source_field_id'=>'Condition source must be a field from this template or its inherited University base.']);
-        $sourceStep = $field->step()->first(['id','college_admission_form_template_id','display_order']);
-        if ($sourceStep && (int) $sourceStep->college_admission_form_template_id === (int) $template->id && $sourceStep->id !== $targetStep->id && (int) $sourceStep->display_order >= (int) $targetStep->display_order) {
-            throw ValidationException::withMessages(['condition_source_field_id'=>'A College extension field can depend only on University-base fields, or on a field in the same/earlier College step.']);
-        }
         return $field;
     }
 
