@@ -89,6 +89,8 @@ type Props = {
     academicPolicies: AcademicPolicy[];
     fullReset: FullReset;
     entities: {
+        college_admission_form_templates: Entity[];
+        college_application_fee_rules: Entity[];
         college_admission_scores: Entity[];
         college_admission_applications: Entity[];
         college_admission_selection_rules: Entity[];
@@ -112,6 +114,8 @@ type Props = {
 type TabKey =
     | 'curriculum'
     | 'academic_policies'
+    | 'college_admission_form_templates'
+    | 'college_application_fee_rules'
     | 'college_admission_scores'
     | 'college_admission_applications'
     | 'college_admission_selection_rules'
@@ -145,6 +149,8 @@ type ActionTarget = {
 };
 
 const tabs: { key: TabKey; label: string }[] = [
+    { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
+    { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
     { key: 'college_admission_scores', label: 'Score Capture / Normalization' },
     { key: 'college_admission_applications', label: 'Admission Applications' },
     { key: 'college_admission_selection_rules', label: 'Merit / Roster / Selection Rules' },

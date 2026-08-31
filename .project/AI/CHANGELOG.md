@@ -217,3 +217,115 @@
 - Fixed Admission Cycle Program Offering eager-loads to use the real `curricula.version` column instead of nonexistent `curricula.version_no`.
 - Updated the Admission Cycle frontend type to match `version` as a string field.
 - Added a schema-consistency rule: downstream implementation must verify actual migration/table-spec column names before selecting or serializing related model fields.
+
+## 2026-08-27 — Interview Scheduling / Evaluation
+- Implemented interview scheduling, College-user panel assignment, evaluator score normalization, final Interview component and shared Admission Score re-evaluation. See `CHANGELOG_PATCH_ADMISSION_INTERVIEW.md`.
+
+## 2026-08-27 — Admission Form Configuration & Internal Entry Stage 1
+Approved prerequisite branch added before Merit/Roster continuation. Added scoped dynamic form builder, manager assignment, dynamic field/file responses, Regular vs Direct admission mode, scoped Application Fee rules with snapshotting, and reuse of existing Admission Application/Application Choice transaction chain. See ADR 024 and `CHANGELOG_PATCH_ADMISSION_FORM_STAGE1.md`.
+
+### 2026-08-27 — Stage 1 Test Data Cleanup coverage
+- Added Admission Form Templates and Application Fee Rules to the Test Data Cleanup Center.
+- Full Academic Test Reset now removes Stage 1 application field values (through application deletion), form mappings, fee rules, and form templates in dependency-safe order.
+- Individual cleanup blocks template/rule deletion when submitted/test Applications still reference them.
+
+## 2026-08-27 — Stage 1 University governance access correction
+- Added University Admission Form Setup page and University-owned base-template workflow.
+- Added `college_admission_form_access_controls` to explicitly enable/disable Stage 1 Form Setup for each College.
+- Added per-College governance mode and independent College fee-override authorization.
+- College Admission Form Setup menu now appears only after University enablement and applicable College RBAC permission.
+- Backend authorization now enforces the University feature gate.
+- Separated University-scope sidebar permission evaluation from aggregated College permissions to prevent cross-scope menu leakage.
+- Added access-control records to Full Academic Test Reset coverage.
+
+### 2026-08-27 — Stage 1 College role assignment gate
+- Added `college_admission_form_access_roles` to map each College Admission Form access-control record to one or more existing ERP roles.
+- University Admission Form Setup can now choose allowed College roles per College.
+- College sidebar and backend authorization require an allowed active College-scoped role in addition to University enablement and RBAC permission.
+- Prevented enabling Admission Form Setup without at least one allowed College role.
+
+
+### 2026-08-27 — Stage 1 Admission Form access aligned to core RBAC
+- Removed the temporary College feature switch and Admission-specific allowed-role checklist from University Admission Form Setup.
+- Added migration `2026_08_27_100040_align_admission_form_access_with_rbac.php` to remove temporary gate tables and normalize permissions.
+- Admission Form permissions remain in the shared Permission catalog and College-delegable.
+- Granted Stage 1 permissions to `SUPER_ADMIN` by default and removed automatic `COLLEGE_ADMIN` grants so delegation is explicit through the existing Roles/Permissions hierarchy.
+- College sidebar and controllers now use the same scoped RBAC behavior as other College modules.
+
+### 2026-08-27 — Stage 1 conditional fields + academic applicability
+- Added relational answer-based conditional display for dynamic Admission Form fields.
+- Added operators `EQUALS`, `NOT_EQUALS`, `IN`, `NOT_IN`, `CONTAINS`, `IS_EMPTY`, and `IS_NOT_EMPTY`.
+- Added relational field applicability by Degree Level, Degree, Program Template, Program Offering, Curriculum and Admission Cycle.
+- Dynamic Application payloads now exclude academic-scope fields that do not match the selected Admission Cycle/Offering context.
+- Laravel now re-evaluates visibility/required rules during create/update; frontend visibility alone is not trusted.
+- Hidden or no-longer-applicable dynamic values are removed from active Application responses on save.
+- File validation controls now appear only for File/Image field types; Options appear only for configurable choice field types.
+- College extension fields may conditionally depend on inherited University base fields.
+- Added migration `2026_08_27_100050_add_conditional_and_academic_scope_to_admission_form_fields.php`.
+
+## 2026-08-27 — Stage 1 Admission Form governance/current-Curriculum alignment
+- Admission Form Curriculum selectors now expose only current approved ACTIVE Curriculum versions after amendments.
+- Backend rejects superseded Curriculum IDs for field applicability.
+- Added explicit `allow_college_override` to University Admission Form Templates, aligned with Academic Calendar governance.
+- College may create an extension only from an ACTIVE University template where override is allowed.
+- University cannot disable override while an ACTIVE College extension depends on the base.
+- College UI treats University templates as read-only and exposes authoring controls only for College-owned extensions.
+
+## 2026-08-27 — Stage 1 Admission Form RBAC permission completion
+- Completed the Admission Form permission catalog using action-level permissions consistent with established ERP modules.
+- Added create, update/governance, lifecycle status, step-create and field-create capabilities alongside existing view, mapping and fee management capabilities.
+- Migrated roles holding the legacy broad `college_admission_form.manage` permission to the granular equivalents and retired the broad permission from the ACTIVE catalog.
+- Updated University and College Admission Form controllers and UI capability flags to enforce action-specific authorization.
+
+## 2026-08-27 — Stage 1 Admission Form CRUD + Panels
+- Added optional Step Panel/Section structure; Fields may be inside a Panel or directly under a Step.
+- Added safe Template, Step, Panel and Field edit/delete operations.
+- Structural destructive changes are limited to DRAFT templates and dependency checks preserve historical application data.
+- Added granular CRUD permissions for panels/steps/fields/templates.
+- Synced all active Admission Form permissions to SUPER_ADMIN and COLLEGE_ADMIN by default.
+- University `Allow College Override` remains the governing gate for College extensions; RBAC alone cannot bypass it.
+
+## 2026-08-27 — Stage 1 College operational form mapping
+- Added College-side mapping UI for ACTIVE University Base and College Extension templates.
+- Separated structural override governance from operational mapping: `Allow College Override` no longer blocks College use/mapping of the University Base.
+- Mapping now requires College Program Offering + linked Admission Cycle and derives Degree Level/Degree/Program automatically.
+- College-created mappings of University templates now persist the College scope instead of becoming University-wide.
+- Added safe mapping removal (INACTIVE history) and legacy ownership normalization migration.
+- Added ADR 028 and synchronized Stage 1 implementation-state documentation.
+
+## 2026-08-27 — Stage 1 Public Admission URL + Admission Cycle gating
+- Added College-controlled public enable/disable on an ACTIVE Program Offering + Admission Cycle form mapping.
+- Added stable `/apply/{slug}` public URL; Form Templates themselves are not published directly.
+- Public candidate submissions are REGULAR admissions and create/submit the existing Admission Application/Application Choice transaction with `entry_source=PUBLIC`.
+- Public submission is backend-gated by ACTIVE College, Template, Mapping, Program Offering and Admission Cycle plus the Admission Cycle application start/end dates.
+- Public page resolves the mapped dynamic Base/Extension form, applicable scoped/conditional fields, active Regular seat-bucket choices, and the resolved Application Fee snapshot.
+- DIRECT Admission remains internal College entry.
+- Added ADR 029.
+
+## 2026-08-27 — Stage 1 condition runtime normalization fix
+- Fixed dynamic answer conditions so human-entered option labels (for example `OBC`) match canonical stored option values (for example `obc`) in both internal Application Entry and public `/apply/{slug}` forms.
+- Backend condition validation now uses the same canonical comparison, so visible/required behavior is consistent server-side.
+- Future choice-field conditions are stored using the source option's canonical value while existing conditions remain backward-compatible at runtime.
+- Public renderer now respects `condition_match_mode` (`ALL` / `ANY`) exactly like the shared backend engine.
+
+## 2026-08-27 — Stage 1 conditional source step-order QA fix
+- Fixed Admission Form Setup conditional-source dropdown so existing eligible fields are shown and grouped by Step.
+- Prevented conditions from referencing fields in later Steps; backend mirrors the UI rule.
+- College Extension conditions can reference inherited University Base fields and same/earlier extension fields.
+
+## 2026-08-27 — Stage 1 generic condition parent fix
+- Removed earlier-step-only restriction from Admission Form conditional-field parent selection.
+- University builder now lists all existing eligible non-file fields in the template, grouped by step.
+- College extension builder now lists all inherited University Base fields plus all existing eligible College Extension fields, grouped by step.
+- Confirmed conditional logic is generic and not limited to Caste/EWS or any hard-coded field family.
+- Backend source validation now matches the builder behavior while continuing to reject FILE/IMAGE sources.
+- Added ADR 032.
+
+## 2026-08-27 — Public Admission Form premium control styling
+
+- Refined only the generated/public Admission Application UI; Admission Form Setup/admin screens are unchanged.
+- Standardized text, number, date, email, phone, textarea and select controls with consistent height, radius, spacing, focus states and theme-token colors.
+- Reworked radio and checkbox/multi-select choices into larger premium selectable surfaces while preserving native accessibility and form semantics.
+- Improved file upload presentation, field/help/error alignment, section panels, responsive two-column spacing and step navigation presentation.
+- Preserved dynamic theme inheritance by using existing `primary`, `background`, `border`, `muted` and `destructive` tokens rather than fixed brand colors.
+- No schema, workflow, condition, mapping, validation, submission or admission-processing behavior changed.

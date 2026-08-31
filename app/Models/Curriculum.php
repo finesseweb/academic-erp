@@ -41,6 +41,15 @@ class Curriculum extends Model
     }
 
 
+
+    public function scopeCurrentApproved($query)
+    {
+        return $query
+            ->where('lifecycle_status', 'ACTIVE')
+            ->where('approval_status', 'APPROVED')
+            ->whereDoesntHave('amendments', fn ($q) => $q->where('approval_status', 'APPROVED'));
+    }
+
     public function parentCurriculum(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_curriculum_id');

@@ -28,6 +28,7 @@ class CollegeAdmissionScoreController extends Controller
                 'score',
             ])
             ->where('eligibility_status','ELIGIBLE')
+            ->whereNotNull('college_admission_selection_rule_id')
             ->whereHas('application', fn($q)=>$q->where('college_id',$college->id)->where('status','SUBMITTED'))
             ->when($search!=='', fn($q)=>$q->whereHas('application', fn($a)=>$a->where(fn($w)=>$w->where('application_no','like',"%{$search}%")->orWhere('candidate_name','like',"%{$search}%")->orWhere('email','like',"%{$search}%")->orWhere('phone','like',"%{$search}%"))))
             ->orderByDesc('id')->paginate(25)->withQueryString();

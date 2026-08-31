@@ -9,7 +9,9 @@ use App\Models\CollegeAdmissionApplication;
 use App\Models\CollegeAdmissionApplicationChoice;
 use App\Models\CollegeAdmissionCycle;
 use App\Models\CollegeAdmissionSelectionRule;
+use App\Models\CollegeProgramIntake;
 use App\Services\CollegeAdmissionApplicationService;
+use App\Services\CollegeAdmissionFormResolver;
 use App\Services\CollegeReservationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +21,7 @@ use Inertia\Response;
 
 class CollegeAdmissionApplicationController extends Controller
 {
-    public function index(Request $request, College $college, CollegeReservationService $reservationService): Response
+    public function index(Request $request, College $college, CollegeReservationService $reservationService, CollegeAdmissionFormResolver $formResolver): Response
     {
         $this->authorizeCollege($request, $college, 'college_admission_application.view');
 
@@ -82,6 +84,39 @@ class CollegeAdmissionApplicationController extends Controller
             fn ($a, $b) => strcmp($a['bucket_label'], $b['bucket_label']),
         ])->values();
 
+        $directSelectionContexts = CollegeProgramIntake::query()
+            ->with(['allocations.discipline:id,name,code','allocations.specialization:id,name,code','offering.programTemplate:id,name,code','offering.academicSession:id,name,code,is_current'])
+            ->where('status', 'ACTIVE')
+            ->whereHas('offering', fn ($q) => $q->where('college_id', $college->id)->where('status', 'ACTIVE'))
+            ->get()
+            ->flatMap(function (CollegeProgramIntake $intake) use ($reservationService) {
+                $offering = $intake->offering;
+                return $reservationService->availableBuckets($intake)->map(fn ($bucket) => [
+                    'college_admission_selection_rule_id' => null,
+                    'college_program_intake_id' => $intake->id,
+                    'college_program_offering_id' => $offering->id,
+                    'academic_session_id' => $offering->academic_session_id,
+                    'program_name' => $offering->programTemplate->name,
+                    'program_code' => $offering->programTemplate->code,
+                    'session_name' => $offering->academicSession->name,
+                    'session_code' => $offering->academicSession->code,
+                    'is_current_session' => (bool) $offering->academicSession->is_current,
+                    'bucket_key' => $bucket['bucket_key'],
+                    'bucket_type' => $bucket['bucket_type'],
+                    'bucket_label' => $bucket['label'],
+                    'basis_capacity' => (int) $bucket['basis_capacity'],
+                    'reservation_plan_id' => null,
+                    'reservation_state' => 'AVAILABLE',
+                    'rule_name' => null,
+                    'rule_code' => null,
+                    'rule_version' => null,
+                    'selection_mode' => 'DIRECT',
+                    'merit_weight_percent' => '0.00',
+                    'entrance_weight_percent' => '0.00',
+                    'interview_weight_percent' => '0.00',
+                ]);
+            })->values();
+
         $search = trim((string) $request->query('search', ''));
         $applications = CollegeAdmissionApplication::query()
             ->with([
@@ -94,6 +129,8 @@ class CollegeAdmissionApplicationController extends Controller
                 'choices.intake.offering.academicSession:id,name,code,is_current',
                 'choices.reservationPlan:id,status',
                 'choices.selectionRule:id,name,code,version_no,selection_mode,status,merit_weight_percent,entrance_weight_percent,interview_weight_percent',
+                'fieldValues.field:id,label,field_type',
+                'formTemplate:id,name,code',
             ])
             ->where('college_id', $college->id)
             ->when($search !== '', function ($query) use ($search) {
@@ -116,10 +153,24 @@ class CollegeAdmissionApplicationController extends Controller
             });
         });
 
+        $formConfigs = [];
+        foreach ($cycles->where('status', 'ACTIVE')->whereNotNull('college_program_offering_id') as $cycle) {
+            foreach (['REGULAR', 'DIRECT'] as $mode) {
+                $template = $formResolver->resolveTemplate($college, $cycle, $mode);
+                $fee = $formResolver->resolveFee($college, $cycle);
+                $formConfigs[$cycle->id][$mode] = [
+                    'template' => $formResolver->templatePayload($template, $cycle),
+                    'fee' => ['required'=>$fee['required'], 'amount'=>$fee['amount'], 'currency'=>$fee['currency'], 'rule_id'=>$fee['rule']?->id],
+                ];
+            }
+        }
+
         return Inertia::render('college-admission-applications/index', [
             'college' => $college->only(['id', 'name', 'code', 'status']),
             'cycles' => $cycles,
             'selectionContexts' => $selectionContexts,
+            'directSelectionContexts' => $directSelectionContexts,
+            'formConfigs' => $formConfigs,
             'applications' => $applications,
             'filters' => ['search' => $search],
             'can' => [
@@ -148,7 +199,10 @@ class CollegeAdmissionApplicationController extends Controller
     {
         $this->authorizeCollege($request, $college, 'college_admission_application.submit');
         $service->submit($application, $college, $request->user()->id, $request->ip());
-        return back()->with('toast', ['type' => 'success', 'message' => 'Application submitted. The exact active Selection Rule version is now locked to each program choice.']);
+        $message = ($application->admission_mode ?? 'REGULAR') === 'DIRECT'
+            ? 'Direct Admission application submitted. Program/seat-bucket choices are locked without Selection Rule-driven processing.'
+            : 'Application submitted. The exact active Selection Rule version is now locked to each program choice.';
+        return back()->with('toast', ['type' => 'success', 'message' => $message]);
     }
 
     public function eligibility(Request $request, College $college, CollegeAdmissionApplicationChoice $choice, CollegeAdmissionApplicationService $service): RedirectResponse

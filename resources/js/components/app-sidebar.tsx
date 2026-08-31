@@ -5,6 +5,7 @@ import {
     Building2,
     CalendarRange,
     ClipboardCheck,
+    FileCog,
     ChevronRight,
     GraduationCap,
     GitBranch,
@@ -182,6 +183,13 @@ const platformItems: TreeNavItem[] = [
                 icon: ShieldCheck,
                 href: '/admin/reservation-categories',
                 permission: 'reservation_category.view',
+            },
+            {
+                title: 'Admission Form Setup',
+                icon: FileCog,
+                href: '/admin/admission-form-setup',
+                permission: 'college_admission_form.view',
+                directNavigation: true,
             },
             {
                 title: 'Academic Calendar',
@@ -543,6 +551,13 @@ export function AppSidebar() {
                           permission: 'college_admission_cycle.view',
                       },
                       {
+                          title: 'Admission Form Setup',
+                          href: `/college/${collegeId}/admission-form-setup`,
+                          icon: FileCog,
+                          permission: 'college_admission_form.view',
+                          directNavigation: true,
+                      },
+                      {
                           title: 'Applications / Candidate Eligibility',
                           href: `/college/${collegeId}/admission-applications`,
                           icon: ClipboardCheck,
@@ -555,18 +570,24 @@ export function AppSidebar() {
                           permission: 'college_admission_score.view',
                           directNavigation: true,
                       },
+                      {
+                          title: 'Interview Scheduling / Evaluation',
+                          href: `/college/${collegeId}/admission-interviews`,
+                          icon: UsersRound,
+                          permission: 'college_admission_interview.view',
+                          directNavigation: true,
+                      },
                   ],
               },
           ]
         : [];
 
     const items = useMemo(
-        () =>
-            filterByPermission(
-                [...platformItems, ...collegeItems],
-                auth.permissions,
-            ),
-        [collegeId, auth.permissions],
+        () => [
+            ...filterByPermission(platformItems, auth.universityPermissions ?? []),
+            ...filterByPermission(collegeItems, auth.permissions),
+        ],
+        [collegeId, auth.permissions, auth.universityPermissions],
     );
 
     const activeBranches = useMemo(

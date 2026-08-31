@@ -220,6 +220,10 @@ Handled through College-scoped roles:
 ## 12 — Admission
 - Admission Cycle
 - Applications
+- **Approved prerequisite branch (2026-08-27): Admission Form Configuration & Internal Application Entry Engine (Stage 1)**
+  - Must extend the existing Application/Application Choice foundation; no parallel candidate/admission transaction model.
+  - University/College template ownership, assigned manager, dynamic steps/fields/documents, scoped mappings, Application Fee rules, REGULAR/DIRECT mode.
+  - After OWNER QA, resume the previously reached checkpoint: Interview Scheduling / Evaluation QA, then Merit / Roster Generation.
 - Program Choice
 - Merit / Entrance
 - Reservation / Quota

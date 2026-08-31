@@ -46,6 +46,11 @@ class CollegeAdmissionApplicationChoice extends Model
         return $this->hasOne(CollegeAdmissionScore::class, 'college_admission_application_choice_id');
     }
 
+    public function interview(): HasOne
+    {
+        return $this->hasOne(CollegeAdmissionInterview::class, 'college_admission_application_choice_id');
+    }
+
     public function eligibilityCheckedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'eligibility_checked_by');

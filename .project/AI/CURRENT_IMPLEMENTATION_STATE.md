@@ -109,3 +109,62 @@ The Admission Cycle foundation is now explicitly part of the delivered implement
 - Activation validates the exact offering's ACTIVE Intake and at least one ACTIVE Selection Rule; Reservation stays optional per bucket.
 - Applications inherit the cycle's Program Offering and can select only seat buckets/specializations from that exact offering.
 - Status: IMPLEMENTED — OWNER QA REQUIRED before continuing Score Capture / Normalization.
+
+## Interview Scheduling / Evaluation — 2026-08-27
+- Implemented after Score Capture for locked Selection Rules with Interview weight > 0.
+- Status: OWNER_QA_REQUIRED before Merit / Roster Generation.
+- See `CURRENT_IMPLEMENTATION_STATE_PATCH_INTERVIEW.md`.
+
+## Admission Form Configuration & Internal Application Entry — Stage 1 — 2026-08-27
+- Owner approved a prerequisite branch before Merit / Roster so the Admission transaction chain has a proper configurable entry foundation.
+- Existing `college_admission_applications` / `college_admission_application_choices` remain authoritative; this branch does not replace or fork the completed Admission work.
+- Added University/College-owned Form Templates with assigned manager, governance mode, REGULAR/DIRECT/BOTH applicability, dynamic steps, fields/options, file/image inputs and scoped mappings.
+- Added most-specific-wins Application Fee Rules across University/College -> Degree Level -> Degree -> Program -> Offering -> Admission Cycle, with fee/template snapshots on each application.
+- Internal Application Entry now resolves the configured template and renders extra fields in the existing ERP theme.
+- REGULAR retains Selection Rule lock and downstream Eligibility/Score/Interview/Merit behavior.
+- DIRECT shares the Application/Application Choice foundation but may be created/submitted without a Selection Rule so it can later route directly toward seat/admission processing.
+- Status: IMPLEMENTED_IN_PACKAGE / OWNER_QA_REQUIRED.
+- Frozen hierarchy resume point after acceptance: Interview Scheduling / Evaluation QA -> Merit / Roster Generation.
+- See `CURRENT_IMPLEMENTATION_STATE_PATCH_ADMISSION_FORM_STAGE1.md`, ADR 024 and the Stage 1 Page Spec.
+
+
+### Stage 1 governance correction — University controlled College access (2026-08-27)
+- University-side `Admission Form Setup` entry point added.
+- University can create/activate locked base templates and dynamic base steps/fields.
+- University explicitly enables/disables Admission Form Setup per affiliated College.
+- Per-College governance modes supported: University Controlled, University Base + College Extension, College Controlled.
+- College application-fee override is independently allowed/denied by University.
+- College menu requires University feature enablement + College-scoped RBAC permission.
+- Backend College setup routes enforce the same feature gate; direct URL/API access cannot bypass it.
+- University sidebar permissions are now evaluated from University scope separately from aggregated College permissions.
+- Full Academic Test Reset removes Stage 1 University→College access-control test records as well.
+
+
+### 2026-08-27 — Stage 1 RBAC alignment correction (authoritative)
+- Removed the temporary Admission Form College enable/disable gate and per-College allowed-role checklist.
+- Admission Form Setup now follows the same Access Management hierarchy as other ERP modules.
+- `SUPER_ADMIN` has the feature by default.
+- Any custom role may be granted the active College-delegable Admission Form permissions through the existing Role → Permissions matrix.
+- College menu visibility and backend access resolve automatically from College-scoped RBAC; no separate checkbox configuration is required.
+- Template governance remains configuration behavior only and does not create a second authorization system.
+
+### Stage 1 enhancement — Conditional Fields & Academic Applicability — 2026-08-27
+
+Status: **OWNER_QA_REQUIRED**
+
+- Answer-based dynamic field conditions implemented in builder + Application renderer + Laravel validation.
+- Academic applicability implemented against canonical Degree Level → Degree → Program → Program Offering → Curriculum → Admission Cycle references.
+- Non-applicable fields are server-filtered from the generated form.
+- Required conditional fields are enforced only while visible.
+- Hidden/scoped-out stale responses are removed on draft save.
+- University base conditions/scopes are inherited; College extension conditions may reference inherited base fields.
+- This remains inside the documented Stage 1 prerequisite branch. Frozen hierarchy resume point is unchanged: Stage 1 QA → Interview QA → Merit/Roster.
+
+### Stage 1 governance correction — 2026-08-27
+Admission Form Setup now uses explicit University-first override governance aligned with Academic Calendar. `allow_college_override` is OFF by default; College extension creation requires it to be ON plus normal College RBAC permission. Curriculum applicability selectors and validation use only the current approved ACTIVE Curriculum version after amendment/successor resolution. Stage 1 remains in OWNER_QA_REQUIRED; frozen hierarchy resume point is unchanged.
+
+### Stage 1 QA correction — condition runtime normalization (2026-08-27)
+Answer-based dynamic conditions now resolve display labels and persisted choice values canonically across public/internal renderers and backend validation. Existing Caste Category conditions do not need to be recreated.
+
+### Public Admission Form visual refinement — 2026-08-27
+The generated/public Admission Application renderer now has a form-only premium visual treatment. All controls use the existing theme token system, so institution/theme color changes continue to flow through automatically. Text/select/textarea/file controls, radio/checkbox choice surfaces, panel spacing, validation text, responsive grids and step navigation are visually aligned. This is presentation-only: template resolution, conditions, academic applicability, required-when-visible validation, file submission, public cycle gate, fee snapshot and Application/Application Choice creation remain unchanged. Stage 1 remains OWNER_QA_REQUIRED.

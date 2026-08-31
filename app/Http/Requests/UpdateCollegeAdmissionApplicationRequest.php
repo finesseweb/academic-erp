@@ -16,6 +16,8 @@ class UpdateCollegeAdmissionApplicationRequest extends FormRequest
     {
         return [
             'college_admission_cycle_id' => ['required', 'integer'],
+            'admission_mode' => ['required', 'in:REGULAR,DIRECT'],
+            'custom_fields' => ['nullable', 'array'],
             'external_reference' => ['nullable', 'string', 'max:120'],
             'candidate_name' => ['required', 'string', 'max:180'],
             'email' => ['nullable', 'email:rfc', 'max:190'],
