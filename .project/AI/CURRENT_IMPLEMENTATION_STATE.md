@@ -175,3 +175,13 @@ College Admission Form Setup now recursively normalizes optional nested Eloquent
 - ACTIVE/RETIRED templates remain structurally frozen; these rules are configured only while the owning template is DRAFT.
 - Status: IMPLEMENTED / OWNER_QA_REQUIRED.
 - Governing decisions: ADR 061, 062, 063, 064 and 065.
+
+## Test Data Cleanup — Admission Form Template testing deactivation — 2026-09-01
+- Test Data Cleanup -> Admission Form Templates now provides `Deactivate for Testing` for ACTIVE templates.
+- The guarded maintenance transition is `ACTIVE -> DRAFT`; normal Admission Form Setup remains frozen for ACTIVE templates.
+- Exact template Code confirmation, `test_data_cleanup.manage`, and the existing environment guard are required.
+- No Admission Form structure or submitted Application is deleted by this action.
+- Enabled public applicant mappings for the selected template are disabled automatically before deactivation.
+- Audit event `TEST_ADMISSION_FORM_TEMPLATE_DEACTIVATED` records before/after template state.
+- No database migration is required.
+- Governing decision: ADR 072.

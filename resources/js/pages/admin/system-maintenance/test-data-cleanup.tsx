@@ -149,6 +149,7 @@ type ActionTarget = {
         | 'reset_policy_approval'
         | 'cleanup_academic_policy'
         | 'cleanup_master'
+        | 'deactivate_admission_form_template'
         | 'cleanup_legacy_unlinked_regular'
         | 'full_reset';
     type?: Exclude<TabKey, 'curriculum' | 'academic_policies'>;
@@ -271,6 +272,17 @@ export default function TestDataCleanup({
         if (target.mode === 'cleanup_academic_policy') {
             form.delete(
                 `/admin/system-maintenance/test-data-cleanup/academic-policies/${target.id}`,
+                {
+                    preserveScroll: true,
+                    onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
+
+        if (target.mode === 'deactivate_admission_form_template') {
+            form.post(
+                `/admin/system-maintenance/test-data-cleanup/admission-form-templates/${target.id}/deactivate`,
                 {
                     preserveScroll: true,
                     onSuccess: () => setTarget(null),
@@ -755,7 +767,27 @@ export default function TestDataCleanup({
                                                     </td>
 
                                                     <td className="px-4 py-4">
-                                                        <div className="flex justify-end">
+                                                        <div className="flex flex-wrap justify-end gap-2">
+                                                            {tab === 'college_admission_form_templates' &&
+                                                                item.status === 'ACTIVE' && (
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        disabled={!enabled}
+                                                                        onClick={() =>
+                                                                            openAction({
+                                                                                mode: 'deactivate_admission_form_template',
+                                                                                id: item.id,
+                                                                                code: item.code,
+                                                                                name: item.name,
+                                                                            })
+                                                                        }
+                                                                    >
+                                                                        <RotateCcw className="size-4" />
+                                                                        Deactivate for Testing
+                                                                    </Button>
+                                                                )}
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
@@ -814,7 +846,9 @@ export default function TestDataCleanup({
                                     : target.mode === 'reset_approval' ||
                                         target.mode === 'reset_policy_approval'
                                       ? 'Reset Test Approval'
-                                      : 'Clean Test Data'}
+                                      : target.mode === 'deactivate_admission_form_template'
+                                        ? 'Deactivate Admission Form for Testing'
+                                        : 'Clean Test Data'}
                             </CardTitle>
                         </CardHeader>
 
@@ -843,7 +877,9 @@ export default function TestDataCleanup({
                                           ? 'Approval requests/history for this standalone test Academic Policy will be removed and the Policy will return to DRAFT / NOT_SUBMITTED. Configured policy rules are preserved.'
                                           : target.mode === 'cleanup_academic_policy'
                                             ? 'The complete Academic Policy test version chain and its policy-rule children will be permanently removed. Cleanup is blocked if operational references exist.'
-                                            : 'The selected test record will be permanently removed. Dependency checks are enforced by Laravel.'}
+                                            : target.mode === 'deactivate_admission_form_template'
+                                              ? 'Testing-only recovery action: the ACTIVE Admission Form Template will return to DRAFT so its setup can be corrected. No template structure or submitted application is deleted. Any enabled public applicant mapping for this template is switched off automatically. Normal Admission Form Setup still does not allow ACTIVE → DRAFT.'
+                                              : 'The selected test record will be permanently removed. Dependency checks are enforced by Laravel.'}
                                 </p>
 
                                 <div className="space-y-2">
@@ -911,7 +947,8 @@ export default function TestDataCleanup({
                                         type="submit"
                                         variant={
                                             target.mode === 'reset_approval' ||
-                                            target.mode === 'reset_policy_approval'
+                                            target.mode === 'reset_policy_approval' ||
+                                            target.mode === 'deactivate_admission_form_template'
                                                 ? 'default'
                                                 : 'destructive'
                                         }
@@ -927,9 +964,11 @@ export default function TestDataCleanup({
                                             : target.mode === 'reset_approval' ||
                                                 target.mode === 'reset_policy_approval'
                                               ? 'Reset Approval'
-                                              : target.mode === 'cleanup_academic_policy'
-                                                ? 'Permanently Clean Policy Chain'
-                                                : 'Permanently Clean'}
+                                              : target.mode === 'deactivate_admission_form_template'
+                                                ? 'Return Template to Draft'
+                                                : target.mode === 'cleanup_academic_policy'
+                                                  ? 'Permanently Clean Policy Chain'
+                                                  : 'Permanently Clean'}
                                     </Button>
                                 </div>
                             </form>

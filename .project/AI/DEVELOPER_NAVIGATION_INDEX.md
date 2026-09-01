@@ -59,3 +59,7 @@ Read:
 
 ### Academic Policy cleanup implementation
 - `PAGE_SPECS/UNIVERSITY_ADMIN/TEST_DATA_CLEANUP.md` — actual Policy reset/chain-clean dependency order and safeguards.
+
+### Admission Form testing-only deactivation
+- `DECISIONS/072_TEST_CLEANUP_ADMISSION_FORM_TEMPLATE_DEACTIVATION.md` — controlled Test Data Cleanup exception for ACTIVE -> DRAFT during development/QA.
+- `PAGE_SPECS/UNIVERSITY_ADMIN/TEST_DATA_CLEANUP_CENTER.md` — UI/action contract, confirmation, public-mapping shutdown and audit behavior.

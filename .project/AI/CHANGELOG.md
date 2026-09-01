@@ -1,5 +1,15 @@
 # Change Log
 
+## 2026-09-01 — Testing-only Admission Form Template deactivation
+
+- Added `Deactivate for Testing` under Test Data Cleanup -> Admission Form Templates for ACTIVE test templates.
+- The maintenance action returns only the selected template from ACTIVE to DRAFT; it does not delete template structure or Admission Applications.
+- Enabled public applicant mappings for that template are disabled automatically before the lifecycle change.
+- Reused `test_data_cleanup.manage`, exact template-Code confirmation, and the existing Test Data Cleanup environment guard.
+- Added audit event `TEST_ADMISSION_FORM_TEMPLATE_DEACTIVATED` with before/after state.
+- Normal Admission Form Setup remains structurally frozen after activation; this does not introduce a production Deactivate lifecycle action.
+- No database schema change. Governing decision: ADR 072.
+
 ## 2026-08-26 — Merit / Selection Rule responsive dialog consistency fix
 
 - Corrected Merit / Roster / Selection Rule create/edit dialog width and viewport overflow.

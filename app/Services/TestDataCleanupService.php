@@ -1426,6 +1426,102 @@ class TestDataCleanupService
         });
     }
 
+
+    public function deactivateAdmissionFormTemplateForTesting(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        if (! Schema::hasTable('college_admission_form_templates')) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($id, $universityId, $actorId) {
+            $record = DB::table('college_admission_form_templates')
+                ->where('id', $id)
+                ->where('university_id', $universityId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $record) {
+                abort(404);
+            }
+
+            if ((string) $record->status !== 'ACTIVE') {
+                throw ValidationException::withMessages([
+                    'record' =>
+                        'Only an ACTIVE Admission Form Template can be returned to DRAFT through Test Data Cleanup.',
+                ]);
+            }
+
+            $before = (array) $record;
+            $disabledPublicMappings = 0;
+
+            if (Schema::hasTable('college_admission_form_mappings')) {
+                $mappingQuery = DB::table('college_admission_form_mappings')
+                    ->where('college_admission_form_template_id', $id);
+
+                if (Schema::hasColumn('college_admission_form_mappings', 'public_enabled')) {
+                    $disabledPublicMappings = (clone $mappingQuery)
+                        ->where('public_enabled', true)
+                        ->count();
+
+                    $updates = [
+                        'public_enabled' => false,
+                    ];
+
+                    if (Schema::hasColumn('college_admission_form_mappings', 'public_enabled_at')) {
+                        $updates['public_enabled_at'] = null;
+                    }
+
+                    if (Schema::hasColumn('college_admission_form_mappings', 'updated_at')) {
+                        $updates['updated_at'] = now();
+                    }
+
+                    $mappingQuery->update($updates);
+                }
+            }
+
+            $templateUpdates = [
+                'status' => 'DRAFT',
+            ];
+
+            if (Schema::hasColumn('college_admission_form_templates', 'updated_at')) {
+                $templateUpdates['updated_at'] = now();
+            }
+
+            DB::table('college_admission_form_templates')
+                ->where('id', $id)
+                ->where('university_id', $universityId)
+                ->update($templateUpdates);
+
+            $after = (array) DB::table('college_admission_form_templates')
+                ->where('id', $id)
+                ->where('university_id', $universityId)
+                ->first();
+
+            $after['disabled_public_mappings'] = $disabledPublicMappings;
+
+            $this->audit(
+                'TEST_ADMISSION_FORM_TEMPLATE_DEACTIVATED',
+                'test_data_cleanup',
+                $id,
+                $before,
+                $actorId,
+                $after
+            );
+
+            return [
+                'template_id' => $id,
+                'from_status' => 'ACTIVE',
+                'to_status' => 'DRAFT',
+                'disabled_public_mappings' => $disabledPublicMappings,
+            ];
+        });
+    }
+
     public function cleanupMaster(
         string $type,
         int $id,
@@ -3557,7 +3653,8 @@ class TestDataCleanupService
         string $type,
         int $id,
         array $before,
-        int $actorId
+        int $actorId,
+        ?array $after = null
     ): void {
         if (! Schema::hasTable('audit_logs')) {
             return;
@@ -3568,7 +3665,7 @@ class TestDataCleanupService
             'resource_type' => $type,
             'resource_id' => $id,
             'before' => json_encode($before),
-            'after' => null,
+            'after' => $after === null ? null : json_encode($after),
             'actor_user_id' => $actorId,
             'ip_address' => request()->ip(),
             'created_at' => now(),

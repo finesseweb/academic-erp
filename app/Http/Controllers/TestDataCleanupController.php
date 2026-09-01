@@ -242,6 +242,57 @@ class TestDataCleanupController extends Controller
         return back()->with('success', $message);
     }
 
+
+    public function deactivateAdmissionFormTemplate(
+        Request $request,
+        int $template
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+
+        $university = University::query()->firstOrFail();
+
+        $request->validate([
+            'confirmation_code' => [
+                'required',
+                'string',
+                'max:120',
+            ],
+        ]);
+
+        $records =
+            $this->service
+                ->listMaintenanceEntities($university->id);
+
+        $record = collect(
+            $records['college_admission_form_templates'] ?? []
+        )->firstWhere('id', $template);
+
+        if (! $record) {
+            abort(404);
+        }
+
+        if (
+            trim((string) $request->input('confirmation_code'))
+                !== (string) $record['code']
+        ) {
+            throw ValidationException::withMessages([
+                'confirmation_code' =>
+                    'Type the exact Admission Form Template Code to confirm testing deactivation.',
+            ]);
+        }
+
+        $this->service->deactivateAdmissionFormTemplateForTesting(
+            $template,
+            $university->id,
+            $request->user()->id
+        );
+
+        return back()->with(
+            'success',
+            'Admission Form Template returned to DRAFT for testing corrections. Any public applicant access for this template was disabled.'
+        );
+    }
+
     public function destroyMaster(
         Request $request,
         string $type,

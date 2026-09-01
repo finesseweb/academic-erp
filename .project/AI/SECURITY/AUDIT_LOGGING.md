@@ -65,3 +65,7 @@ Reconcile with existing audit/history tables before creating a new table.
 - The implemented `audit_logs` table is append-only and intentionally has no `updated_at`; an audit event is never edited in place.
 - `actor_user_id` is nullable with `ON DELETE SET NULL` so audit history survives account removal.
 - Scope fields must both be NULL or both be present, enforced by a database check constraint.
+
+### Test Data Cleanup maintenance events
+- Testing-only Admission Form Template lifecycle recovery uses `TEST_ADMISSION_FORM_TEMPLATE_DEACTIVATED`.
+- The event is emitted only through the guarded Test Data Cleanup path and records safe before/after template state plus the count of public mappings disabled by the maintenance action.
