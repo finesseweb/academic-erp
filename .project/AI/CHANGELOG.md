@@ -302,3 +302,13 @@ Approved prerequisite branch added before Merit/Roster continuation. Added scope
 - 2026-08-31: Applicant/internal application Specialization options now require actual ACTIVE specialization-specific Curriculum Course Mapping usage in the selected Program Offering Curriculum. Empty template-only specializations no longer appear. ADR 049.
 
 - 2026-08-31: Added shared Effective Curriculum Scope authority. Unused Program Template Disciplines/Specializations are excluded from Applicant/Internal Application, Intake/Capacity, Reservation buckets and Selection Rules; Intake activation and Student handoff revalidate current curriculum scope. ADR 050.
+
+## 2026-09-01 — Admission Form dynamic validation, behavior and builder runtime fixes
+- Added reusable text/number field constraints without hard-coding domain-specific fields.
+- Added compatible cross-field comparisons for NUMBER and DATE fields, enforced on the backend and reflected in form UX.
+- Added generic trigger-based copy-from-field behavior with optional target locking; correspondence-to-permanent address copying is supported as configuration rather than special-case code.
+- Added reusable DATE age validation with minimum/maximum completed years and current/custom cutoff reference dates.
+- Added explicit Panel and Field display-order controls within Admission Form Steps.
+- Hardened Add/Edit Field source/panel discovery against nullable hydrated relation arrays.
+- Fixed Add Field client white-screen regression caused by missing `AcademicSelect` runtime definition while preserving Academic Applicability and all advanced rules.
+- No schema change is introduced by the AcademicSelect runtime fix. See ADR 061–065.

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CollegeAdmissionFormField extends Model
 {
@@ -15,4 +16,6 @@ class CollegeAdmissionFormField extends Model
     public function options(): HasMany { return $this->hasMany(CollegeAdmissionFormFieldOption::class)->orderBy('display_order')->orderBy('id'); }
     public function conditions(): HasMany { return $this->hasMany(CollegeAdmissionFormFieldCondition::class)->orderBy('display_order')->orderBy('id'); }
     public function scopes(): HasMany { return $this->hasMany(CollegeAdmissionFormFieldScope::class)->orderBy('id'); }
+    public function comparisonRule(): HasOne { return $this->hasOne(CollegeAdmissionFormFieldComparison::class, 'target_field_id'); }
+    public function copyRule(): HasOne { return $this->hasOne(CollegeAdmissionFormFieldCopyRule::class, 'target_field_id'); }
 }

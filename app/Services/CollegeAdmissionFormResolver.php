@@ -70,7 +70,7 @@ class CollegeAdmissionFormResolver
     public function templatePayload(?CollegeAdmissionFormTemplate $template, ?CollegeAdmissionCycle $cycle = null): ?array
     {
         if (! $template) return null;
-        $template->loadMissing(['parent.steps.panels','parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes','steps.panels','steps.fields.options','steps.fields.conditions','steps.fields.scopes']);
+        $template->loadMissing(['parent.steps.panels','parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes','parent.steps.fields.comparisonRule.sourceField','parent.steps.fields.copyRule.sourceField','parent.steps.fields.copyRule.triggerField','steps.panels','steps.fields.options','steps.fields.conditions','steps.fields.scopes','steps.fields.comparisonRule.sourceField','steps.fields.copyRule.sourceField','steps.fields.copyRule.triggerField']);
 
         $ownSteps = $template->steps->where('status', 'ACTIVE')->map(function ($step) use ($template, $cycle) {
             $fields = $step->fields->where('status', 'ACTIVE');
@@ -84,6 +84,8 @@ class CollegeAdmissionFormResolver
                     'id' => $field->id, 'field_key' => $field->field_key, 'label' => $field->label, 'field_type' => $field->field_type,
                     'placeholder' => $field->placeholder, 'help_text' => $field->help_text, 'is_required' => $field->is_required, 'college_admission_form_panel_id'=>$field->college_admission_form_panel_id,
                     'validation_rules' => $field->validation_rules, 'condition_match_mode' => $field->condition_match_mode ?? 'ALL',
+                    'comparison_rule' => $field->comparisonRule ? ['source_field_id'=>$field->comparisonRule->source_field_id,'source_field_label'=>$field->comparisonRule->sourceField?->label,'operator'=>$field->comparisonRule->operator] : null,
+                    'copy_rule' => $field->copyRule ? ['source_field_id'=>$field->copyRule->source_field_id,'source_field_label'=>$field->copyRule->sourceField?->label,'trigger_field_id'=>$field->copyRule->trigger_field_id,'trigger_field_label'=>$field->copyRule->triggerField?->label,'trigger_values'=>array_values($field->copyRule->trigger_values??[]),'read_only'=>(bool)$field->copyRule->is_read_only_when_active] : null,
                     'conditions' => $field->conditions->where('is_active', true)->map(fn ($condition) => [
                         'source_field_id' => $condition->source_field_id,
                         'operator' => $condition->operator,

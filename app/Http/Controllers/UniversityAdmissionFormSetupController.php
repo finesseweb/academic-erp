@@ -14,6 +14,7 @@ use App\Models\ProgramTemplate;
 use App\Models\University;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use App\Services\CollegeAdmissionFieldRuleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -30,7 +31,7 @@ class UniversityAdmissionFormSetupController extends Controller
         $university = University::query()->firstOrFail();
 
         $templates = CollegeAdmissionFormTemplate::query()
-            ->with(['manager:id,name,email', 'steps.panels', 'steps.fields.panel:id,title,code', 'steps.fields.options', 'steps.fields.conditions.sourceField:id,label,field_key,field_type', 'steps.fields.scopes'])
+            ->with(['manager:id,name,email', 'steps.panels', 'steps.fields.panel:id,title,code', 'steps.fields.options', 'steps.fields.conditions.sourceField:id,label,field_key,field_type', 'steps.fields.scopes', 'steps.fields.comparisonRule.sourceField:id,label,field_key,field_type', 'steps.fields.copyRule.sourceField:id,label,field_key,field_type', 'steps.fields.copyRule.triggerField:id,label,field_key,field_type'])
             ->where('university_id', $university->id)
             ->whereNull('college_id')
             ->where('owner_scope_type', 'UNIVERSITY')
@@ -165,11 +166,13 @@ class UniversityAdmissionFormSetupController extends Controller
         $this->authorizeUniversity($request, 'college_admission_form.field_create');
         $this->assertUniversityTemplate($template);
         abort_unless($step->college_admission_form_template_id === $template->id, 404);
+        $fieldRuleService = app(CollegeAdmissionFieldRuleService::class);
         $data=$request->validate([
+            ...$fieldRuleService->requestRules(),
             'college_admission_form_panel_id'=>['nullable','integer','exists:college_admission_form_panels,id'],
             'label'=>['required','string','max:180'],'field_key'=>['required','string','max:100','regex:/^[a-z][a-z0-9_]*$/'],
             'field_type'=>['required',Rule::in(['TEXT','NUMBER','DATE','EMAIL','PHONE','TEXTAREA','SELECT','RADIO','CHECKBOX','MULTISELECT','FILE','IMAGE','YES_NO'])],
-            'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],
+            'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999'],
             'options'=>['nullable','string','max:5000'],'max_kb'=>['nullable','integer','min:1','max:51200'],'extensions'=>['nullable','string','max:500'],
             'condition_source_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
             'condition_operator'=>['nullable',Rule::in(['EQUALS','NOT_EQUALS','IN','NOT_IN','CONTAINS','IS_EMPTY','IS_NOT_EMPTY'])],
@@ -184,12 +187,13 @@ class UniversityAdmissionFormSetupController extends Controller
         $sourceField = $this->conditionSource($template, $data['condition_source_field_id'] ?? null);
         if ($sourceField && in_array($sourceField->field_type, ['FILE','IMAGE'], true)) throw ValidationException::withMessages(['condition_source_field_id'=>'File/Image fields cannot be used as a condition source.']);
         if ($sourceField && ! in_array($data['condition_operator'] ?? 'EQUALS', ['IS_EMPTY','IS_NOT_EMPTY'], true) && blank($data['condition_values'] ?? null)) throw ValidationException::withMessages(['condition_values'=>'Enter the value that should make this field appear.']);
-        $field=DB::transaction(function()use($step,$data,$sourceField){
+        $fieldRuleService->assertConfiguration($template, $step, $data['field_type'], $data);
+        $field=DB::transaction(function()use($fieldRuleService,$step,$data,$sourceField){
             $field=$step->fields()->create([
                 'college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,
                 'field_key'=>$data['field_key'],'label'=>trim($data['label']),'field_type'=>$data['field_type'],'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,
-                'is_required'=>(bool)($data['is_required']??false),'is_locked'=>true,'display_order'=>($step->fields()->max('display_order')??0)+10,
-                'validation_rules'=>array_filter(['max_kb'=>$data['max_kb']??null,'extensions'=>filled($data['extensions']??null)?array_values(array_filter(array_map(fn($v)=>strtolower(trim($v)),explode(',',$data['extensions'])))):null],fn($v)=>$v!==null),'status'=>'ACTIVE',
+                'is_required'=>(bool)($data['is_required']??false),'is_locked'=>true,'display_order'=>$data['display_order']??(($step->fields()->max('display_order')??0)+10),
+                'validation_rules'=>$fieldRuleService->intrinsicRules($data, $data['field_type']),'status'=>'ACTIVE',
             ]);
             $options=[];
             if($data['field_type']==='YES_NO')$options=[['Yes','YES'],['No','NO']];
@@ -198,7 +202,8 @@ class UniversityAdmissionFormSetupController extends Controller
             $scope = collect(['degree_level_id','degree_id','program_template_id','curriculum_id'])->mapWithKeys(fn($key)=>[$key=>$data[$key]??null])->all();
             if (collect($scope)->filter(fn($v)=>filled($v))->isNotEmpty()) $field->scopes()->create([...$scope,'is_active'=>true]);
             if ($sourceField) $field->conditions()->create(['source_field_id'=>$sourceField->id,'operator'=>$data['condition_operator']??'EQUALS','compare_values'=>in_array($data['condition_operator']??'EQUALS',['IS_EMPTY','IS_NOT_EMPTY'],true)?[]:$this->splitValues($data['condition_values']??''),'display_order'=>10,'is_active'=>true]);
-            return $field->load(['options','conditions.sourceField','scopes']);
+            $fieldRuleService->sync($field, $data);
+            return $field->load(['options','conditions.sourceField','scopes','comparisonRule.sourceField','copyRule.sourceField','copyRule.triggerField']);
         });
         $this->audit($request, 'UNIVERSITY_ADMISSION_FORM_FIELD_CREATED', 'CollegeAdmissionFormField', $field->id, $field->toArray());
         return back()->with('toast',['type'=>'success','message'=>'University base field added and locked for College inheritance.']);
@@ -247,9 +252,9 @@ class UniversityAdmissionFormSetupController extends Controller
     public function storePanel(Request $request, CollegeAdmissionFormTemplate $template, CollegeAdmissionFormStep $step): RedirectResponse
     {
         $this->authorizeUniversity($request,'college_admission_form.panel_create'); $this->assertUniversityTemplate($template); abort_unless($step->college_admission_form_template_id===$template->id,404); $this->assertDraftStructure($template);
-        $data=$request->validate(['title'=>['required','string','max:160'],'code'=>['required','string','max:80'],'description'=>['nullable','string','max:2000']]); $code=Str::upper(trim($data['code']));
+        $data=$request->validate(['title'=>['required','string','max:160'],'code'=>['required','string','max:80'],'description'=>['nullable','string','max:2000'],'display_order'=>['nullable','integer','min:0','max:9999']]); $code=Str::upper(trim($data['code']));
         if($step->panels()->where('code',$code)->exists()) throw ValidationException::withMessages(['code'=>'This panel code already exists in the step.']);
-        $step->panels()->create(['title'=>trim($data['title']),'code'=>$code,'description'=>$data['description']??null,'display_order'=>($step->panels()->max('display_order')??0)+10,'is_locked'=>true,'status'=>'ACTIVE']);
+        $step->panels()->create(['title'=>trim($data['title']),'code'=>$code,'description'=>$data['description']??null,'display_order'=>$data['display_order']??(($step->panels()->max('display_order')??0)+10),'is_locked'=>true,'status'=>'ACTIVE']);
         return back()->with('toast',['type'=>'success','message'=>'Optional panel added. Fields may be placed inside it or directly in the step.']);
     }
 
@@ -271,16 +276,16 @@ class UniversityAdmissionFormSetupController extends Controller
     public function updateField(Request $request, CollegeAdmissionFormTemplate $template, CollegeAdmissionFormStep $step, CollegeAdmissionFormField $field): RedirectResponse
     {
         $this->authorizeUniversity($request,'college_admission_form.field_update'); $this->assertUniversityTemplate($template); abort_unless($step->college_admission_form_template_id===$template->id && $field->college_admission_form_step_id===$step->id,404); $this->assertDraftStructure($template);
-        $data=$request->validate(['college_admission_form_panel_id'=>['nullable','integer','exists:college_admission_form_panels,id'],'label'=>['required','string','max:180'],'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999']]);
+        $fieldRuleService = app(CollegeAdmissionFieldRuleService::class); $data=$request->validate([...$fieldRuleService->requestRules(),'college_admission_form_panel_id'=>['nullable','integer','exists:college_admission_form_panels,id'],'label'=>['required','string','max:180'],'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999']]);
         if(filled($data['college_admission_form_panel_id']??null) && ! $step->panels()->whereKey($data['college_admission_form_panel_id'])->exists()) throw ValidationException::withMessages(['college_admission_form_panel_id'=>'Selected panel is outside this step.']);
-        $field->update(['college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,'label'=>trim($data['label']),'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??$field->display_order]);
+        $fieldRuleService->assertConfiguration($template, $step, $field->field_type, $data, $field); $field->update(['college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,'label'=>trim($data['label']),'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??$field->display_order,'validation_rules'=>$fieldRuleService->intrinsicRules($data, $field->field_type, $field->validation_rules??[])]); $fieldRuleService->sync($field,$data);
         return back()->with('toast',['type'=>'success','message'=>'Field updated. Existing condition/applicability rules were preserved.']);
     }
 
     public function destroyField(Request $request, CollegeAdmissionFormTemplate $template, CollegeAdmissionFormStep $step, CollegeAdmissionFormField $field): RedirectResponse
     {
         $this->authorizeUniversity($request,'college_admission_form.field_delete'); $this->assertUniversityTemplate($template); abort_unless($step->college_admission_form_template_id===$template->id && $field->college_admission_form_step_id===$step->id,404); $this->assertDraftStructure($template);
-        if(DB::table('college_admission_application_field_values')->where('college_admission_form_field_id',$field->id)->exists() || DB::table('college_admission_form_field_conditions')->where('source_field_id',$field->id)->exists()) throw ValidationException::withMessages(['field'=>'This field is already used by an application or another field condition. Remove the dependency first.']);
+        if(DB::table('college_admission_application_field_values')->where('college_admission_form_field_id',$field->id)->exists() || DB::table('college_admission_form_field_conditions')->where('source_field_id',$field->id)->exists()||DB::table('college_admission_form_field_comparisons')->where('source_field_id',$field->id)->exists()||DB::table('college_admission_form_field_copy_rules')->where('source_field_id',$field->id)->orWhere('trigger_field_id',$field->id)->exists()) throw ValidationException::withMessages(['field'=>'This field is already used by an application or another field condition. Remove the dependency first.']);
         $field->delete(); return back()->with('toast',['type'=>'success','message'=>'Field deleted.']);
     }
 

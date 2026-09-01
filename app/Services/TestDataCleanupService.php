@@ -942,12 +942,7 @@ class TestDataCleanupService
                     $fieldIdsForCleanup = Schema::hasTable('college_admission_form_fields')
                         ? DB::table('college_admission_form_fields')->whereIn('college_admission_form_step_id', $stepIdsForCleanup)->pluck('id')
                         : collect();
-                    if ($fieldIdsForCleanup->isNotEmpty() && Schema::hasTable('college_admission_form_field_conditions')) {
-                        DB::table('college_admission_form_field_conditions')
-                            ->whereIn('college_admission_form_field_id', $fieldIdsForCleanup)
-                            ->orWhereIn('source_field_id', $fieldIdsForCleanup)
-                            ->delete();
-                    }
+                    $this->deleteAdmissionFormFieldReferences($fieldIdsForCleanup);
 
                     // Break parent inheritance links before deleting the template tree.
                     DB::table('college_admission_form_templates')->where('university_id', $universityId)->update(['parent_template_id' => null]);
@@ -1504,6 +1499,48 @@ class TestDataCleanupService
             })->all();
     }
 
+    /**
+     * Remove admission-form rule rows that can reference fields through RESTRICT
+     * foreign keys before the template -> step -> field cascade is allowed to run.
+     *
+     * Target-side rows also get deleted explicitly so cleanup remains deterministic
+     * even when a rule points at another field in the same template tree.
+     */
+    private function deleteAdmissionFormFieldReferences($fieldIds): void
+    {
+        if ($fieldIds->isEmpty()) {
+            return;
+        }
+
+        if (Schema::hasTable('college_admission_form_field_copy_rules')) {
+            DB::table('college_admission_form_field_copy_rules')
+                ->where(function ($query) use ($fieldIds) {
+                    $query->whereIn('target_field_id', $fieldIds)
+                        ->orWhereIn('source_field_id', $fieldIds)
+                        ->orWhereIn('trigger_field_id', $fieldIds);
+                })
+                ->delete();
+        }
+
+        if (Schema::hasTable('college_admission_form_field_comparisons')) {
+            DB::table('college_admission_form_field_comparisons')
+                ->where(function ($query) use ($fieldIds) {
+                    $query->whereIn('target_field_id', $fieldIds)
+                        ->orWhereIn('source_field_id', $fieldIds);
+                })
+                ->delete();
+        }
+
+        if (Schema::hasTable('college_admission_form_field_conditions')) {
+            DB::table('college_admission_form_field_conditions')
+                ->where(function ($query) use ($fieldIds) {
+                    $query->whereIn('college_admission_form_field_id', $fieldIds)
+                        ->orWhereIn('source_field_id', $fieldIds);
+                })
+                ->delete();
+        }
+    }
+
     private function cleanupCollegeAdmissionFormTemplate(int $id, int $universityId, int $actorId): array
     {
         if (! Schema::hasTable('college_admission_form_templates')) abort(404);
@@ -1529,12 +1566,7 @@ class TestDataCleanupService
         $fieldIds = Schema::hasTable('college_admission_form_fields')
             ? DB::table('college_admission_form_fields')->whereIn('college_admission_form_step_id', $stepIds)->pluck('id')
             : collect();
-        if ($fieldIds->isNotEmpty() && Schema::hasTable('college_admission_form_field_conditions')) {
-            DB::table('college_admission_form_field_conditions')
-                ->whereIn('college_admission_form_field_id', $fieldIds)
-                ->orWhereIn('source_field_id', $fieldIds)
-                ->delete();
-        }
+        $this->deleteAdmissionFormFieldReferences($fieldIds);
 
         DB::table('college_admission_form_templates')->where('id', $id)->delete();
         $result = ['deleted' => 1, 'record' => $before];

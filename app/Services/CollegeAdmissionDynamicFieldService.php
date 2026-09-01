@@ -19,7 +19,7 @@ class CollegeAdmissionDynamicFieldService
         $cycle->loadMissing('programOffering.programTemplate.degree');
 
         $fields = $this->allFields($template)->where('status', 'ACTIVE')->values();
-        $effectiveValues = $this->effectiveValues($fields, $input, $application);
+        $effectiveValues = $this->applyCopyRules($fields, $this->effectiveValues($fields, $input, $application));
         $normalized = [];
         $errors = [];
 
@@ -29,7 +29,7 @@ class CollegeAdmissionDynamicFieldService
                 continue;
             }
 
-            $value = $input[(string) $field->id] ?? null;
+            $value = $effectiveValues[$field->id] ?? null;
             $hasExisting = $application?->fieldValues()
                 ->where('college_admission_form_field_id', $field->id)
                 ->where(fn ($q) => $q->whereNotNull('value_text')->orWhereNotNull('value_json')->orWhereNotNull('file_path'))
@@ -71,7 +71,18 @@ class CollegeAdmissionDynamicFieldService
                 continue;
             }
 
-            $normalized[$field->id] = is_scalar($value) ? trim((string) $value) : $value;
+            $scalar = is_scalar($value) ? trim((string) $value) : $value;
+            $ruleError = $this->validateIntrinsicValue($field, $scalar);
+            if ($ruleError) {
+                $errors["custom_fields.{$field->id}"] = $ruleError;
+                continue;
+            }
+            $comparisonError = $this->validateComparison($field, $scalar, $effectiveValues);
+            if ($comparisonError) {
+                $errors["custom_fields.{$field->id}"] = $comparisonError;
+                continue;
+            }
+            $normalized[$field->id] = $scalar;
         }
 
         if ($errors) throw ValidationException::withMessages($errors);
@@ -182,6 +193,99 @@ class CollegeAdmissionDynamicFieldService
         };
     }
 
+    private function applyCopyRules(Collection $fields, array $values): array
+    {
+        foreach ($fields as $field) {
+            $field->loadMissing('copyRule');
+            $rule = $field->copyRule;
+            if (! $rule || ! $rule->is_active) continue;
+            $trigger = $values[$rule->trigger_field_id] ?? null;
+            if (! $this->triggerMatches($trigger, $rule->trigger_values ?? [])) continue;
+            $values[$field->id] = $values[$rule->source_field_id] ?? null;
+        }
+        return $values;
+    }
+
+    private function triggerMatches(mixed $actual, array $expected): bool
+    {
+        $actualValues = is_array($actual) ? array_map('strval', $actual) : [(string) ($actual ?? '')];
+        $canonical = fn (string $value) => Str::slug(trim($value), '_');
+        $actualCanonical = array_map($canonical, $actualValues);
+        $expectedCanonical = array_map($canonical, array_map('strval', $expected));
+        return count(array_intersect($actualCanonical, $expectedCanonical)) > 0;
+    }
+
+    private function validateIntrinsicValue(CollegeAdmissionFormField $field, mixed $value): ?string
+    {
+        $rules = $field->validation_rules ?? [];
+        $text = is_scalar($value) ? (string) $value : '';
+
+        if (in_array($field->field_type, ['TEXT','TEXTAREA','EMAIL','PHONE'], true)) {
+            $length = mb_strlen($text);
+            if (isset($rules['exact_length']) && $length !== (int) $rules['exact_length']) return "{$field->label} must be exactly {$rules['exact_length']} characters.";
+            if (isset($rules['min_length']) && $length < (int) $rules['min_length']) return "{$field->label} must be at least {$rules['min_length']} characters.";
+            if (isset($rules['max_length']) && $length > (int) $rules['max_length']) return "{$field->label} may not be longer than {$rules['max_length']} characters.";
+            if ($field->field_type === 'EMAIL' && ! filter_var($text, FILTER_VALIDATE_EMAIL)) return "Enter a valid email address for {$field->label}.";
+        }
+
+        if ($field->field_type === 'NUMBER') {
+            if (! is_numeric($text)) return "{$field->label} must be a valid number.";
+            $number = (float) $text;
+            if (isset($rules['min_value']) && $number < (float) $rules['min_value']) return "{$field->label} must be at least {$rules['min_value']}.";
+            if (isset($rules['max_value']) && $number > (float) $rules['max_value']) return "{$field->label} may not be greater than {$rules['max_value']}.";
+            if (! empty($rules['integer_only']) && floor($number) != $number) return "{$field->label} must be a whole number.";
+            if (isset($rules['decimal_places'])) {
+                $parts = explode('.', $text, 2);
+                $places = isset($parts[1]) ? strlen(rtrim($parts[1], '0')) : 0;
+                if ($places > (int) $rules['decimal_places']) return "{$field->label} may have at most {$rules['decimal_places']} decimal places.";
+            }
+        }
+
+        if ($field->field_type === 'DATE') {
+            $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $text);
+            if (! $parsed || $parsed->format('Y-m-d') !== $text) return "Enter a valid date for {$field->label}.";
+            if (isset($rules['min_age_years']) || isset($rules['max_age_years'])) {
+                $reference = ($rules['age_reference_mode'] ?? 'TODAY') === 'CUSTOM'
+                    ? \DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($rules['age_reference_date'] ?? ''))
+                    : new \DateTimeImmutable('today');
+                if (! $reference) return "Age reference date configured for {$field->label} is invalid.";
+                if ($parsed > $reference) return "{$field->label} cannot be after the age reference date.";
+                $age = $parsed->diff($reference)->y;
+                if (isset($rules['min_age_years']) && $age < (int) $rules['min_age_years']) return "Age calculated from {$field->label} must be at least {$rules['min_age_years']} years.";
+                if (isset($rules['max_age_years']) && $age > (int) $rules['max_age_years']) return "Age calculated from {$field->label} may not be more than {$rules['max_age_years']} years.";
+            }
+        }
+        return null;
+    }
+
+    private function validateComparison(CollegeAdmissionFormField $field, mixed $value, array $values): ?string
+    {
+        $field->loadMissing('comparisonRule.sourceField');
+        $rule = $field->comparisonRule;
+        if (! $rule || ! $rule->is_active) return null;
+        $other = $values[$rule->source_field_id] ?? null;
+        if ($this->blankValue($other)) return null;
+
+        if ($field->field_type === 'NUMBER') {
+            if (! is_numeric($value) || ! is_numeric($other)) return "{$field->label} and {$rule->sourceField->label} must contain valid numbers.";
+            $left = (float) $value; $right = (float) $other;
+        } elseif ($field->field_type === 'DATE') {
+            $leftDate = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $value);
+            $rightDate = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $other);
+            if (! $leftDate || ! $rightDate) return "{$field->label} and {$rule->sourceField->label} must contain valid dates.";
+            $left = $leftDate->getTimestamp(); $right = $rightDate->getTimestamp();
+        } else return null;
+
+        $passes = match ($rule->operator) {
+            'LT' => $left < $right, 'LTE' => $left <= $right, 'GT' => $left > $right,
+            'GTE' => $left >= $right, 'EQ' => $left == $right, 'NEQ' => $left != $right,
+            default => true,
+        };
+        if ($passes) return null;
+        $symbol = ['LT'=>'<','LTE'=>'≤','GT'=>'>','GTE'=>'≥','EQ'=>'=','NEQ'=>'≠'][$rule->operator] ?? $rule->operator;
+        return "{$field->label} must be {$symbol} {$rule->sourceField->label}.";
+    }
+
     private function allFields(CollegeAdmissionFormTemplate $template): Collection
     {
         $own = $template->steps->flatMap(fn ($step) => $step->fields);
@@ -191,8 +295,8 @@ class CollegeAdmissionDynamicFieldService
     private function templateRelations(): array
     {
         return [
-            'parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes',
-            'steps.fields.options','steps.fields.conditions','steps.fields.scopes',
+            'parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes','parent.steps.fields.comparisonRule.sourceField','parent.steps.fields.copyRule.sourceField','parent.steps.fields.copyRule.triggerField',
+            'steps.fields.options','steps.fields.conditions','steps.fields.scopes','steps.fields.comparisonRule.sourceField','steps.fields.copyRule.sourceField','steps.fields.copyRule.triggerField',
         ];
     }
 

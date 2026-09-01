@@ -163,3 +163,15 @@ College Admission Form Setup now recursively normalizes optional nested Eloquent
 - Final Review & Submit preview added.
 - New tables persist applicant academic preference and course selections independently of seat allocation.
 - Governing decision: ADR 043.
+
+## Admission Form advanced dynamic field rules + builder runtime stabilization — 2026-09-01
+- Admission Form fields now support generic intrinsic validation: text minimum/maximum/exact length and number minimum/maximum/whole-number/decimal-place constraints.
+- Generic cross-field comparisons support compatible NUMBER-to-NUMBER and DATE-to-DATE fields with `<`, `<=`, `>`, `>=`, `=` and `!=`; backend validation remains authoritative. Example use case: Obtained Marks <= Total Marks.
+- Generic copy behavior supports copying a compatible source field into a target when a configured trigger matches, including optional target locking. Address copying is a configuration use case, not a hard-coded address feature.
+- Any DATE field may use dynamic minimum/maximum age rules with current-date or custom-cutoff reference; rules are not tied to DOB or a named field.
+- Panel and Field display order are configurable within a Step; lower values render first and existing automatic ordering remains the fallback when order is omitted.
+- Add/Edit Field collection discovery is defensive against nullable/malformed hydrated `steps`, `fields` and `panels` arrays.
+- Restored the missing `AcademicSelect` runtime helper used by Academic Applicability after browser QA identified `ReferenceError: AcademicSelect is not defined` when opening Add Field. SSR was healthy; this was a client-dialog render regression.
+- ACTIVE/RETIRED templates remain structurally frozen; these rules are configured only while the owning template is DRAFT.
+- Status: IMPLEMENTED / OWNER_QA_REQUIRED.
+- Governing decisions: ADR 061, 062, 063, 064 and 065.
