@@ -225,6 +225,24 @@ class CollegeAdmissionDynamicFieldService
             if (isset($rules['exact_length']) && $length !== (int) $rules['exact_length']) return "{$field->label} must be exactly {$rules['exact_length']} characters.";
             if (isset($rules['min_length']) && $length < (int) $rules['min_length']) return "{$field->label} must be at least {$rules['min_length']} characters.";
             if (isset($rules['max_length']) && $length > (int) $rules['max_length']) return "{$field->label} may not be longer than {$rules['max_length']} characters.";
+            if (in_array($field->field_type, ['TEXT','TEXTAREA'], true)) {
+                $mode = $rules['text_input_mode'] ?? 'ANY';
+                $pattern = match ($mode) {
+                    'LETTERS_ONLY' => '/^[\p{L}\p{M}]+(?:[ \'-][\p{L}\p{M}]+)*$/u',
+                    'DIGITS_ONLY' => '/^\d+$/u',
+                    'ALPHANUMERIC' => '/^[\p{L}\p{M}\p{N}]+$/u',
+                    default => null,
+                };
+                if ($text !== '' && $pattern && ! preg_match($pattern, $text)) {
+                    $description = match ($mode) {
+                        'LETTERS_ONLY' => 'letters only',
+                        'DIGITS_ONLY' => 'digits only',
+                        'ALPHANUMERIC' => 'letters and numbers only',
+                        default => 'the configured format',
+                    };
+                    return "{$field->label} must contain {$description}.";
+                }
+            }
             if ($field->field_type === 'EMAIL' && ! filter_var($text, FILTER_VALIDATE_EMAIL)) return "Enter a valid email address for {$field->label}.";
         }
 

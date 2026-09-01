@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\College;
 use App\Models\CollegeAdmissionSelectionRule;
+use App\Models\CollegeAdmissionFormField;
+use App\Models\CollegeAdmissionFormMapping;
 use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationPlan;
 use Illuminate\Support\Arr;
@@ -26,6 +28,7 @@ class CollegeAdmissionSelectionRuleService
         );
         $this->validateWeights($data);
         $this->validateThresholds($data);
+        $this->validateMeritSources($college, $intake, $data);
         $this->validateTieBreakers($data['tie_breakers'] ?? []);
 
         return DB::transaction(function () use ($college, $intake, $bucket, $plan, $data, $actorId, $ip) {
@@ -48,8 +51,9 @@ class CollegeAdmissionSelectionRuleService
                 'updated_by' => $actorId,
             ]);
 
+            $this->replaceMeritSources($rule, $data['merit_sources'] ?? []);
             $this->replaceTieBreakers($rule, $data['tie_breakers'] ?? []);
-            $rule->load('tieBreakers');
+            $rule->load(['meritSources.obtainedField','meritSources.maximumField','tieBreakers']);
 
             $this->audit('COLLEGE_ADMISSION_SELECTION_RULE_CREATED', $rule, $college, $actorId, $ip, null, $rule->toArray());
             return $rule;
@@ -65,17 +69,20 @@ class CollegeAdmissionSelectionRuleService
         }
         $this->validateWeights($data);
         $this->validateThresholds($data);
+        $intake = $rule->intake()->with('offering')->firstOrFail();
+        $this->validateMeritSources($college, $intake, $data);
         $this->validateTieBreakers($data['tie_breakers'] ?? []);
 
         return DB::transaction(function () use ($rule, $college, $data, $actorId, $ip) {
-            $before = $rule->load('tieBreakers')->toArray();
+            $before = $rule->load(['meritSources.obtainedField','meritSources.maximumField','tieBreakers'])->toArray();
             $rule->fill($this->mainRuleData($data));
             $rule->minimum_qualifying_score = null;
             $rule->updated_by = $actorId;
             $rule->save();
 
+            $this->replaceMeritSources($rule, $data['merit_sources'] ?? []);
             $this->replaceTieBreakers($rule, $data['tie_breakers'] ?? []);
-            $rule->load('tieBreakers');
+            $rule->load(['meritSources.obtainedField','meritSources.maximumField','tieBreakers']);
 
             $this->audit('COLLEGE_ADMISSION_SELECTION_RULE_UPDATED', $rule, $college, $actorId, $ip, $before, $rule->toArray());
             return $rule;
@@ -97,9 +104,12 @@ class CollegeAdmissionSelectionRuleService
             ]);
         }
 
-        $rule->load('tieBreakers');
+        $rule->load(['meritSources','tieBreakers']);
         $this->validateWeights($rule->toArray());
         $this->validateThresholds($rule->toArray());
+        $activationData = $rule->toArray();
+        $activationData['merit_sources'] = $rule->meritSources->toArray();
+        $this->validateMeritSources($college, $intake, $activationData);
         $this->validateTieBreakers($rule->tieBreakers->toArray(), true);
 
         return DB::transaction(function () use ($rule, $college, $plan, $actorId, $ip) {
@@ -203,6 +213,65 @@ class CollegeAdmissionSelectionRuleService
             'tie_breaker_rules' => $data['tie_breaker_rules'] ?? null,
             'notes' => $data['notes'] ?? null,
         ];
+    }
+
+    private function replaceMeritSources(CollegeAdmissionSelectionRule $rule, array $sources): void
+    {
+        $rule->meritSources()->delete();
+        foreach (array_values($sources) as $index => $source) {
+            $rule->meritSources()->create([
+                'label' => trim((string) $source['label']),
+                'source_type' => 'FORM_FIELD_PAIR',
+                'obtained_field_id' => (int) $source['obtained_field_id'],
+                'maximum_field_id' => (int) $source['maximum_field_id'],
+                'weight_percent' => (float) $source['weight_percent'],
+                'display_order' => ($index + 1) * 10,
+            ]);
+        }
+    }
+
+    private function validateMeritSources(College $college, CollegeProgramIntake $intake, array $data): void
+    {
+        $sources = array_values($data['merit_sources'] ?? []);
+        $meritWeight = (float) ($data['merit_weight_percent'] ?? 0);
+        if ($meritWeight <= 0 && $sources !== []) {
+            throw ValidationException::withMessages(['merit_sources' => 'Merit source mapping can be configured only when Merit has a positive Selection weight.']);
+        }
+        if ($sources === []) return; // backwards-compatible manual Score Capture.
+
+        $total = array_sum(array_map(fn ($item) => (float) ($item['weight_percent'] ?? 0), $sources));
+        if (abs($total - 100) > 0.001) {
+            throw ValidationException::withMessages(['merit_sources' => 'Mapped Merit source weights must total exactly 100%.']);
+        }
+
+        $offeringId = (int) $intake->college_program_offering_id;
+        $templateIds = CollegeAdmissionFormMapping::query()
+            ->where('college_id', $college->id)
+            ->where('college_program_offering_id', $offeringId)
+            ->where('status', 'ACTIVE')
+            ->pluck('college_admission_form_template_id');
+        if ($templateIds->isEmpty()) {
+            throw ValidationException::withMessages(['merit_sources' => 'No ACTIVE Admission Form is mapped to this Program Offering, so dynamic Merit fields cannot be linked.']);
+        }
+
+        $fieldIds = collect($sources)->flatMap(fn ($item) => [(int)$item['obtained_field_id'], (int)$item['maximum_field_id']])->unique()->values();
+        $valid = CollegeAdmissionFormField::query()
+            ->whereIn('id', $fieldIds)
+            ->where('field_type', 'NUMBER')
+            ->where('status', 'ACTIVE')
+            ->whereHas('step', fn ($q) => $q->whereIn('college_admission_form_template_id', $templateIds))
+            ->pluck('id')->map(fn ($id)=>(int)$id)->all();
+        $validSet = array_fill_keys($valid, true);
+        foreach ($sources as $index => $source) {
+            $obtained = (int)$source['obtained_field_id'];
+            $maximum = (int)$source['maximum_field_id'];
+            if (!isset($validSet[$obtained]) || !isset($validSet[$maximum])) {
+                throw ValidationException::withMessages(["merit_sources.$index.obtained_field_id" => 'Both Merit source fields must be ACTIVE NUMBER fields from the Admission Form mapped to this Program Offering.']);
+            }
+            if ($obtained === $maximum) {
+                throw ValidationException::withMessages(["merit_sources.$index.maximum_field_id" => 'Obtained and Maximum fields must be different.']);
+            }
+        }
     }
 
     private function replaceTieBreakers(CollegeAdmissionSelectionRule $rule, array $tieBreakers): void

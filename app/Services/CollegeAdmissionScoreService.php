@@ -13,7 +13,7 @@ class CollegeAdmissionScoreService
 {
     public function upsert(College $college, CollegeAdmissionApplicationChoice $choice, array $data, int $actorId, ?string $ip): CollegeAdmissionScore
     {
-        $choice->load(['application','selectionRule']);
+        $choice->load(['application.fieldValues','selectionRule.meritSources.obtainedField','selectionRule.meritSources.maximumField']);
         $application = $choice->application;
         $rule = $choice->selectionRule;
 
@@ -28,7 +28,12 @@ class CollegeAdmissionScoreService
         $entranceRequired = (float)$rule->entrance_weight_percent > 0;
         $interviewRequired = (float)$rule->interview_weight_percent > 0;
 
-        [$meritRaw,$meritMax,$meritNorm] = $this->component('Merit / qualifying', $meritRequired, $data['merit_raw_score'] ?? null, $data['merit_max_score'] ?? null);
+        $meritSnapshot = null;
+        if ($meritRequired && $rule->meritSources->isNotEmpty()) {
+            [$meritRaw,$meritMax,$meritNorm,$meritSnapshot] = $this->mappedMerit($application, $rule->meritSources);
+        } else {
+            [$meritRaw,$meritMax,$meritNorm] = $this->component('Merit / qualifying', $meritRequired, $data['merit_raw_score'] ?? null, $data['merit_max_score'] ?? null);
+        }
         [$entranceRaw,$entranceMax,$entranceNorm] = $this->component('Entrance', $entranceRequired, $data['entrance_raw_score'] ?? null, $data['entrance_max_score'] ?? null);
 
         $existing = CollegeAdmissionScore::where('college_admission_application_choice_id', $choice->id)->first();
@@ -36,14 +41,14 @@ class CollegeAdmissionScoreService
 
         [$qualificationStatus,$reason,$final] = $this->evaluate($rule, $meritNorm, $entranceNorm, $interviewNorm, $interviewRequired);
 
-        return DB::transaction(function () use ($application,$choice,$rule,$data,$actorId,$ip,$meritRaw,$meritMax,$meritNorm,$entranceRaw,$entranceMax,$entranceNorm,$interviewNorm,$qualificationStatus,$reason,$final,$existing) {
+        return DB::transaction(function () use ($application,$choice,$rule,$data,$actorId,$ip,$meritRaw,$meritMax,$meritNorm,$meritSnapshot,$entranceRaw,$entranceMax,$entranceNorm,$interviewNorm,$qualificationStatus,$reason,$final,$existing) {
             $before = $existing?->toArray();
             $score = CollegeAdmissionScore::updateOrCreate(
                 ['college_admission_application_choice_id'=>$choice->id],
                 [
                     'college_admission_application_id'=>$application->id,
                     'college_admission_selection_rule_id'=>$rule->id,
-                    'merit_raw_score'=>$meritRaw,'merit_max_score'=>$meritMax,'merit_normalized_score'=>$meritNorm,
+                    'merit_raw_score'=>$meritRaw,'merit_max_score'=>$meritMax,'merit_normalized_score'=>$meritNorm,'merit_source_snapshot'=>$meritSnapshot,
                     'entrance_raw_score'=>$entranceRaw,'entrance_max_score'=>$entranceMax,'entrance_normalized_score'=>$entranceNorm,
                     'interview_normalized_score'=>$interviewNorm,'final_weighted_score'=>$final,
                     'qualification_status'=>$qualificationStatus,'qualification_reason'=>$reason,
@@ -69,6 +74,37 @@ class CollegeAdmissionScoreService
         $score->update(['interview_normalized_score'=>$interviewNormalized,'final_weighted_score'=>$final,'qualification_status'=>$status,'qualification_reason'=>$reason,'updated_by'=>$actorId]);
         $this->audit($score,(int)$application->college_id,$actorId,$ip,$before,$score->fresh()->toArray());
         return $score->fresh();
+    }
+
+    private function mappedMerit($application, $sources): array
+    {
+        $values = $application->fieldValues->keyBy('college_admission_form_field_id');
+        $snapshot = [];
+        $weighted = 0.0;
+        foreach ($sources as $source) {
+            $rawValue = $values->get($source->obtained_field_id)?->value_text;
+            $maxValue = $values->get($source->maximum_field_id)?->value_text;
+            if ($rawValue === null || $rawValue === '' || $maxValue === null || $maxValue === '') {
+                throw ValidationException::withMessages(['score' => "Mapped Merit source '{$source->label}' is incomplete in the submitted Admission Form."]);
+            }
+            if (!is_numeric($rawValue) || !is_numeric($maxValue)) {
+                throw ValidationException::withMessages(['score' => "Mapped Merit source '{$source->label}' must contain numeric Admission Form values."]);
+            }
+            $raw=(float)$rawValue; $max=(float)$maxValue;
+            if ($max <= 0 || $raw < 0 || $raw > $max) {
+                throw ValidationException::withMessages(['score' => "Mapped Merit source '{$source->label}' has invalid obtained/maximum marks."]);
+            }
+            $normalized=round(($raw/$max)*100,3);
+            $weight=(float)$source->weight_percent;
+            $weighted += $normalized*$weight/100;
+            $snapshot[]=[
+                'source_id'=>$source->id,'label'=>$source->label,'obtained_field_id'=>$source->obtained_field_id,
+                'maximum_field_id'=>$source->maximum_field_id,'raw_score'=>$raw,'maximum_score'=>$max,
+                'normalized_score'=>$normalized,'weight_percent'=>$weight,
+            ];
+        }
+        $merit=round($weighted,3);
+        return [$merit,100.0,$merit,$snapshot];
     }
 
     private function component(string $label, bool $required, mixed $raw, mixed $max): array

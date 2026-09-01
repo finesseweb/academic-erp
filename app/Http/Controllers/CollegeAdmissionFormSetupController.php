@@ -18,6 +18,7 @@ use App\Models\ProgramTemplate;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use App\Services\CollegeAdmissionFieldRuleService;
+use App\Services\CollegeAdmissionFormOptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -212,10 +213,10 @@ class CollegeAdmissionFormSetupController extends Controller
                 'validation_rules'=>$fieldRuleService->intrinsicRules($data, $data['field_type']),
                 'status'=>'ACTIVE',
             ]);
-            $options=[];
-            if ($data['field_type']==='YES_NO') $options=[['Yes','YES'],['No','NO']];
-            elseif (filled($data['options']??null)) foreach (preg_split('/\r\n|\r|\n|,/', $data['options']) as $raw) { $label=trim($raw); if($label!=='')$options[]=[$label,Str::slug($label,'_')]; }
-            foreach($options as $i=>[$label,$value]) $field->options()->create(['label'=>$label,'value'=>$value,'display_order'=>($i+1)*10,'is_active'=>true]);
+            $options = app(CollegeAdmissionFormOptionService::class)->build($data['field_type'], $data['options'] ?? null);
+            foreach ($options as $i => [$label, $value]) {
+                $field->options()->create(['label'=>$label,'value'=>$value,'display_order'=>($i+1)*10,'is_active'=>true]);
+            }
             $scope = collect(['degree_level_id','degree_id','program_template_id','college_program_offering_id','curriculum_id','college_admission_cycle_id'])->mapWithKeys(fn($key)=>[$key=>$data[$key]??null])->all();
             if (collect($scope)->filter(fn($v)=>filled($v))->isNotEmpty()) $field->scopes()->create([...$scope,'is_active'=>true]);
             if ($sourceField) $field->conditions()->create(['source_field_id'=>$sourceField->id,'operator'=>$data['condition_operator']??'EQUALS','compare_values'=>in_array($data['condition_operator']??'EQUALS',['IS_EMPTY','IS_NOT_EMPTY'],true)?[]:$this->canonicalConditionValues($sourceField, $this->splitValues($data['condition_values']??'')),'display_order'=>10,'is_active'=>true]);

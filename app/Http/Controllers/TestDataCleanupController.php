@@ -79,6 +79,9 @@ class TestDataCleanupController extends Controller
                 'fullReset' =>
                     $this->service
                         ->fullAcademicResetPreview($university->id),
+                'legacyUnlinkedRegularApplications' =>
+                    $this->service
+                        ->legacyUnlinkedRegularApplicationsPreview($university->id),
             ]
         );
     }
@@ -204,6 +207,39 @@ class TestDataCleanupController extends Controller
             'success',
             'Full academic test data reset completed in dependency-safe order. System core and access data were preserved.'
         );
+    }
+
+
+    public function cleanupLegacyUnlinkedRegularApplications(
+        Request $request
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+
+        $university = University::query()->firstOrFail();
+
+        $request->validate([
+            'confirmation_code' => ['required', 'string', 'max:120'],
+        ]);
+
+        $expected = 'CLEAN-UNLINKED-REGULAR-APPLICATIONS';
+        if (trim((string) $request->input('confirmation_code')) !== $expected) {
+            throw ValidationException::withMessages([
+                'confirmation_code' =>
+                    'Type CLEAN-UNLINKED-REGULAR-APPLICATIONS exactly to clean legacy unlinked Regular applications.',
+            ]);
+        }
+
+        $result = $this->service->cleanupLegacyUnlinkedRegularApplications(
+            $university->id,
+            $request->user()->id
+        );
+
+        $message = $result['deleted'].' legacy unlinked Regular application(s) cleaned successfully.';
+        if (($result['blocked'] ?? 0) > 0) {
+            $message .= ' '.$result['blocked'].' record(s) were preserved because downstream processing references exist.';
+        }
+
+        return back()->with('success', $message);
     }
 
     public function destroyMaster(

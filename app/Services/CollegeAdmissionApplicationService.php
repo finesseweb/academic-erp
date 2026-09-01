@@ -11,7 +11,6 @@ use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationPlan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CollegeAdmissionApplicationService
@@ -28,8 +27,12 @@ class CollegeAdmissionApplicationService
     {
         $this->assertCollegeActive($college);
         $cycle = $this->activeCycle($college, (int) $data['college_admission_cycle_id']);
-        $admissionMode = $data['admission_mode'] ?? 'REGULAR';
-        $contexts = isset($data['choices']) ? $this->resolveChoices($college, $cycle, $data['choices'], $admissionMode) : [];
+        $admissionMode = strtoupper((string) ($data['admission_mode'] ?? 'REGULAR'));
+        $this->formResolver->assertAdmissionModeAllowed($college, $cycle, $admissionMode);
+        // Application capture must not expose or persist seat-bucket choices.
+        // REGULAR processing context is resolved and locked only on Submit from the saved academic preference;
+        // DIRECT applications bypass Selection Rule processing and are allocated downstream.
+        $contexts = [];
         $academicPreference = $this->academicPreferenceService->resolve($cycle, $data['academic_preference'] ?? []);
         $template = $this->formResolver->resolveTemplate($college, $cycle, $admissionMode);
         $customValues = $template ? $this->dynamicFieldService->validateAndNormalize($template, $cycle, $data['custom_fields'] ?? []) : [];
@@ -40,7 +43,7 @@ class CollegeAdmissionApplicationService
                 'college_id' => $college->id,
                 'applicant_user_id' => $data['applicant_user_id'] ?? null,
                 'college_admission_cycle_id' => $cycle->id,
-                'application_no' => 'PENDING-'.Str::uuid(),
+                'application_no' => $this->allocateApplicationNumber($college, $cycle),
                 'college_admission_form_template_id' => $template?->id,
                 'admission_mode' => $admissionMode,
                 'entry_source' => $entrySource,
@@ -55,9 +58,6 @@ class CollegeAdmissionApplicationService
                 'updated_by' => $actorId,
             ]);
 
-            $application->update([
-                'application_no' => strtoupper($college->code.'-'.$cycle->code.'-'.str_pad((string) $application->id, 6, '0', STR_PAD_LEFT)),
-            ]);
 
             $this->replaceChoices($application, $contexts);
             $this->academicPreferenceService->persist($application, $academicPreference);
@@ -76,8 +76,9 @@ class CollegeAdmissionApplicationService
         $this->assertDraft($application);
 
         $cycle = $this->activeCycle($college, (int) $data['college_admission_cycle_id']);
-        $admissionMode = $data['admission_mode'] ?? $application->admission_mode ?? 'REGULAR';
-        $contexts = isset($data['choices']) ? $this->resolveChoices($college, $cycle, $data['choices'], $admissionMode) : [];
+        $admissionMode = strtoupper((string) ($data['admission_mode'] ?? $application->admission_mode ?? 'REGULAR'));
+        $this->formResolver->assertAdmissionModeAllowed($college, $cycle, $admissionMode);
+        $contexts = [];
         $academicPreference = $this->academicPreferenceService->resolve($cycle, $data['academic_preference'] ?? []);
         $template = $this->formResolver->resolveTemplate($college, $cycle, $admissionMode);
         $customValues = $template ? $this->dynamicFieldService->validateAndNormalize($template, $cycle, $data['custom_fields'] ?? [], $application) : [];
@@ -132,9 +133,12 @@ class CollegeAdmissionApplicationService
             'college_program_intake_id' => $choice->college_program_intake_id,
             'bucket_key' => $choice->bucket_key,
         ])->all();
+        $admissionMode = strtoupper((string) ($application->admission_mode ?? 'REGULAR'));
         $contexts = $choiceInput
-            ? $this->resolveChoices($college, $cycle, $choiceInput, $application->admission_mode ?? 'REGULAR')
-            : [];
+            ? $this->resolveChoices($college, $cycle, $choiceInput, $admissionMode)
+            : ($admissionMode === 'REGULAR'
+                ? $this->resolveRegularProcessingContextFromAcademicPreference($application, $college, $cycle)
+                : []);
 
         return DB::transaction(function () use ($application, $college, $contexts, $actorId, $ip) {
             $before = $application->load('choices')->toArray();
@@ -209,6 +213,51 @@ class CollegeAdmissionApplicationService
         });
     }
 
+    private function allocateApplicationNumber(College $college, CollegeAdmissionCycle $cycle): string
+    {
+        $sequenceTable = 'college_admission_application_sequences';
+
+        if (! Schema::hasTable($sequenceTable)) {
+            throw ValidationException::withMessages([
+                'application' => 'Admission Application numbering is not initialized. Run the latest database migrations and try again.',
+            ]);
+        }
+
+        $existingMax = (int) (DB::table('college_admission_applications')
+            ->where('college_id', $college->id)
+            ->where('college_admission_cycle_id', $cycle->id)
+            ->selectRaw('COALESCE(MAX(CAST(RIGHT(application_no, 6) AS UNSIGNED)), 0) as max_sequence')
+            ->value('max_sequence') ?? 0);
+
+        DB::table($sequenceTable)->insertOrIgnore([
+            'college_id' => $college->id,
+            'college_admission_cycle_id' => $cycle->id,
+            'next_number' => $existingMax + 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $sequence = DB::table($sequenceTable)
+            ->where('college_id', $college->id)
+            ->where('college_admission_cycle_id', $cycle->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $sequence) {
+            throw ValidationException::withMessages([
+                'application' => 'Admission Application number could not be allocated. Please retry.',
+            ]);
+        }
+
+        $number = max(1, (int) $sequence->next_number);
+        DB::table($sequenceTable)->where('id', $sequence->id)->update([
+            'next_number' => $number + 1,
+            'updated_at' => now(),
+        ]);
+
+        return strtoupper($college->code.'-'.$cycle->code.'-'.str_pad((string) $number, 6, '0', STR_PAD_LEFT));
+    }
+
     private function resolveChoices(College $college, CollegeAdmissionCycle $cycle, array $choices, string $admissionMode = 'REGULAR'): array
     {
         $seen = [];
@@ -274,6 +323,132 @@ class CollegeAdmissionApplicationService
         }
 
         return $resolved;
+    }
+
+    /**
+     * Link a REGULAR application to its downstream eligibility/selection context
+     * without asking the applicant to choose a seat bucket and without checking
+     * remaining seat capacity. The applicant-facing academic preference decides
+     * the discipline/specialization scope; Intake + ACTIVE Selection Rule decide
+     * the processing context used by Eligibility -> Score/Interview -> Merit.
+     */
+    private function resolveRegularProcessingContextFromAcademicPreference(
+        CollegeAdmissionApplication $application,
+        College $college,
+        CollegeAdmissionCycle $cycle,
+    ): array {
+        $preference = DB::table('college_admission_application_academic_preferences')
+            ->where('college_admission_application_id', $application->id)
+            ->first(['discipline_id', 'specialization_id']);
+
+        if (! $preference) {
+            throw ValidationException::withMessages([
+                'application' => 'Regular Admission cannot enter Eligibility because its academic preference is missing. Review the application setup and submit again.',
+            ]);
+        }
+
+        $disciplineId = $preference->discipline_id ? (int) $preference->discipline_id : null;
+        $specializationId = $preference->specialization_id ? (int) $preference->specialization_id : null;
+
+        $intakes = CollegeProgramIntake::query()
+            ->with(['offering', 'allocations'])
+            ->where('college_program_offering_id', $cycle->college_program_offering_id)
+            ->where('status', 'ACTIVE')
+            ->get();
+
+        $matches = collect();
+
+        foreach ($intakes as $intake) {
+            foreach ($this->reservationService->availableBuckets($intake) as $bucket) {
+                if (! $this->bucketMatchesAcademicPreference($intake, $bucket, $disciplineId, $specializationId)) {
+                    continue;
+                }
+
+                $plan = CollegeProgramReservationPlan::query()
+                    ->where('college_program_intake_id', $intake->id)
+                    ->where('bucket_key', $bucket['bucket_key'])
+                    ->first();
+
+                if ($plan && $plan->status !== 'ACTIVE') {
+                    continue;
+                }
+
+                $rule = CollegeAdmissionSelectionRule::query()
+                    ->where('college_program_intake_id', $intake->id)
+                    ->where('bucket_key', $bucket['bucket_key'])
+                    ->where('status', 'ACTIVE')
+                    ->orderByDesc('version_no')
+                    ->first();
+
+                if (! $rule) {
+                    continue;
+                }
+
+                if ((int) ($rule->college_program_reservation_plan_id ?? 0) !== (int) ($plan?->id ?? 0)) {
+                    continue;
+                }
+
+                $matches->push([
+                    'preference_no' => 1,
+                    'college_program_intake_id' => $intake->id,
+                    'college_program_reservation_plan_id' => $plan?->id,
+                    'college_admission_selection_rule_id' => $rule->id,
+                    'bucket_type' => $bucket['bucket_type'],
+                    'bucket_key' => $bucket['bucket_key'],
+                    'basis_capacity' => (int) $bucket['basis_capacity'],
+                ]);
+            }
+        }
+
+        if ($matches->isEmpty()) {
+            throw ValidationException::withMessages([
+                'application' => 'Regular Admission is not ready for Eligibility. Configure one ACTIVE Intake and ACTIVE Merit / Roster / Selection Rule matching this applicant\'s Program, Discipline and Specialization. Seat availability is not checked at application submission.',
+            ]);
+        }
+
+        if ($matches->count() > 1) {
+            throw ValidationException::withMessages([
+                'application' => 'Regular Admission has more than one valid Eligibility processing context for this Program / Discipline / Specialization. Keep only one applicable ACTIVE Intake + Selection Rule path before accepting applications.',
+            ]);
+        }
+
+        return [$matches->first()];
+    }
+
+    private function bucketMatchesAcademicPreference(
+        CollegeProgramIntake $intake,
+        array $bucket,
+        ?int $disciplineId,
+        ?int $specializationId,
+    ): bool {
+        if ($intake->allocation_mode === 'PROGRAM') {
+            return $bucket['bucket_type'] === 'PROGRAM';
+        }
+
+        $disciplineAllocationId = $bucket['discipline_allocation_id'] ?? null;
+        if (! $disciplineAllocationId || ! $disciplineId) {
+            return false;
+        }
+
+        $disciplineAllocation = $intake->allocations->firstWhere('id', (int) $disciplineAllocationId);
+        if (! $disciplineAllocation || (int) $disciplineAllocation->discipline_id !== $disciplineId) {
+            return false;
+        }
+
+        if ($specializationId) {
+            if ($bucket['bucket_type'] !== 'SPECIALIZATION') {
+                return false;
+            }
+            $specializationAllocationId = $bucket['specialization_allocation_id'] ?? null;
+            $specializationAllocation = $specializationAllocationId
+                ? $intake->allocations->firstWhere('id', (int) $specializationAllocationId)
+                : null;
+
+            return $specializationAllocation
+                && (int) $specializationAllocation->specialization_id === $specializationId;
+        }
+
+        return $bucket['bucket_type'] === 'DISCIPLINE_GENERAL';
     }
 
     private function replaceChoices(CollegeAdmissionApplication $application, array $contexts): void

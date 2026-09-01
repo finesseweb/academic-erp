@@ -7,6 +7,7 @@ use App\Models\CollegeAdmissionCycle;
 use App\Models\CollegeAdmissionFormMapping;
 use App\Models\CollegeAdmissionFormTemplate;
 use App\Models\CollegeApplicationFeeRule;
+use App\Models\ProgramTemplate;
 
 class CollegeAdmissionFormResolver
 {
@@ -14,10 +15,19 @@ class CollegeAdmissionFormResolver
 
     public function resolveTemplate(College $college, CollegeAdmissionCycle $cycle, string $admissionMode = 'REGULAR'): ?CollegeAdmissionFormTemplate
     {
-        $cycle->loadMissing('programOffering.programTemplate.degree');
+        $cycle->loadMissing('programOffering');
         $offering = $cycle->programOffering;
-        if (! $offering || ! $offering->programTemplate) return null;
-        $program = $offering->programTemplate;
+        if (! $offering) return null;
+
+        // Resolve the Program Template from its authoritative id instead of trusting a
+        // possibly partially-selected eager-loaded relation. Some Admission pages load
+        // programTemplate with only id/name/code for display; in that state degree_id is
+        // absent and degree-scoped Form Mappings would incorrectly look unresolved.
+        $programTemplateId = $offering->program_template_id ?: $offering->programTemplate?->id;
+        $program = $programTemplateId
+            ? ProgramTemplate::query()->with('degree:id,degree_level_id')->find($programTemplateId)
+            : null;
+        if (! $program) return null;
         $degree = $program->degree;
 
         $mapping = CollegeAdmissionFormMapping::query()
@@ -38,11 +48,52 @@ class CollegeAdmissionFormResolver
         return $mapping?->template;
     }
 
+    /**
+     * Return the application routes currently allowed by the mapped ACTIVE Admission Form.
+     * If no dynamic form is mapped at all, the legacy/core-only application capture remains
+     * available for both routes. Once a form is mapped, its admission_mode is authoritative.
+     *
+     * @return array<int, string>
+     */
+    public function allowedAdmissionModes(College $college, CollegeAdmissionCycle $cycle): array
+    {
+        $regular = $this->resolveTemplate($college, $cycle, 'REGULAR');
+        $direct = $this->resolveTemplate($college, $cycle, 'DIRECT');
+
+        if (! $regular && ! $direct) {
+            return ['REGULAR', 'DIRECT'];
+        }
+
+        $modes = [];
+        if ($regular) $modes[] = 'REGULAR';
+        if ($direct) $modes[] = 'DIRECT';
+
+        return $modes;
+    }
+
+    public function assertAdmissionModeAllowed(College $college, CollegeAdmissionCycle $cycle, string $admissionMode): void
+    {
+        $mode = strtoupper($admissionMode);
+        $allowed = $this->allowedAdmissionModes($college, $cycle);
+        if (in_array($mode, $allowed, true)) return;
+
+        $label = $allowed === ['REGULAR']
+            ? 'Regular / Selection Based only'
+            : ($allowed === ['DIRECT'] ? 'Direct Admission only' : implode(' / ', $allowed));
+
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            'admission_mode' => "The mapped Admission Form allows {$label}. The selected admission route is not permitted for this template.",
+        ]);
+    }
+
     public function resolveFee(College $college, CollegeAdmissionCycle $cycle): array
     {
-        $cycle->loadMissing('programOffering.programTemplate.degree');
+        $cycle->loadMissing('programOffering');
         $offering = $cycle->programOffering;
-        $program = $offering?->programTemplate;
+        $programTemplateId = $offering?->program_template_id ?: $offering?->programTemplate?->id;
+        $program = $programTemplateId
+            ? ProgramTemplate::query()->with('degree:id,degree_level_id')->find($programTemplateId)
+            : null;
         $degree = $program?->degree;
         if (! $offering || ! $program) return ['rule' => null, 'required' => false, 'amount' => '0.00', 'currency' => 'INR'];
 
@@ -70,7 +121,7 @@ class CollegeAdmissionFormResolver
     public function templatePayload(?CollegeAdmissionFormTemplate $template, ?CollegeAdmissionCycle $cycle = null): ?array
     {
         if (! $template) return null;
-        $template->loadMissing(['parent.steps.panels','parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes','parent.steps.fields.comparisonRule.sourceField','parent.steps.fields.copyRule.sourceField','parent.steps.fields.copyRule.triggerField','steps.panels','steps.fields.options','steps.fields.conditions','steps.fields.scopes','steps.fields.comparisonRule.sourceField','steps.fields.copyRule.sourceField','steps.fields.copyRule.triggerField']);
+        $template->loadMissing(['parent.steps.panels','parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes','steps.panels','steps.fields.options','steps.fields.conditions','steps.fields.scopes']);
 
         $ownSteps = $template->steps->where('status', 'ACTIVE')->map(function ($step) use ($template, $cycle) {
             $fields = $step->fields->where('status', 'ACTIVE');
@@ -84,8 +135,6 @@ class CollegeAdmissionFormResolver
                     'id' => $field->id, 'field_key' => $field->field_key, 'label' => $field->label, 'field_type' => $field->field_type,
                     'placeholder' => $field->placeholder, 'help_text' => $field->help_text, 'is_required' => $field->is_required, 'college_admission_form_panel_id'=>$field->college_admission_form_panel_id,
                     'validation_rules' => $field->validation_rules, 'condition_match_mode' => $field->condition_match_mode ?? 'ALL',
-                    'comparison_rule' => $field->comparisonRule ? ['source_field_id'=>$field->comparisonRule->source_field_id,'source_field_label'=>$field->comparisonRule->sourceField?->label,'operator'=>$field->comparisonRule->operator] : null,
-                    'copy_rule' => $field->copyRule ? ['source_field_id'=>$field->copyRule->source_field_id,'source_field_label'=>$field->copyRule->sourceField?->label,'trigger_field_id'=>$field->copyRule->trigger_field_id,'trigger_field_label'=>$field->copyRule->triggerField?->label,'trigger_values'=>array_values($field->copyRule->trigger_values??[]),'read_only'=>(bool)$field->copyRule->is_read_only_when_active] : null,
                     'conditions' => $field->conditions->where('is_active', true)->map(fn ($condition) => [
                         'source_field_id' => $condition->source_field_id,
                         'operator' => $condition->operator,

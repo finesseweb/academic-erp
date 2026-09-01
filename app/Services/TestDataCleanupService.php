@@ -576,6 +576,132 @@ class TestDataCleanupService
         });
     }
 
+
+    public function legacyUnlinkedRegularApplicationsPreview(int $universityId): array
+    {
+        if (! Schema::hasTable('college_admission_applications')) {
+            return [
+                'confirmation_code' => 'CLEAN-UNLINKED-REGULAR-APPLICATIONS',
+                'total' => 0,
+                'cleanable' => 0,
+                'blocked' => 0,
+            ];
+        }
+
+        $rows = DB::table('college_admission_applications as a')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->where('a.admission_mode', 'REGULAR')
+            ->where('a.status', 'SUBMITTED')
+            ->when(
+                Schema::hasColumn('college_admission_applications', 'entry_source'),
+                fn ($query) => $query->where('a.entry_source', 'PUBLIC')
+            )
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')
+                    ->from('college_admission_application_choices as ch')
+                    ->whereColumn('ch.college_admission_application_id', 'a.id');
+            })
+            ->pluck('a.id');
+
+        $blocked = $rows->filter(function ($id) {
+            return count($this->downstreamReferences(
+                (int) $id,
+                [
+                    ['college_admission_scores', 'college_admission_application_id'],
+                    ['college_admission_interviews', 'college_admission_application_id'],
+                    ['college_admission_merit_entries', 'college_admission_application_id'],
+                    ['college_admission_seat_allocations', 'college_admission_application_id'],
+                    ['admissions', 'college_admission_application_id'],
+                    ['students', 'college_admission_application_id'],
+                ]
+            )) > 0;
+        })->count();
+
+        return [
+            'confirmation_code' => 'CLEAN-UNLINKED-REGULAR-APPLICATIONS',
+            'total' => $rows->count(),
+            'cleanable' => $rows->count() - $blocked,
+            'blocked' => $blocked,
+        ];
+    }
+
+    public function cleanupLegacyUnlinkedRegularApplications(
+        int $universityId,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        if (! Schema::hasTable('college_admission_applications')) {
+            return ['deleted' => 0, 'blocked' => 0];
+        }
+
+        $candidateIds = DB::table('college_admission_applications as a')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->where('a.admission_mode', 'REGULAR')
+            ->where('a.status', 'SUBMITTED')
+            ->when(
+                Schema::hasColumn('college_admission_applications', 'entry_source'),
+                fn ($query) => $query->where('a.entry_source', 'PUBLIC')
+            )
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')
+                    ->from('college_admission_application_choices as ch')
+                    ->whereColumn('ch.college_admission_application_id', 'a.id');
+            })
+            ->pluck('a.id');
+
+        $cleanableIds = $candidateIds->reject(function ($id) {
+            return count($this->downstreamReferences(
+                (int) $id,
+                [
+                    ['college_admission_scores', 'college_admission_application_id'],
+                    ['college_admission_interviews', 'college_admission_application_id'],
+                    ['college_admission_merit_entries', 'college_admission_application_id'],
+                    ['college_admission_seat_allocations', 'college_admission_application_id'],
+                    ['admissions', 'college_admission_application_id'],
+                    ['students', 'college_admission_application_id'],
+                ]
+            )) > 0;
+        })->values();
+
+        $blocked = $candidateIds->count() - $cleanableIds->count();
+
+        return DB::transaction(function () use ($cleanableIds, $blocked, $actorId, $universityId) {
+            $this->deleteWhereIn('college_admission_application_field_values', 'college_admission_application_id', $cleanableIds);
+            $this->deleteWhereIn('college_admission_application_course_choices', 'college_admission_application_id', $cleanableIds);
+            $this->deleteWhereIn('college_admission_application_academic_preferences', 'college_admission_application_id', $cleanableIds);
+            $this->deleteWhereIn('college_admission_application_choices', 'college_admission_application_id', $cleanableIds);
+
+            $deleted = 0;
+            if ($cleanableIds->isNotEmpty()) {
+                $deleted = DB::table('college_admission_applications')
+                    ->whereIn('id', $cleanableIds)
+                    ->delete();
+            }
+
+            $result = [
+                'deleted' => $deleted,
+                'blocked' => $blocked,
+                'preserved' => [
+                    'Applicant users/login identities',
+                    'Applicant profiles/registration numbers',
+                ],
+            ];
+
+            $this->audit(
+                'TEST_LEGACY_UNLINKED_REGULAR_APPLICATIONS_CLEANED',
+                'test_data_cleanup',
+                $universityId,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
+    }
+
     public function listMaintenanceEntities(
         int $universityId
     ): array {
@@ -1512,6 +1638,15 @@ class TestDataCleanupService
             return;
         }
 
+        if (Schema::hasTable('college_admission_selection_rule_merit_sources')) {
+            DB::table('college_admission_selection_rule_merit_sources')
+                ->where(function ($query) use ($fieldIds) {
+                    $query->whereIn('obtained_field_id', $fieldIds)
+                        ->orWhereIn('maximum_field_id', $fieldIds);
+                })
+                ->delete();
+        }
+
         if (Schema::hasTable('college_admission_form_field_copy_rules')) {
             DB::table('college_admission_form_field_copy_rules')
                 ->where(function ($query) use ($fieldIds) {
@@ -1770,6 +1905,8 @@ class TestDataCleanupService
             ->orderByDesc('a.id')
             ->get([
                 'a.id', 'a.application_no', 'a.candidate_name', 'a.status',
+                'a.admission_mode',
+                ...(Schema::hasColumn('college_admission_applications', 'entry_source') ? ['a.entry_source'] : []),
                 'c.name as college_name', 'ac.name as cycle_name',
             ])
             ->map(function ($row) {
@@ -1785,18 +1922,24 @@ class TestDataCleanupService
                     ]
                 );
 
+                $programChoiceCount = $this->countIfExists(
+                    'college_admission_application_choices',
+                    'college_admission_application_id',
+                    $row->id
+                );
+                $isLegacyUnlinked = $row->status === 'SUBMITTED'
+                    && $row->admission_mode === 'REGULAR'
+                    && (! property_exists($row, 'entry_source') || $row->entry_source === 'PUBLIC')
+                    && $programChoiceCount === 0;
+
                 return [
                     'id' => $row->id,
                     'code' => $row->application_no,
                     'name' => $row->candidate_name.' · '.$row->college_name.' · '.($row->cycle_name ?? 'Admission Cycle'),
                     'status' => $row->status,
-                    'kind' => 'APPLICATION',
+                    'kind' => $isLegacyUnlinked ? 'LEGACY UNLINKED REGULAR APPLICATION' : 'APPLICATION',
                     'dependencies' => [
-                        'program_choices' => $this->countIfExists(
-                            'college_admission_application_choices',
-                            'college_admission_application_id',
-                            $row->id
-                        ),
+                        'program_choices' => $programChoiceCount,
                         'dynamic_field_values' => $this->countIfExists(
                             'college_admission_application_field_values',
                             'college_admission_application_id',
@@ -1867,7 +2010,13 @@ class TestDataCleanupService
                 'college_admission_selection_rule_id',
                 $record->id
             );
+            $meritSourceCount = $this->countIfExists(
+                'college_admission_selection_rule_merit_sources',
+                'college_admission_selection_rule_id',
+                $record->id
+            );
 
+            $this->deleteWhereIn('college_admission_selection_rule_merit_sources', 'college_admission_selection_rule_id', collect([$record->id]));
             $this->deleteWhereIn(
                 'college_admission_selection_rule_tiebreakers',
                 'college_admission_selection_rule_id',
@@ -1878,6 +2027,7 @@ class TestDataCleanupService
             $result = [
                 'record' => (array) $record,
                 'deleted_tie_breakers' => $tieBreakerCount,
+                'deleted_merit_sources' => $meritSourceCount,
             ];
 
             $this->audit(

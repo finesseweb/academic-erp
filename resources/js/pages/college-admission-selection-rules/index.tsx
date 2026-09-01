@@ -26,6 +26,9 @@ type Bucket = {
     eligible:boolean;
 };
 
+type ScoreSourceField={college_program_offering_id:number;field_id:number;label:string;field_key:string};
+type MeritSource={id?:number;label:string;source_type:'FORM_FIELD_PAIR';obtained_field_id:number;maximum_field_id:number;weight_percent:string};
+
 type TieBreakerCriterion = 'QUALIFYING_EXAM_SCORE'|'ENTRANCE_SCORE'|'INTERVIEW_SCORE'|'RELEVANT_SUBJECT_SCORE'|'DATE_OF_BIRTH'|'APPLICATION_SUBMITTED_AT';
 type ComparisonDirection = 'ASC'|'DESC';
 type TieBreaker = { id?:number; priority?:number; criterion:TieBreakerCriterion; comparison_direction:ComparisonDirection; criterion_reference?:string|null };
@@ -51,11 +54,12 @@ type Rule = {
     minimum_final_score?:string|null;
     roster_rule_reference?:string|null;
     tie_breaker_rules?:string|null;
+    merit_sources:MeritSource[];
     tie_breakers:TieBreaker[];
     notes?:string|null;
     status:'INACTIVE'|'ACTIVE'|'RETIRED';
     reservation_state:'NOT_DEFINED'|'ACTIVE'|'INACTIVE';
-    intake:{offering:{program_template:{name:string;code:string};academic_session:{name:string;code:string;is_current:boolean}}};
+    intake:{offering:{id:number;program_template:{name:string;code:string};academic_session:{name:string;code:string;is_current:boolean}}};
 };
 
 type Props = {
@@ -63,6 +67,7 @@ type Props = {
     eligibleBuckets:Bucket[];
     blockedBuckets:Bucket[];
     rules:Rule[];
+    scoreSourceFields:ScoreSourceField[];
     can:{create:boolean;update:boolean;enable:boolean;disable:boolean};
 };
 
@@ -126,13 +131,14 @@ function SearchablePicker({label,value,onChange,options,placeholder,disabled=fal
     </div>;
 }
 
-function RuleForm({collegeId,buckets,rule}:{collegeId:number;buckets:Bucket[];rule?:Rule}){
+function RuleForm({collegeId,buckets,scoreSourceFields,rule}:{collegeId:number;buckets:Bucket[];scoreSourceFields:ScoreSourceField[];rule?:Rule}){
     const [mode,setMode]=useState<Rule['selection_mode']>(rule?.selection_mode ?? 'MERIT');
     const offeringIds=useMemo(()=>Array.from(new Set(buckets.map(bucket=>bucket.college_program_offering_id))),[buckets]);
-    const defaultOfferingId=offeringIds[0]?.toString() ?? '';
+    const defaultOfferingId=rule?.intake?.offering?.id?.toString() ?? offeringIds[0]?.toString() ?? '';
     const [offeringId,setOfferingId]=useState(defaultOfferingId);
     const filteredBuckets=useMemo(()=>buckets.filter(bucket=>bucket.college_program_offering_id.toString()===offeringId),[buckets,offeringId]);
     const [seatKey,setSeatKey]=useState('');
+    const [meritSources,setMeritSources]=useState<MeritSource[]>(rule?.merit_sources?.length?rule.merit_sources.map(item=>({...item,weight_percent:String(item.weight_percent)})):[]);
     const [tieBreakers,setTieBreakers]=useState<TieBreaker[]>(rule?.tie_breakers?.length ? rule.tie_breakers.map(item=>({...item})) : []);
     const selected=buckets.find(b=>bucketValue(b)===seatKey);
     const offeringOptions=useMemo<SearchableOption[]>(()=>offeringIds.map(id=>{
@@ -157,6 +163,11 @@ function RuleForm({collegeId,buckets,rule}:{collegeId:number;buckets:Bucket[];ru
         if(rule?.selection_mode==='COMBINED') return [rule.merit_weight_percent,rule.entrance_weight_percent,rule.interview_weight_percent ?? '0'];
         return ['40','40','20'];
     },[mode,rule]);
+    const numericSourceOptions=useMemo(()=>scoreSourceFields.filter(field=>field.college_program_offering_id.toString()===offeringId),[scoreSourceFields,offeringId]);
+    const addMeritSource=()=>setMeritSources(items=>[...items,{label:'',source_type:'FORM_FIELD_PAIR',obtained_field_id:0,maximum_field_id:0,weight_percent:items.length===0?'100':'0'}]);
+    const updateMeritSource=(index:number,patch:Partial<MeritSource>)=>setMeritSources(items=>items.map((item,i)=>i===index?{...item,...patch}:item));
+    const removeMeritSource=(index:number)=>setMeritSources(items=>items.filter((_,i)=>i!==index));
+    const meritSourceTotal=meritSources.reduce((sum,item)=>sum+(Number(item.weight_percent)||0),0);
     const action=rule?`/college/${collegeId}/admission-selection-rules/${rule.id}`:`/college/${collegeId}/admission-selection-rules`;
 
     const addTieBreaker=()=>{
@@ -223,6 +234,17 @@ function RuleForm({collegeId,buckets,rule}:{collegeId:number;buckets:Bucket[];ru
                             </div>
                         </div>
                         {errors.weights&&<p className="text-xs text-destructive">{errors.weights}</p>}
+                        {(mode==='MERIT'||mode==='COMBINED')&&<div className="space-y-3 rounded-lg border p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium">Dynamic Merit Sources</h3><p className="text-xs text-muted-foreground">Optional. Link one or more NUMBER field pairs from the mapped Admission Form. If none are configured, Score Capture remains manual. Source weights must total 100%.</p></div><Button type="button" variant="outline" size="sm" onClick={addMeritSource} disabled={meritSources.length>=10||numericSourceOptions.length<2}><Plus/>Add Merit Source</Button></div>
+                            {meritSources.length===0?<div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Manual Merit Score Capture will be used. Add sources to calculate Merit automatically from submitted Admission Form values.</div>:<div className="space-y-3">{meritSources.map((source,index)=><div key={index} className="rounded-md border p-3">
+                                <div className="mb-3 flex items-center justify-between"><span className="text-sm font-medium">Merit Source {index+1}</span><Button type="button" size="icon" variant="ghost" onClick={()=>removeMeritSource(index)}><Trash2/></Button></div>
+                                <input type="hidden" name={`merit_sources[${index}][source_type]`} value="FORM_FIELD_PAIR"/>
+                                <div className="grid gap-3 md:grid-cols-2"><div className="space-y-2"><Label>Label</Label><Input name={`merit_sources[${index}][label]`} value={source.label} onChange={e=>updateMeritSource(index,{label:e.target.value})} placeholder="e.g. Class 12" required/></div><div className="space-y-2"><Label>Weight within Merit %</Label><Input name={`merit_sources[${index}][weight_percent]`} type="number" step="0.01" min="0.01" max="100" value={source.weight_percent} onChange={e=>updateMeritSource(index,{weight_percent:e.target.value})} required/></div></div>
+                                <div className="mt-3 grid gap-3 md:grid-cols-2"><div className="space-y-2"><Label>Obtained Marks Field</Label><Select value={source.obtained_field_id?String(source.obtained_field_id):''} onValueChange={v=>updateMeritSource(index,{obtained_field_id:Number(v)})}><SelectTrigger><SelectValue placeholder="Select NUMBER field"/></SelectTrigger><SelectContent>{numericSourceOptions.map(f=><SelectItem key={f.field_id} value={String(f.field_id)}>{f.label} · {f.field_key}</SelectItem>)}</SelectContent></Select><input type="hidden" name={`merit_sources[${index}][obtained_field_id]`} value={source.obtained_field_id||''}/></div><div className="space-y-2"><Label>Maximum Marks Field</Label><Select value={source.maximum_field_id?String(source.maximum_field_id):''} onValueChange={v=>updateMeritSource(index,{maximum_field_id:Number(v)})}><SelectTrigger><SelectValue placeholder="Select NUMBER field"/></SelectTrigger><SelectContent>{numericSourceOptions.map(f=><SelectItem key={f.field_id} value={String(f.field_id)}>{f.label} · {f.field_key}</SelectItem>)}</SelectContent></Select><input type="hidden" name={`merit_sources[${index}][maximum_field_id]`} value={source.maximum_field_id||''}/></div></div>
+                            </div>)}</div>}
+                            {meritSources.length>0&&<div className={`text-sm font-medium ${Math.abs(meritSourceTotal-100)<0.001?'text-emerald-700':'text-destructive'}`}>Merit source total: {meritSourceTotal.toFixed(2)}% / 100%</div>}
+                            {Object.entries(errors).filter(([key])=>key==='merit_sources'||key.startsWith('merit_sources.')).map(([key,message])=><p key={key} className="text-xs text-destructive">{String(message)}</p>)}
+                        </div>}
 
                         <div className="space-y-3 rounded-lg border p-4">
                             <div><h3 className="font-medium">Qualifying Thresholds</h3><p className="text-xs text-muted-foreground">Optional normalized scores from 0 to 100. In Combined mode, set a component minimum only when that component has a positive weight.</p></div>
@@ -268,15 +290,15 @@ function RuleForm({collegeId,buckets,rule}:{collegeId:number;buckets:Bucket[];ru
     </Dialog>;
 }
 
-export default function SelectionRules({college,eligibleBuckets,blockedBuckets,rules,can}:Props){
+export default function SelectionRules({college,eligibleBuckets,blockedBuckets,rules,scoreSourceFields,can}:Props){
     return <><Head title="Merit / Roster / Selection Rules"/><div className="space-y-6 p-4 md:p-6">
-        <header className="flex flex-wrap items-end justify-between gap-3 border-b pb-5"><div><p className="text-sm font-medium text-primary">{college.code} · College Academic Setup</p><h1 className="text-3xl font-semibold">Merit / Roster / Selection Rules</h1><p className="max-w-3xl text-sm text-muted-foreground">Rules attach to the effective Intake admission seat bucket. Reservation is consumed only where it is configured.</p></div>{can.create&&college.status==='ACTIVE'&&eligibleBuckets.length>0&&<RuleForm collegeId={college.id} buckets={eligibleBuckets}/>}</header>
+        <header className="flex flex-wrap items-end justify-between gap-3 border-b pb-5"><div><p className="text-sm font-medium text-primary">{college.code} · College Academic Setup</p><h1 className="text-3xl font-semibold">Merit / Roster / Selection Rules</h1><p className="max-w-3xl text-sm text-muted-foreground">Rules attach to the effective Intake admission seat bucket. Reservation is consumed only where it is configured.</p></div>{can.create&&college.status==='ACTIVE'&&eligibleBuckets.length>0&&<RuleForm collegeId={college.id} buckets={eligibleBuckets} scoreSourceFields={scoreSourceFields}/>}</header>
 
         {eligibleBuckets.length===0&&<Card><CardContent className="p-4 text-sm text-muted-foreground">No eligible seat bucket is available. Activate Program Offering and Intake / Seat Capacity first. If Reservation is configured for a bucket, that Reservation plan must also be ACTIVE.</CardContent></Card>}
 
         {blockedBuckets.length>0&&<Card><CardContent className="p-4 text-sm"><div className="font-medium">Reservation is defined but inactive for {blockedBuckets.length} seat bucket{blockedBuckets.length===1?'':'s'}.</div><div className="mt-1 text-muted-foreground">Activate the Reservation / Seat Distribution plan to use those buckets in Selection Rules.</div><ul className="mt-2 list-disc pl-5 text-muted-foreground">{blockedBuckets.map(b=><li key={bucketValue(b)}>{b.program_name} · {b.bucket_label} · {b.basis_capacity} seats</li>)}</ul></CardContent></Card>}
 
-        {rules.length===0?<Card><CardContent className="grid place-items-center py-16 text-center"><BookOpenCheck className="size-10 text-muted-foreground"/><h2 className="mt-3 font-semibold">No selection rule configured</h2><p className="mt-1 text-sm text-muted-foreground">Create the first inactive rule version for any eligible Intake seat bucket.</p></CardContent></Card>:<div className="space-y-4">{rules.map(rule=><Card key={rule.id}><CardHeader className="gap-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{rule.name} <span className="text-sm font-normal text-muted-foreground">v{rule.version_no} · {rule.status}</span></CardTitle><p className="mt-1 text-sm text-muted-foreground">{rule.intake.offering.program_template.name} · {rule.bucket_label} · {rule.intake.offering.academic_session.name} · {rule.basis_capacity} seats</p><p className="mt-1 text-xs text-muted-foreground">{reservationText(rule.reservation_state)}</p></div><div className="flex gap-2">{rule.status==='INACTIVE'&&can.update&&<RuleForm collegeId={college.id} buckets={eligibleBuckets} rule={rule}/>} {rule.status==='INACTIVE'&&can.enable&&<Form action={`/college/${college.id}/admission-selection-rules/${rule.id}/activate`} method="patch">{({processing})=><Button size="sm" disabled={processing}>{processing?<Spinner/>:<Power/>}Activate</Button>}</Form>}{rule.status==='ACTIVE'&&can.disable&&<Form action={`/college/${college.id}/admission-selection-rules/${rule.id}/retire`} method="patch">{({processing})=><Button size="sm" variant="outline" disabled={processing}>{processing?<Spinner/>:<Archive/>}Retire</Button>}</Form>}</div></div></CardHeader><CardContent className="space-y-4 text-sm">
+        {rules.length===0?<Card><CardContent className="grid place-items-center py-16 text-center"><BookOpenCheck className="size-10 text-muted-foreground"/><h2 className="mt-3 font-semibold">No selection rule configured</h2><p className="mt-1 text-sm text-muted-foreground">Create the first inactive rule version for any eligible Intake seat bucket.</p></CardContent></Card>:<div className="space-y-4">{rules.map(rule=><Card key={rule.id}><CardHeader className="gap-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{rule.name} <span className="text-sm font-normal text-muted-foreground">v{rule.version_no} · {rule.status}</span></CardTitle><p className="mt-1 text-sm text-muted-foreground">{rule.intake.offering.program_template.name} · {rule.bucket_label} · {rule.intake.offering.academic_session.name} · {rule.basis_capacity} seats</p><p className="mt-1 text-xs text-muted-foreground">{reservationText(rule.reservation_state)}</p></div><div className="flex gap-2">{rule.status==='INACTIVE'&&can.update&&<RuleForm collegeId={college.id} buckets={eligibleBuckets} scoreSourceFields={scoreSourceFields} rule={rule}/>} {rule.status==='INACTIVE'&&can.enable&&<Form action={`/college/${college.id}/admission-selection-rules/${rule.id}/activate`} method="patch">{({processing})=><Button size="sm" disabled={processing}>{processing?<Spinner/>:<Power/>}Activate</Button>}</Form>}{rule.status==='ACTIVE'&&can.disable&&<Form action={`/college/${college.id}/admission-selection-rules/${rule.id}/retire`} method="patch">{({processing})=><Button size="sm" variant="outline" disabled={processing}>{processing?<Spinner/>:<Archive/>}Retire</Button>}</Form>}</div></div></CardHeader><CardContent className="space-y-4 text-sm">
                 <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-8"><div><span className="text-muted-foreground">Mode</span><div className="font-medium">{rule.selection_mode}</div></div><div><span className="text-muted-foreground">Merit</span><div className="font-medium">{rule.merit_weight_percent}%</div></div><div><span className="text-muted-foreground">Entrance</span><div className="font-medium">{rule.entrance_weight_percent}%</div></div><div><span className="text-muted-foreground">Interview</span><div className="font-medium">{rule.interview_weight_percent ?? '0'}%</div></div><div><span className="text-muted-foreground">Merit Min.</span><div className="font-medium">{rule.minimum_merit_score ?? 'Not set'}</div></div><div><span className="text-muted-foreground">Entrance Min.</span><div className="font-medium">{rule.minimum_entrance_score ?? 'Not set'}</div></div><div><span className="text-muted-foreground">Interview Min.</span><div className="font-medium">{rule.minimum_interview_score ?? 'Not set'}</div></div><div><span className="text-muted-foreground">Final Min.</span><div className="font-medium">{rule.minimum_final_score ?? 'Not set'}</div></div></div>
                 {rule.roster_rule_reference&&<p><span className="font-medium">Roster / Policy:</span> {rule.roster_rule_reference}</p>}
                 <div><span className="font-medium">Tie-break order:</span>{rule.tie_breakers?.length?<ol className="mt-1 list-decimal pl-5 text-muted-foreground">{rule.tie_breakers.map(item=><li key={item.id ?? `${item.priority}-${item.criterion}`}>{criterionLabel(item.criterion)}{item.criterion_reference?` (${item.criterion_reference})`:''} · {directionLabel(item.criterion,item.comparison_direction)}</li>)}</ol>:<span className="ml-1 text-muted-foreground">Not configured</span>}</div>
