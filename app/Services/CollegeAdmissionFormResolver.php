@@ -31,7 +31,7 @@ class CollegeAdmissionFormResolver
         $degree = $program->degree;
 
         $mapping = CollegeAdmissionFormMapping::query()
-            ->with(['template.parent.steps.panels','template.parent.steps.fields.options','template.parent.steps.fields.conditions','template.parent.steps.fields.scopes','template.steps.panels','template.steps.fields.options','template.steps.fields.conditions','template.steps.fields.scopes'])
+            ->with(['template.parent.steps.panels','template.parent.steps.fields.options','template.parent.steps.fields.conditions','template.parent.steps.fields.scopes','template.parent.steps.fields.comparisonRule.sourceField','template.parent.steps.fields.copyRule.sourceField','template.parent.steps.fields.copyRule.triggerField','template.steps.panels','template.steps.fields.options','template.steps.fields.conditions','template.steps.fields.scopes','template.steps.fields.comparisonRule.sourceField','template.steps.fields.copyRule.sourceField','template.steps.fields.copyRule.triggerField'])
             ->where('university_id', $college->university_id)
             ->where('status', 'ACTIVE')
             ->whereHas('template', fn ($q) => $q->where('status', 'ACTIVE')->whereIn('admission_mode', [$admissionMode, 'BOTH']))
@@ -121,7 +121,7 @@ class CollegeAdmissionFormResolver
     public function templatePayload(?CollegeAdmissionFormTemplate $template, ?CollegeAdmissionCycle $cycle = null): ?array
     {
         if (! $template) return null;
-        $template->loadMissing(['parent.steps.panels','parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes','steps.panels','steps.fields.options','steps.fields.conditions','steps.fields.scopes']);
+        $template->loadMissing(['parent.steps.panels','parent.steps.fields.options','parent.steps.fields.conditions','parent.steps.fields.scopes','parent.steps.fields.comparisonRule.sourceField','parent.steps.fields.copyRule.sourceField','parent.steps.fields.copyRule.triggerField','steps.panels','steps.fields.options','steps.fields.conditions','steps.fields.scopes','steps.fields.comparisonRule.sourceField','steps.fields.copyRule.sourceField','steps.fields.copyRule.triggerField']);
 
         $ownSteps = $template->steps->where('status', 'ACTIVE')->map(function ($step) use ($template, $cycle) {
             $fields = $step->fields->where('status', 'ACTIVE');
@@ -144,6 +144,19 @@ class CollegeAdmissionFormResolver
                         'degree_level_id'=>$scope->degree_level_id,'degree_id'=>$scope->degree_id,'program_template_id'=>$scope->program_template_id,
                         'college_program_offering_id'=>$scope->college_program_offering_id,'curriculum_id'=>$scope->curriculum_id,'college_admission_cycle_id'=>$scope->college_admission_cycle_id,
                     ])->values(),
+                    'comparison_rule' => ($field->comparisonRule && $field->comparisonRule->is_active) ? [
+                        'source_field_id' => $field->comparisonRule->source_field_id,
+                        'source_field_label' => $field->comparisonRule->sourceField?->label,
+                        'operator' => $field->comparisonRule->operator,
+                    ] : null,
+                    'copy_rule' => ($field->copyRule && $field->copyRule->is_active) ? [
+                        'source_field_id' => $field->copyRule->source_field_id,
+                        'source_field_label' => $field->copyRule->sourceField?->label,
+                        'trigger_field_id' => $field->copyRule->trigger_field_id,
+                        'trigger_field_label' => $field->copyRule->triggerField?->label,
+                        'trigger_values' => array_values($field->copyRule->trigger_values ?? []),
+                        'read_only' => (bool) $field->copyRule->read_only,
+                    ] : null,
                     'options' => $field->options->where('is_active', true)->map(fn ($o) => ['value' => $o->value, 'label' => $o->label])->values(),
                 ])->values(),
             ];
@@ -151,6 +164,42 @@ class CollegeAdmissionFormResolver
 
         $parentPayload = $template->parent ? $this->templatePayload($template->parent, $cycle) : null;
         $steps = collect($parentPayload['steps'] ?? [])->concat($ownSteps)->values();
+
+        // Academic applicability can remove a condition source from the effective form.
+        // Never send a dangling child condition to either applicant runtime. Prune such
+        // children iteratively because removing one field can invalidate another field
+        // that depends on it.
+        do {
+            $before = $steps->sum(fn ($step) => collect($step['fields'] ?? [])->count());
+            $available = $steps->flatMap(fn ($step) => collect($step['fields'] ?? []))->pluck('id')->map(fn ($id) => (int) $id)->flip();
+            $steps = $steps->map(function ($step) use ($available) {
+                $step['fields'] = collect($step['fields'] ?? [])->filter(function ($field) use ($available) {
+                    return collect($field['conditions'] ?? [])->every(fn ($condition) => $available->has((int) $condition['source_field_id']));
+                })->values();
+                return $step;
+            })->filter(fn ($step) => collect($step['fields'] ?? [])->isNotEmpty())->values();
+            $after = $steps->sum(fn ($step) => collect($step['fields'] ?? [])->count());
+        } while ($after < $before);
+
+        // Copy/comparison rules are runtime behavior, so they must be present in the
+        // effective payload. If academic applicability removed a source/trigger field,
+        // keep the target field usable but disable only the dangling advanced rule.
+        $available = $steps->flatMap(fn ($step) => collect($step['fields'] ?? []))->pluck('id')->map(fn ($id) => (int) $id)->flip();
+        $steps = $steps->map(function ($step) use ($available) {
+            $step['fields'] = collect($step['fields'] ?? [])->map(function ($field) use ($available) {
+                $copy = $field['copy_rule'] ?? null;
+                if ($copy && (! $available->has((int) $copy['source_field_id']) || ! $available->has((int) $copy['trigger_field_id']))) {
+                    $field['copy_rule'] = null;
+                }
+                $comparison = $field['comparison_rule'] ?? null;
+                if ($comparison && ! $available->has((int) $comparison['source_field_id'])) {
+                    $field['comparison_rule'] = null;
+                }
+                return $field;
+            })->values();
+            return $step;
+        })->values();
+
         return [
             'id' => $template->id, 'name' => $template->name, 'code' => $template->code,
             'admission_mode' => $template->admission_mode, 'governance_mode' => $template->governance_mode,

@@ -20,11 +20,25 @@ class CollegeAdmissionDynamicFieldService
 
         $fields = $this->allFields($template)->where('status', 'ACTIVE')->values();
         $effectiveValues = $this->applyCopyRules($fields, $this->effectiveValues($fields, $input, $application));
+
+        // Applicability is evaluated before answer conditions. A conditional field must
+        // never become visible because a source field carries a stale/submitted value
+        // while that source itself is outside the current academic context.
+        $applicableFieldIds = $fields
+            ->filter(fn ($field) => $this->isApplicable($field, $cycle))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $applicableLookup = array_fill_keys($applicableFieldIds, true);
+        foreach ($fields as $field) {
+            if (! isset($applicableLookup[(int) $field->id])) $effectiveValues[$field->id] = null;
+        }
+
         $normalized = [];
         $errors = [];
 
         foreach ($fields as $field) {
-            if (! $this->isApplicable($field, $cycle) || ! $this->conditionsPass($field, $effectiveValues)) {
+            if (! isset($applicableLookup[(int) $field->id]) || ! $this->conditionsPass($field, $effectiveValues)) {
                 $normalized[$field->id] = null;
                 continue;
             }

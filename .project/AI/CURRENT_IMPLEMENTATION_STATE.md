@@ -185,3 +185,20 @@ College Admission Form Setup now recursively normalizes optional nested Eloquent
 - Audit event `TEST_ADMISSION_FORM_TEMPLATE_DEACTIVATED` records before/after template state.
 - No database migration is required.
 - Governing decision: ADR 072.
+
+## Admission Form conditional rendering integrity — 2026-09-01
+- **IMPLEMENTED:** condition parents may be any existing eligible non-file field per ADR 032; Edit Field can change/remove the condition; cycle detection protects edited dependencies.
+- Runtime applicability is resolved before conditions, and conditional children with unavailable sources are removed from the effective Applicant/Internal form payload.
+- Backend and React condition semantics remain aligned. See ADR 073.
+
+### 2026-09-01 — Admission Form runtime validation parity
+Admission Form field validation is now carried through to both runtime renderers. The public applicant form and College Admission Applications internal entry use the shared `resources/js/lib/admission-field-validation.ts` helper for validation hints and live rule evaluation. This covers allowed text input, min/max/exact text length, numeric min/max/integer/decimal precision, date age rules, and NUMBER/DATE cross-field comparisons. Public NEW_WINDOW step navigation blocks progression on any visible configured-rule violation. Backend `CollegeAdmissionDynamicFieldService` remains authoritative. See ADR 074.
+
+## 2026-09-01 — Admission Form Setup structural delete reliability
+University and College Admission Form Setup now use confirmed Inertia router DELETE actions for Draft Template/Step/Panel/Field cleanup (and College mapping removal). Backend Step deletion is dependency-aware: submitted values and external field-rule references block deletion, while condition/comparison/copy rules wholly internal to the deleted Step are removed transactionally before the Step cascade. Structural deletion remains DRAFT-only per ADR 053. See ADR 075.
+
+### Admission Form advanced-rule runtime parity — 2026-09-01
+- Copy rules configured in Admission Form Setup are now serialized by `CollegeAdmissionFormResolver::templatePayload()`.
+- Public Applicant and College Add Application/Edit Draft receive source field, trigger field, trigger values and read-only state.
+- Active copy rules are also reapplied server-side by `CollegeAdmissionDynamicFieldService` before validation/persistence.
+- Comparison rule metadata is included in the same effective runtime payload.
