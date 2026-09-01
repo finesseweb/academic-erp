@@ -22,6 +22,7 @@ class TestDataCleanupService
         ['admission_applications', 'curriculum_id'],
         ['academic_policies', 'curriculum_id'],
         ['college_program_offerings', 'curriculum_id'],
+        ['college_admission_application_academic_preferences', 'curriculum_id'],
         ['academic_policy_progression_rule_sets', 'curriculum_id'],
     ];
 
@@ -579,6 +580,10 @@ class TestDataCleanupService
         int $universityId
     ): array {
         return [
+            'college_admission_form_templates' =>
+                $this->collegeAdmissionFormTemplateRows($universityId),
+            'college_application_fee_rules' =>
+                $this->collegeApplicationFeeRuleRows($universityId),
             'college_admission_scores' =>
                 $this->collegeAdmissionScoreRows($universityId),
             'college_admission_applications' =>
@@ -729,6 +734,22 @@ class TestDataCleanupService
         return [
             'confirmation_code' => 'RESET-ACADEMIC-TEST-DATA',
             'counts' => [
+                'college_admission_form_templates' =>
+                    $this->countUniversityRows('college_admission_form_templates', $universityId),
+                'college_admission_form_mappings' =>
+                    $this->countUniversityRows('college_admission_form_mappings', $universityId),
+                'college_application_fee_rules' =>
+                    $this->countUniversityRows('college_application_fee_rules', $universityId),
+                'college_admission_application_field_values' =>
+                    $this->countCollegeAdmissionApplicationFieldValuesForUniversity($universityId),
+                'college_admission_application_academic_preferences' =>
+                    $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_academic_preferences', $universityId),
+                'college_admission_application_course_choices' =>
+                    $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_course_choices', $universityId),
+                'college_applicant_registration_settings' =>
+                    $this->countCollegeScopedRowsForUniversity('college_applicant_registration_settings', $universityId),
+                'college_admission_interviews' =>
+                    $this->countCollegeAdmissionInterviewsForUniversity($universityId),
                 'college_admission_scores' =>
                     $this->countCollegeAdmissionScoresForUniversity($universityId),
                 'college_admission_application_choices' =>
@@ -786,6 +807,7 @@ class TestDataCleanupService
                 'University Profile',
                 'Affiliated Colleges',
                 'Users and login accounts',
+                'Applicant login identities/profiles (applications are cleared, identities are preserved)',
                 'Protected/system Roles',
                 'Permissions and Role-Permission grants',
                 'College role/scope assignments',
@@ -888,9 +910,50 @@ class TestDataCleanupService
                 $applicationIds = Schema::hasTable('college_admission_applications')
                     ? DB::table('college_admission_applications')->whereIn('college_id', $collegeIds)->pluck('id')
                     : collect();
+                $interviewIds = Schema::hasTable('college_admission_interviews')
+                    ? DB::table('college_admission_interviews')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
+                    : collect();
+                $this->deleteWhereIn('college_admission_interview_evaluators', 'college_admission_interview_id', $interviewIds);
+                $this->deleteWhereIn('college_admission_interviews', 'id', $interviewIds);
                 $this->deleteWhereIn('college_admission_scores', 'college_admission_application_id', $applicationIds);
+                $this->deleteWhereIn('college_admission_application_field_values', 'college_admission_application_id', $applicationIds);
+                $this->deleteWhereIn('college_admission_application_course_choices', 'college_admission_application_id', $applicationIds);
+                $this->deleteWhereIn('college_admission_application_academic_preferences', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_application_choices', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_applications', 'id', $applicationIds);
+
+                // Stage 1 admission form-builder configuration is test data too.
+                // Applications must be removed first because they snapshot/reference
+                // the resolved template and fee rule with RESTRICT foreign keys.
+                if (Schema::hasTable('college_admission_form_mappings')) {
+                    DB::table('college_admission_form_mappings')->where('university_id', $universityId)->delete();
+                }
+                if (Schema::hasTable('college_application_fee_rules')) {
+                    DB::table('college_application_fee_rules')->where('university_id', $universityId)->delete();
+                }
+                if (Schema::hasTable('college_admission_form_templates')) {
+                    // Field conditions use RESTRICT on source_field_id. Delete all
+                    // condition rows belonging to this University's template fields
+                    // before relying on the template -> step -> field cascades.
+                    $templateIdsForCleanup = DB::table('college_admission_form_templates')->where('university_id', $universityId)->pluck('id');
+                    $stepIdsForCleanup = Schema::hasTable('college_admission_form_steps')
+                        ? DB::table('college_admission_form_steps')->whereIn('college_admission_form_template_id', $templateIdsForCleanup)->pluck('id')
+                        : collect();
+                    $fieldIdsForCleanup = Schema::hasTable('college_admission_form_fields')
+                        ? DB::table('college_admission_form_fields')->whereIn('college_admission_form_step_id', $stepIdsForCleanup)->pluck('id')
+                        : collect();
+                    $this->deleteAdmissionFormFieldReferences($fieldIdsForCleanup);
+
+                    // Break parent inheritance links before deleting the template tree.
+                    DB::table('college_admission_form_templates')->where('university_id', $universityId)->update(['parent_template_id' => null]);
+                    DB::table('college_admission_form_templates')->where('university_id', $universityId)->delete();
+                }
+
+                if (Schema::hasTable('college_applicant_registration_settings')) {
+                    DB::table('college_applicant_registration_settings')
+                        ->whereIn('college_id', $collegeIds)
+                        ->delete();
+                }
 
                 $selectionRuleIds = Schema::hasTable('college_admission_selection_rules')
                     ? DB::table('college_admission_selection_rules')->whereIn('college_program_intake_id', $intakeIdsForAdmission)->pluck('id')
@@ -1246,6 +1309,10 @@ class TestDataCleanupService
         $this->assertCleanupEnabled();
 
         return match ($type) {
+            'college_admission_form_templates' =>
+                $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
+            'college_application_fee_rules' =>
+                $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
             'college_admission_scores' =>
                 $this->cleanupCollegeAdmissionScore($id, $universityId, $actorId),
             'college_admission_applications' =>
@@ -1405,6 +1472,160 @@ class TestDataCleanupService
         };
     }
 
+    private function collegeAdmissionFormTemplateRows(int $universityId): array
+    {
+        if (! Schema::hasTable('college_admission_form_templates')) return [];
+
+        return DB::table('college_admission_form_templates as t')
+            ->leftJoin('colleges as c', 'c.id', '=', 't.college_id')
+            ->where('t.university_id', $universityId)
+            ->orderByDesc('t.id')
+            ->get(['t.id', 't.code', 't.name', 't.status', 't.owner_scope_type', 'c.name as college_name'])
+            ->map(function ($row) {
+                $dependencies = array_filter([
+                    'applications' => $this->countIfExists('college_admission_applications', 'college_admission_form_template_id', $row->id),
+                    'child_templates' => $this->countIfExists('college_admission_form_templates', 'parent_template_id', $row->id),
+                ]);
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->name.($row->college_name ? ' · '.$row->college_name : ' · University'),
+                    'status' => $row->status,
+                    'kind' => 'ADMISSION_FORM_TEMPLATE',
+                    'dependencies' => [],
+                    'blocked' => count($dependencies) > 0,
+                    'blocking_references' => $dependencies,
+                ];
+            })->all();
+    }
+
+    /**
+     * Remove admission-form rule rows that can reference fields through RESTRICT
+     * foreign keys before the template -> step -> field cascade is allowed to run.
+     *
+     * Target-side rows also get deleted explicitly so cleanup remains deterministic
+     * even when a rule points at another field in the same template tree.
+     */
+    private function deleteAdmissionFormFieldReferences($fieldIds): void
+    {
+        if ($fieldIds->isEmpty()) {
+            return;
+        }
+
+        if (Schema::hasTable('college_admission_form_field_copy_rules')) {
+            DB::table('college_admission_form_field_copy_rules')
+                ->where(function ($query) use ($fieldIds) {
+                    $query->whereIn('target_field_id', $fieldIds)
+                        ->orWhereIn('source_field_id', $fieldIds)
+                        ->orWhereIn('trigger_field_id', $fieldIds);
+                })
+                ->delete();
+        }
+
+        if (Schema::hasTable('college_admission_form_field_comparisons')) {
+            DB::table('college_admission_form_field_comparisons')
+                ->where(function ($query) use ($fieldIds) {
+                    $query->whereIn('target_field_id', $fieldIds)
+                        ->orWhereIn('source_field_id', $fieldIds);
+                })
+                ->delete();
+        }
+
+        if (Schema::hasTable('college_admission_form_field_conditions')) {
+            DB::table('college_admission_form_field_conditions')
+                ->where(function ($query) use ($fieldIds) {
+                    $query->whereIn('college_admission_form_field_id', $fieldIds)
+                        ->orWhereIn('source_field_id', $fieldIds);
+                })
+                ->delete();
+        }
+    }
+
+    private function cleanupCollegeAdmissionFormTemplate(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('college_admission_form_templates')) abort(404);
+        $record = DB::table('college_admission_form_templates')->where('id', $id)->where('university_id', $universityId)->first();
+        if (! $record) abort(404);
+
+        $downstream = array_filter([
+            'applications' => $this->countIfExists('college_admission_applications', 'college_admission_form_template_id', $id),
+            'child_templates' => $this->countIfExists('college_admission_form_templates', 'parent_template_id', $id),
+        ]);
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages(['record' => 'This Admission Form Template is already referenced by an Application or child template. Clean those dependent test records first.']);
+        }
+
+        $before = (array) $record;
+
+        // Field conditions use RESTRICT on source_field_id so a template tree cannot
+        // rely on step/field cascades alone. Remove condition rows first for every
+        // field owned by this template before deleting the template.
+        $stepIds = Schema::hasTable('college_admission_form_steps')
+            ? DB::table('college_admission_form_steps')->where('college_admission_form_template_id', $id)->pluck('id')
+            : collect();
+        $fieldIds = Schema::hasTable('college_admission_form_fields')
+            ? DB::table('college_admission_form_fields')->whereIn('college_admission_form_step_id', $stepIds)->pluck('id')
+            : collect();
+        $this->deleteAdmissionFormFieldReferences($fieldIds);
+
+        DB::table('college_admission_form_templates')->where('id', $id)->delete();
+        $result = ['deleted' => 1, 'record' => $before];
+        $this->audit('TEST_ADMISSION_FORM_TEMPLATE_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+        return $result;
+    }
+
+    private function collegeApplicationFeeRuleRows(int $universityId): array
+    {
+        if (! Schema::hasTable('college_application_fee_rules')) return [];
+
+        return DB::table('college_application_fee_rules as r')
+            ->leftJoin('colleges as c', 'c.id', '=', 'r.college_id')
+            ->where('r.university_id', $universityId)
+            ->orderByDesc('r.id')
+            ->get(['r.id', 'r.name', 'r.status', 'r.amount', 'r.currency', 'r.fee_required', 'c.name as college_name'])
+            ->map(function ($row) {
+                $applications = $this->countIfExists('college_admission_applications', 'application_fee_rule_id', $row->id);
+                return [
+                    'id' => $row->id,
+                    'code' => $row->fee_required ? $row->currency.' '.$row->amount : 'FREE',
+                    'name' => $row->name.($row->college_name ? ' · '.$row->college_name : ' · University'),
+                    'status' => $row->status,
+                    'kind' => 'APPLICATION_FEE_RULE',
+                    'dependencies' => [],
+                    'blocked' => $applications > 0,
+                    'blocking_references' => $applications > 0 ? ['applications' => $applications] : [],
+                ];
+            })->all();
+    }
+
+    private function cleanupCollegeApplicationFeeRule(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('college_application_fee_rules')) abort(404);
+        $record = DB::table('college_application_fee_rules')->where('id', $id)->where('university_id', $universityId)->first();
+        if (! $record) abort(404);
+
+        $applications = $this->countIfExists('college_admission_applications', 'application_fee_rule_id', $id);
+        if ($applications > 0) {
+            throw ValidationException::withMessages(['record' => 'This Application Fee Rule is already snapshotted/referenced by an Application. Clean the dependent test Application first.']);
+        }
+
+        $before = (array) $record;
+        DB::table('college_application_fee_rules')->where('id', $id)->delete();
+        $result = ['deleted' => 1, 'record' => $before];
+        $this->audit('TEST_APPLICATION_FEE_RULE_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+        return $result;
+    }
+
+    private function countCollegeAdmissionApplicationFieldValuesForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_application_field_values') || ! Schema::hasTable('college_admission_applications')) return 0;
+        return DB::table('college_admission_application_field_values as v')
+            ->join('college_admission_applications as a', 'a.id', '=', 'v.college_admission_application_id')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
     private function cleanupCollegeAdmissionScore(int $id, int $universityId, int $actorId): array
     {
         if (! Schema::hasTable('college_admission_scores')) abort(404);
@@ -1424,6 +1645,12 @@ class TestDataCleanupService
         $result=['record'=>(array)$record];
         $this->audit('TEST_COLLEGE_ADMISSION_SCORE_CLEANED','test_data_cleanup',$record->id,$result,$actorId);
         return $result;
+    }
+
+    private function collegeAdmissionInterviewRows(int $universityId): array
+    {
+        if (! Schema::hasTable('college_admission_interviews') || ! Schema::hasTable('college_admission_applications')) return [];
+        return DB::table('college_admission_interviews as i')->join('college_admission_applications as a','a.id','=','i.college_admission_application_id')->join('colleges as c','c.id','=','a.college_id')->where('c.university_id',$universityId)->select(['i.id','i.panel_name as name','i.status','c.name as college_name'])->orderByDesc('i.id')->get()->map(fn($r)=>(array)$r)->all();
     }
 
     private function collegeAdmissionScoreRows(int $universityId): array
@@ -1489,16 +1716,35 @@ class TestDataCleanupService
                 'college_admission_application_id',
                 $record->id
             );
-            $this->deleteWhereIn(
-                'college_admission_application_choices',
+            $fieldValueCount = $this->countIfExists(
+                'college_admission_application_field_values',
                 'college_admission_application_id',
-                collect([$record->id])
+                $record->id
             );
+            $academicPreferenceCount = $this->countIfExists(
+                'college_admission_application_academic_preferences',
+                'college_admission_application_id',
+                $record->id
+            );
+            $courseChoiceCount = $this->countIfExists(
+                'college_admission_application_course_choices',
+                'college_admission_application_id',
+                $record->id
+            );
+
+            $applicationIds = collect([$record->id]);
+            $this->deleteWhereIn('college_admission_application_field_values', 'college_admission_application_id', $applicationIds);
+            $this->deleteWhereIn('college_admission_application_course_choices', 'college_admission_application_id', $applicationIds);
+            $this->deleteWhereIn('college_admission_application_academic_preferences', 'college_admission_application_id', $applicationIds);
+            $this->deleteWhereIn('college_admission_application_choices', 'college_admission_application_id', $applicationIds);
             DB::table('college_admission_applications')->where('id', $record->id)->delete();
 
             $result = [
                 'record' => (array) $record,
                 'deleted_choices' => $choiceCount,
+                'deleted_dynamic_field_values' => $fieldValueCount,
+                'deleted_academic_preferences' => $academicPreferenceCount,
+                'deleted_course_choices' => $courseChoiceCount,
             ];
             $this->audit(
                 'TEST_COLLEGE_ADMISSION_APPLICATION_CLEANED',
@@ -1548,6 +1794,21 @@ class TestDataCleanupService
                     'dependencies' => [
                         'program_choices' => $this->countIfExists(
                             'college_admission_application_choices',
+                            'college_admission_application_id',
+                            $row->id
+                        ),
+                        'dynamic_field_values' => $this->countIfExists(
+                            'college_admission_application_field_values',
+                            'college_admission_application_id',
+                            $row->id
+                        ),
+                        'academic_preferences' => $this->countIfExists(
+                            'college_admission_application_academic_preferences',
+                            'college_admission_application_id',
+                            $row->id
+                        ),
+                        'curriculum_course_choices' => $this->countIfExists(
+                            'college_admission_application_course_choices',
                             'college_admission_application_id',
                             $row->id
                         ),
@@ -3164,6 +3425,12 @@ class TestDataCleanupService
         ]);
     }
 
+    private function countCollegeAdmissionInterviewsForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_admission_interviews') || ! Schema::hasTable('college_admission_applications')) return 0;
+        return DB::table('college_admission_interviews as i')->join('college_admission_applications as a','a.id','=','i.college_admission_application_id')->join('colleges as c','c.id','=','a.college_id')->where('c.university_id',$universityId)->count();
+    }
+
     private function countCollegeAdmissionScoresForUniversity(int $universityId): int
     {
         if (! Schema::hasTable('college_admission_scores') || ! Schema::hasTable('college_admission_applications')) return 0;
@@ -3180,6 +3447,31 @@ class TestDataCleanupService
         }
         return DB::table('college_admission_applications as a')
             ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeAdmissionApplicationChildForUniversity(string $table, int $universityId): int
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasTable('college_admission_applications')) {
+            return 0;
+        }
+
+        return DB::table($table.' as child')
+            ->join('college_admission_applications as a', 'a.id', '=', 'child.college_admission_application_id')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function countCollegeScopedRowsForUniversity(string $table, int $universityId): int
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasTable('colleges')) {
+            return 0;
+        }
+
+        return DB::table($table.' as scoped')
+            ->join('colleges as c', 'c.id', '=', 'scoped.college_id')
             ->where('c.university_id', $universityId)
             ->count();
     }

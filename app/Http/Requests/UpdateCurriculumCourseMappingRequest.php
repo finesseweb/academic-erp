@@ -16,6 +16,11 @@ class UpdateCurriculumCourseMappingRequest extends FormRequest
         return [
             'discipline_id' => ['required', 'integer', 'exists:academic_disciplines,id'],
             'specialization_id' => ['nullable', 'integer', 'exists:academic_disciplines,id'],
+            'source_discipline_id' => [
+                'nullable',
+                'integer',
+                'exists:academic_disciplines,id',
+            ],
             'course_id' => ['required', 'integer', 'exists:courses,id'],
         ];
     }

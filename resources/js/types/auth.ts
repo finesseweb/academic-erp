@@ -13,6 +13,7 @@ export type User = {
 export type Auth = {
     user: User;
     permissions: string[];
+    universityPermissions: string[];
     collegeScopeIds: number[];
 };
 

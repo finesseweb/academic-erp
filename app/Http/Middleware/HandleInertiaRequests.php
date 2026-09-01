@@ -41,6 +41,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
                 'permissions' => fn () => $request->user()?->allEffectivePermissionCodes() ?? [],
+                'universityPermissions' => fn () => $request->user()?->permissionCodes() ?? [],
                 'collegeScopeIds' => fn () => $request->user()?->activeCollegeScopeIds() ?? [],
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

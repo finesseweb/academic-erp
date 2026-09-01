@@ -217,3 +217,98 @@
 - Fixed Admission Cycle Program Offering eager-loads to use the real `curricula.version` column instead of nonexistent `curricula.version_no`.
 - Updated the Admission Cycle frontend type to match `version` as a string field.
 - Added a schema-consistency rule: downstream implementation must verify actual migration/table-spec column names before selecting or serializing related model fields.
+
+## 2026-08-27 — Interview Scheduling / Evaluation
+- Implemented interview scheduling, College-user panel assignment, evaluator score normalization, final Interview component and shared Admission Score re-evaluation. See `CHANGELOG_PATCH_ADMISSION_INTERVIEW.md`.
+
+## 2026-08-27 — Admission Form Configuration & Internal Entry Stage 1
+Approved prerequisite branch added before Merit/Roster continuation. Added scoped dynamic form builder, manager assignment, dynamic field/file responses, Regular vs Direct admission mode, scoped Application Fee rules with snapshotting, and reuse of existing Admission Application/Application Choice transaction chain. See ADR 024 and `CHANGELOG_PATCH_ADMISSION_FORM_STAGE1.md`.
+
+### 2026-08-27 — Stage 1 Test Data Cleanup coverage
+- Added Admission Form Templates and Application Fee Rules to the Test Data Cleanup Center.
+- Full Academic Test Reset now removes Stage 1 application field values (through application deletion), form mappings, fee rules, and form templates in dependency-safe order.
+- Individual cleanup blocks template/rule deletion when submitted/test Applications still reference them.
+
+## 2026-08-27 — Stage 1 University governance access correction
+- Added University Admission Form Setup page and University-owned base-template workflow.
+- Added `college_admission_form_access_controls` to explicitly enable/disable Stage 1 Form Setup for each College.
+- Added per-College governance mode and independent College fee-override authorization.
+- College Admission Form Setup menu now appears only after University enablement and applicable College RBAC permission.
+- Backend authorization now enforces the University feature gate.
+- Separated University-scope sidebar permission evaluation from aggregated College permissions to prevent cross-scope menu leakage.
+- Added access-control records to Full Academic Test Reset coverage.
+
+## 2026-08-31 — Applicant identity and future Student login
+- Replaced anonymous mapped-form entry with Applicant Registration/Login gateway.
+- Added College-controlled registration, email verification and CAPTCHA settings with RBAC.
+- Added `applicant_profiles` and application ownership by `applicant_user_id`.
+- Core Name/DOB/Email/Phone are captured once at registration and reused in the application.
+- Added Student portal identity transition contract: same login becomes STUDENT only after final Admission Approval/Enrollment creates a Student record.
+
+## 2026-08-31 — Admission Form RBAC runtime regression fix
+- Removed operational references to the superseded `college_admission_form_access_controls` feature-gate table.
+- College and University Admission Form Setup now use the ERP's standard scoped RBAC model as the single access authority.
+- Removed obsolete University College-access route/UI and Inertia shared feature-gate data.
+- Preserved University Base `Allow College Override` as structural governance only.
+- Added ADR 035.
+
+## 2026-08-31 — Admission Form College Render Recovery
+- Fixed blank College Admission Form Setup page caused by missing `curricula` Inertia prop.
+- College controller now supplies only current approved ACTIVE curricula after amendment resolution.
+- Added defensive frontend collection defaults to avoid white-screen crashes from absent list props.
+- Added ADR 036.
+
+## 2026-08-31 — College Admission Form SSR nested-relation safety
+- Fixed College Admission Form Setup SSR crash `Cannot read properties of undefined (reading 'map')`.
+- Added recursive runtime normalization for template steps, mappings, parent steps, panels, fields, options, conditions and scopes.
+- Added safe defaults for top-level selector arrays, fee rules and applicant registration settings.
+- Added ADR 037.
+
+- 2026-08-31: Applicant Portal modernization: theme-token based registration/login UI, shared ERP DatePicker for applicant DOB and public dynamic DATE fields, Forgot Password entry point, and real signed applicant email verification/resend flow. See ADR 038.
+
+- 2026-08-31: Fixed Applicant email-verification runtime namespace (`Illuminate\Auth\MustVerifyEmail`) and added mapping-level optional seat/category selection. Seat selection now defaults to Disabled for public application submission. See ADR 039.
+
+## 2026-08-31 — Applicant verification isolation regression fix
+- Removed the global `MustVerifyEmail` contract from the shared `User` model.
+- Applicant email verification remains available through the existing helper trait and is enforced only inside the Applicant Admission Portal when the College setting requires it.
+- Restored College Admin / University / internal ERP login behavior so Applicant Registration settings cannot redirect internal accounts to the generic verification screen.
+- Added ADR 040 documenting the authentication boundary.
+
+## 2026-08-31 — Applicant public shell / premium gateway
+- Removed internal ERP AppLayout from `applicant/*` pages.
+- Redesigned Applicant Gateway as a theme-aware public admissions experience.
+- Added mapped College/University/Program/Cycle/Session context to the gateway.
+- Preserved shared DatePicker and applicant registration/login behavior.
+
+## 2026-08-31 — Public Applicant Gateway hard isolation + premium refresh
+- `/apply/{slug}` now renders the unique `public/admission-gateway` component instead of the legacy `applicant/gateway` entry page.
+- Added page-level no-layout boundary and global `public/*` layout exclusion so internal Dashboard/sidebar cannot wrap public admission pages.
+- Refreshed gateway visual hierarchy with theme-aware premium admission shell, application context, tabbed new/existing applicant flow, trust indicators, and shared ERP DatePicker.
+
+## 2026-08-31 — Public application academic journey + premium preview
+- Added applicant-facing Logout on the live application page.
+- Reworked public application styling into a premium theme-token-aware admission journey with step rail/cards.
+- Added first-stage Discipline and optional Specialization selection from the mapped Program Offering.
+- Added curriculum-driven mandatory Course/Paper auto-allotment and CHOICE-slot selection with min/max validation.
+- Added final premium Review & Submit preview with confirmation.
+- Public Regular Admission submission is no longer seat-capacity/bucket gated; seat/reservation/allocation remains downstream.
+- Added academic-preference/course-choice persistence separate from seat choices.
+- Added ADR 043.
+
+- 2026-08-31: Reconciled Test Data Cleanup with Applicant Academic Preference/Course Choice and registration-setting data. Individual Admission Application cleanup and Full Academic Reset now delete new application children in FK-safe order; applicant identities remain preserved. ADR 047.
+
+- 2026-08-31: Admission academic selection no longer exposes semester headings. Added category/source-discipline package selection: when all papers under a source are fixed, applicant/admin selects the source (for example History) once and underlying papers are linked automatically; genuine paper choices remain individually selectable. Backend enforces coherent packages. ADR 048.
+
+- 2026-08-31: Applicant/internal application Specialization options now require actual ACTIVE specialization-specific Curriculum Course Mapping usage in the selected Program Offering Curriculum. Empty template-only specializations no longer appear. ADR 049.
+
+- 2026-08-31: Added shared Effective Curriculum Scope authority. Unused Program Template Disciplines/Specializations are excluded from Applicant/Internal Application, Intake/Capacity, Reservation buckets and Selection Rules; Intake activation and Student handoff revalidate current curriculum scope. ADR 050.
+
+## 2026-09-01 — Admission Form dynamic validation, behavior and builder runtime fixes
+- Added reusable text/number field constraints without hard-coding domain-specific fields.
+- Added compatible cross-field comparisons for NUMBER and DATE fields, enforced on the backend and reflected in form UX.
+- Added generic trigger-based copy-from-field behavior with optional target locking; correspondence-to-permanent address copying is supported as configuration rather than special-case code.
+- Added reusable DATE age validation with minimum/maximum completed years and current/custom cutoff reference dates.
+- Added explicit Panel and Field display-order controls within Admission Form Steps.
+- Hardened Add/Edit Field source/panel discovery against nullable hydrated relation arrays.
+- Fixed Add Field client white-screen regression caused by missing `AcademicSelect` runtime definition while preserving Academic Applicability and all advanced rules.
+- No schema change is introduced by the AcademicSelect runtime fix. See ADR 061–065.

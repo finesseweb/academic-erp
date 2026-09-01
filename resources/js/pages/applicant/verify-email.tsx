@@ -1,0 +1,9 @@
+import { Form,Head,usePage } from '@inertiajs/react';
+import { MailCheck, RefreshCw } from 'lucide-react';
+import { Card,CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+export default function VerifyEmail({slug,email}:{slug:string;email:string}){
+ const page=usePage<{status?:string}>(); const sent=page.props.status==='verification-link-sent';
+ return <><Head title="Verify Email"/><main className="relative grid min-h-screen place-items-center overflow-hidden bg-background p-4"><div aria-hidden className="absolute -left-24 top-0 size-80 rounded-full bg-primary/10 blur-3xl"/><div aria-hidden className="absolute -right-20 bottom-0 size-72 rounded-full bg-accent/40 blur-3xl"/><Card className="relative w-full max-w-lg border-primary/15 shadow-xl"><CardContent className="py-10 text-center"><div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/10"><MailCheck className="size-7 text-primary"/></div><h1 className="mt-4 text-2xl font-semibold">Verify your email</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">We sent a secure verification link to <strong className="text-foreground">{email}</strong>. Open the link in that email before continuing your application.</p>{sent&&<p className="mt-4 rounded-lg bg-primary/5 p-3 text-sm text-primary">A new verification link has been sent.</p>}<Form action={`/apply/${slug}/verify-email/resend`} method="post">{({processing})=><Button variant="outline" className="mt-6" disabled={processing}>{processing?<Spinner/>:<RefreshCw className="size-4"/>}Resend verification email</Button>}</Form><p className="mt-4 text-xs text-muted-foreground">If the email does not arrive, check Spam/Junk and confirm that the ERP mail/SMTP configuration is active.</p></CardContent></Card></main></>;
+}

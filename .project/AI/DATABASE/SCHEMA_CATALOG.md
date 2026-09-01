@@ -140,3 +140,32 @@ Ordered machine-readable tie-break criteria for one Selection Rule version, incl
 
 ## Admission Cycle Program Offering anchor — 2026-08-26
 `college_admission_cycles` now includes `college_program_offering_id` (FK -> `college_program_offerings.id`) as its authoritative parent. `academic_session_id` is retained as a derived compatibility snapshot. See ADR 022 and the table spec for lifecycle/application constraints.
+
+## Admission Interviews — 2026-08-27
+- `college_admission_interviews` — one schedule/evaluation per interview-required Application Choice.
+- `college_admission_interview_evaluators` — College-user panel members and normalized evaluator scores.
+
+## Admission Form Configuration & Internal Entry — Stage 1 — 2026-08-27
+- `college_admission_form_templates` — University/College-owned form template header with optional University-parent inheritance, assigned manager, governance mode and REGULAR/DIRECT/BOTH applicability.
+- `college_admission_form_steps` — ordered dynamic form steps.
+- `college_admission_form_fields` — typed dynamic inputs with validation/visibility configuration.
+- `college_admission_form_field_options` — stable options for dropdown/radio/checkbox/multi-select.
+- `college_admission_form_mappings` — inheritance/override mappings from University/College through Degree Level/Degree/Program/Offering/Cycle.
+- `college_application_fee_rules` — scoped Application Fee rules including FREE/no-fee.
+- `college_admission_application_field_values` — application-specific dynamic answers/document metadata.
+- `college_admission_applications` extended with `college_admission_form_template_id`, `admission_mode`, resolved Application Fee snapshot, fee rule id and `form_snapshot`.
+See ADR 024 and the related TABLE_SPECS.
+
+### Admission Form access — RBAC-native correction
+No dedicated Admission Form feature-gate table is authoritative. The temporary `college_admission_form_access_controls` and `college_admission_form_access_roles` tables introduced during Stage 1 iteration are removed by migration `2026_08_27_100040_align_admission_form_access_with_rbac.php`.
+
+Admission Form access uses existing `permissions`, `roles`, `role_permissions`, and scoped `user_roles`.
+
+
+### Admission Form conditional/applicability extension — 2026-08-27
+- `college_admission_form_field_conditions` — relational dynamic-field answer dependencies. See `TABLE_SPECS/college_admission_form_field_conditions.md`.
+- `college_admission_form_field_scopes` — relational Degree Level/Degree/Program/Offering/Curriculum/Admission Cycle applicability. See `TABLE_SPECS/college_admission_form_field_scopes.md`.
+- `college_admission_form_fields.condition_match_mode` — reserved `ALL|ANY` condition aggregation; current builder creates a first condition and backend supports deterministic aggregation.
+
+### Stage 1 governance addition — 2026-08-27
+`college_admission_form_templates.allow_college_override` explicitly governs whether an ACTIVE University form may be extended by a College. Curriculum applicability continues to reference `curricula.id`, but new selections are restricted to the current approved ACTIVE Curriculum version (no approved successor/amendment).

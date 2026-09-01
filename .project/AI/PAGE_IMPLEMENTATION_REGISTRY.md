@@ -168,3 +168,10 @@ On `next` / `next N` / `nextN`:
 - Scope: College
 - Source definitions: University Program Template + approved Curriculum + Academic Session
 - Current gate: Program Offering QA in `NEXT_WORKFLOW.md`.
+
+## Admission Form Configuration & Internal Entry — Stage 1 — 2026-08-27
+- `PAGE_SPECS/COLLEGE_ADMISSION/ADMISSION_FORM_SETUP_AND_INTERNAL_ENTRY_PAGE.md` — IMPLEMENTED_IN_PACKAGE / OWNER_QA_REQUIRED.
+- Setup route: `/college/{college}/admission-form-setup`.
+- Internal entry route reused: `/college/{college}/admission-applications`.
+- Permission gates: `college_admission_form.view`, `college_admission_form.manage`, `college_admission_form.map`, `college_application_fee.manage`.
+- Resume after acceptance: Interview Scheduling / Evaluation QA -> Merit / Roster Generation.

@@ -57,6 +57,8 @@ Every agent MUST follow `DOCUMENTATION_MAINTENANCE.md`. Any implementation that 
 
 The canonical documentation root is `.project/AI/`. Read `DOCUMENTATION_ROOT.md` before resolving any documentation path. Do not assume `/AI` or `AI/` exists elsewhere in the repository.
 
+Do **not** create a parallel root-level `docs/` folder for implementation notes, ADRs, patch readmes, architecture decisions, or living project documentation. All such project documentation must be merged into the appropriate authoritative file under `.project/AI/` (for example `DECISIONS/`, `CURRENT_IMPLEMENTATION_STATE.md`, `CHANGELOG.md`, database docs, or the relevant PAGE_SPEC). A patch is not documentation-complete until `.project/AI/` is synchronized.
+
 ## Mandatory Documentation and Approval Gate
 Before any project work, read `.project/AI/` and treat it as authoritative.
 

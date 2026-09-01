@@ -17,6 +17,7 @@ class CurriculumCourseMappingService
         CurriculumSlot $slot,
         int $disciplineId,
         ?int $specializationId,
+        ?int $sourceDisciplineId,
         int $courseId,
         int $actorId
     ): CurriculumCourseMapping {
@@ -27,6 +28,7 @@ class CurriculumCourseMappingService
             $disciplineId,
             $specializationId
         );
+        $this->assertSourceDiscipline($curriculum, $sourceDisciplineId);
         $this->assertCompatibleCourse($curriculum, $slot, $courseId);
         $this->assertNotAlreadyMapped(
             $slot,
@@ -39,6 +41,7 @@ class CurriculumCourseMappingService
             $slot,
             $disciplineId,
             $specializationId,
+            $sourceDisciplineId,
             $courseId,
             $actorId
         ) {
@@ -51,6 +54,7 @@ class CurriculumCourseMappingService
                 'course_id' => $courseId,
                 'discipline_id' => $disciplineId,
                 'specialization_id' => $specializationId,
+                'source_discipline_id' => $sourceDisciplineId,
                 'display_order' => max($nextOrder, 1),
                 'status' => 'ACTIVE',
                 'created_by' => $actorId,
@@ -77,6 +81,7 @@ class CurriculumCourseMappingService
         CurriculumCourseMapping $mapping,
         int $disciplineId,
         ?int $specializationId,
+        ?int $sourceDisciplineId,
         int $courseId,
         int $actorId
     ): CurriculumCourseMapping {
@@ -84,6 +89,7 @@ class CurriculumCourseMappingService
         $this->assertMappingBelongsToSlot($slot, $mapping);
         $this->assertStructureEditable($curriculum);
         $this->assertProgramAcademicContext($curriculum, $disciplineId, $specializationId);
+        $this->assertSourceDiscipline($curriculum, $sourceDisciplineId);
         $this->assertCompatibleCourse($curriculum, $slot, $courseId);
         $this->assertNotAlreadyMapped(
             $slot,
@@ -97,6 +103,7 @@ class CurriculumCourseMappingService
             $mapping,
             $disciplineId,
             $specializationId,
+            $sourceDisciplineId,
             $courseId,
             $actorId
         ) {
@@ -105,6 +112,7 @@ class CurriculumCourseMappingService
             $mapping->update([
                 'discipline_id' => $disciplineId,
                 'specialization_id' => $specializationId,
+                'source_discipline_id' => $sourceDisciplineId,
                 'course_id' => $courseId,
                 'updated_by' => $actorId,
             ]);
@@ -273,6 +281,28 @@ class CurriculumCourseMappingService
         if (! $valid) {
             throw ValidationException::withMessages([
                 'specialization_id' => 'Select an active Specialization allowed under the selected Program Template Discipline.',
+            ]);
+        }
+    }
+
+    private function assertSourceDiscipline(
+        Curriculum $curriculum,
+        ?int $sourceDisciplineId
+    ): void {
+        if ($sourceDisciplineId === null) {
+            return;
+        }
+
+        $valid = DB::table('academic_disciplines')
+            ->where('id', $sourceDisciplineId)
+            ->where('university_id', $curriculum->university_id)
+            ->where('kind', 'DISCIPLINE')
+            ->where('status', 'ACTIVE')
+            ->exists();
+
+        if (! $valid) {
+            throw ValidationException::withMessages([
+                'source_discipline_id' => 'Select an active source Discipline from this University.',
             ]);
         }
     }

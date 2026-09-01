@@ -16,21 +16,39 @@ use Illuminate\Validation\ValidationException;
 
 class CollegeAdmissionApplicationService
 {
-    public function __construct(private CollegeReservationService $reservationService)
-    {
+    public function __construct(
+        private CollegeReservationService $reservationService,
+        private CollegeAdmissionFormResolver $formResolver,
+        private CollegeAdmissionDynamicFieldService $dynamicFieldService,
+        private ApplicantAcademicPreferenceService $academicPreferenceService,
+    ) {
     }
 
-    public function create(College $college, array $data, int $actorId, ?string $ip): CollegeAdmissionApplication
+    public function create(College $college, array $data, ?int $actorId, ?string $ip, string $entrySource = 'INTERNAL'): CollegeAdmissionApplication
     {
         $this->assertCollegeActive($college);
         $cycle = $this->activeCycle($college, (int) $data['college_admission_cycle_id']);
-        $contexts = $this->resolveChoices($college, $cycle, $data['choices']);
+        $admissionMode = $data['admission_mode'] ?? 'REGULAR';
+        $contexts = isset($data['choices']) ? $this->resolveChoices($college, $cycle, $data['choices'], $admissionMode) : [];
+        $academicPreference = $this->academicPreferenceService->resolve($cycle, $data['academic_preference'] ?? []);
+        $template = $this->formResolver->resolveTemplate($college, $cycle, $admissionMode);
+        $customValues = $template ? $this->dynamicFieldService->validateAndNormalize($template, $cycle, $data['custom_fields'] ?? []) : [];
+        $fee = $this->formResolver->resolveFee($college, $cycle);
 
-        return DB::transaction(function () use ($college, $cycle, $data, $contexts, $actorId, $ip) {
+        return DB::transaction(function () use ($college, $cycle, $data, $contexts, $academicPreference, $actorId, $ip, $template, $customValues, $fee, $admissionMode, $entrySource) {
             $application = CollegeAdmissionApplication::create([
                 'college_id' => $college->id,
+                'applicant_user_id' => $data['applicant_user_id'] ?? null,
                 'college_admission_cycle_id' => $cycle->id,
                 'application_no' => 'PENDING-'.Str::uuid(),
+                'college_admission_form_template_id' => $template?->id,
+                'admission_mode' => $admissionMode,
+                'entry_source' => $entrySource,
+                'application_fee_rule_id' => $fee['rule']?->id,
+                'application_fee_required' => $fee['required'],
+                'application_fee_amount' => $fee['required'] ? $fee['amount'] : 0,
+                'application_fee_currency' => $fee['currency'],
+                'form_snapshot' => $this->formResolver->templatePayload($template, $cycle),
                 ...$this->candidateData($data),
                 'status' => 'DRAFT',
                 'created_by' => $actorId,
@@ -42,6 +60,8 @@ class CollegeAdmissionApplicationService
             ]);
 
             $this->replaceChoices($application, $contexts);
+            $this->academicPreferenceService->persist($application, $academicPreference);
+            if ($template) $this->dynamicFieldService->persist($application, $template, $customValues);
             $application->load($this->applicationRelations());
             $this->audit('COLLEGE_ADMISSION_APPLICATION_CREATED', $application, $college, $actorId, $ip, null, $application->toArray());
 
@@ -56,18 +76,33 @@ class CollegeAdmissionApplicationService
         $this->assertDraft($application);
 
         $cycle = $this->activeCycle($college, (int) $data['college_admission_cycle_id']);
-        $contexts = $this->resolveChoices($college, $cycle, $data['choices']);
+        $admissionMode = $data['admission_mode'] ?? $application->admission_mode ?? 'REGULAR';
+        $contexts = isset($data['choices']) ? $this->resolveChoices($college, $cycle, $data['choices'], $admissionMode) : [];
+        $academicPreference = $this->academicPreferenceService->resolve($cycle, $data['academic_preference'] ?? []);
+        $template = $this->formResolver->resolveTemplate($college, $cycle, $admissionMode);
+        $customValues = $template ? $this->dynamicFieldService->validateAndNormalize($template, $cycle, $data['custom_fields'] ?? [], $application) : [];
+        $fee = $this->formResolver->resolveFee($college, $cycle);
 
-        return DB::transaction(function () use ($application, $college, $cycle, $data, $contexts, $actorId, $ip) {
+        return DB::transaction(function () use ($application, $college, $cycle, $data, $contexts, $academicPreference, $actorId, $ip, $template, $customValues, $fee, $admissionMode) {
             $application->load('choices');
             $before = $application->toArray();
 
             $application->update([
                 'college_admission_cycle_id' => $cycle->id,
+                'college_admission_form_template_id' => $template?->id,
+                'admission_mode' => $admissionMode,
+                'application_fee_rule_id' => $fee['rule']?->id,
+                'application_fee_required' => $fee['required'],
+                'application_fee_amount' => $fee['required'] ? $fee['amount'] : 0,
+                'application_fee_currency' => $fee['currency'],
+                'form_snapshot' => $this->formResolver->templatePayload($template, $cycle),
                 ...$this->candidateData($data),
                 'updated_by' => $actorId,
             ]);
             $this->replaceChoices($application, $contexts);
+            $this->academicPreferenceService->persist($application, $academicPreference);
+            if ($template) $this->dynamicFieldService->persist($application, $template, $customValues);
+            else $application->fieldValues()->delete();
 
             $fresh = $application->fresh()->load($this->applicationRelations());
             $this->audit('COLLEGE_ADMISSION_APPLICATION_UPDATED', $fresh, $college, $actorId, $ip, $before, $fresh->toArray());
@@ -76,7 +111,7 @@ class CollegeAdmissionApplicationService
         });
     }
 
-    public function submit(CollegeAdmissionApplication $application, College $college, int $actorId, ?string $ip): CollegeAdmissionApplication
+    public function submit(CollegeAdmissionApplication $application, College $college, ?int $actorId, ?string $ip): CollegeAdmissionApplication
     {
         $this->assertOwned($application, $college);
         $this->assertCollegeActive($college);
@@ -91,11 +126,15 @@ class CollegeAdmissionApplicationService
             ]);
         }
 
+        // New applications are intentionally not bound to seat buckets at application stage.
+        // Keep legacy seat-bucket choices valid for older records, but do not require or create them here.
         $choiceInput = $application->choices->map(fn ($choice) => [
             'college_program_intake_id' => $choice->college_program_intake_id,
             'bucket_key' => $choice->bucket_key,
         ])->all();
-        $contexts = $this->resolveChoices($college, $cycle, $choiceInput);
+        $contexts = $choiceInput
+            ? $this->resolveChoices($college, $cycle, $choiceInput, $application->admission_mode ?? 'REGULAR')
+            : [];
 
         return DB::transaction(function () use ($application, $college, $contexts, $actorId, $ip) {
             $before = $application->load('choices')->toArray();
@@ -170,7 +209,7 @@ class CollegeAdmissionApplicationService
         });
     }
 
-    private function resolveChoices(College $college, CollegeAdmissionCycle $cycle, array $choices): array
+    private function resolveChoices(College $college, CollegeAdmissionCycle $cycle, array $choices, string $admissionMode = 'REGULAR'): array
     {
         $seen = [];
         $resolved = [];
@@ -216,10 +255,10 @@ class CollegeAdmissionApplicationService
                 ->where('status', 'ACTIVE')
                 ->orderByDesc('version_no')
                 ->first();
-            if (! $rule) {
-                throw ValidationException::withMessages(['choices' => 'Every application choice requires an ACTIVE Merit / Roster / Selection Rule for the exact seat bucket.']);
+            if ($admissionMode === 'REGULAR' && ! $rule) {
+                throw ValidationException::withMessages(['choices' => 'Regular Admission requires an ACTIVE Merit / Roster / Selection Rule for every selected seat bucket.']);
             }
-            if ((int) ($rule->college_program_reservation_plan_id ?? 0) !== (int) ($plan?->id ?? 0)) {
+            if ($rule && (int) ($rule->college_program_reservation_plan_id ?? 0) !== (int) ($plan?->id ?? 0)) {
                 throw ValidationException::withMessages(['choices' => 'The active Selection Rule reservation context no longer matches the current seat bucket. Review the Selection Rule before accepting applications.']);
             }
 
@@ -227,7 +266,7 @@ class CollegeAdmissionApplicationService
                 'preference_no' => $index + 1,
                 'college_program_intake_id' => $intake->id,
                 'college_program_reservation_plan_id' => $plan?->id,
-                'college_admission_selection_rule_id' => $rule->id,
+                'college_admission_selection_rule_id' => $rule?->id,
                 'bucket_type' => $bucket['bucket_type'],
                 'bucket_key' => $bucket['bucket_key'],
                 'basis_capacity' => (int) $bucket['basis_capacity'],
@@ -307,10 +346,15 @@ class CollegeAdmissionApplicationService
             'choices.intake.offering.academicSession:id,name,code,is_current',
             'choices.reservationPlan:id,status',
             'choices.selectionRule:id,name,code,version_no,selection_mode,status,merit_weight_percent,entrance_weight_percent,interview_weight_percent',
+            'formTemplate:id,name,code',
+            'fieldValues.field:id,label,field_type',
+            'academicPreference.discipline:id,name,code',
+            'academicPreference.specialization:id,name,code',
+            'courseChoices.course:id,name,code',
         ];
     }
 
-    private function audit(string $event, CollegeAdmissionApplication $application, College $college, int $actorId, ?string $ip, ?array $before, ?array $after): void
+    private function audit(string $event, CollegeAdmissionApplication $application, College $college, ?int $actorId, ?string $ip, ?array $before, ?array $after): void
     {
         DB::table('audit_logs')->insert([
             'actor_user_id' => $actorId,

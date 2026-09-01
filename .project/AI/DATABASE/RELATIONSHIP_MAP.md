@@ -263,3 +263,52 @@ Future Score / Interview / Merit / Seat Allocation records must reference the Ap
 → `college_admission_application_choices`
 
 Rule: every Application Choice Intake/seat bucket must resolve back to the same `college_program_offering_id` carried by the Admission Cycle. `academic_session_id` on Admission Cycle is a derived compatibility snapshot, not an independent academic parent.
+
+## Student Admission Processing — Interview
+`college_admission_application_choices` -> one `college_admission_interviews` -> many `college_admission_interview_evaluators`.
+Interview retains the Application Choice's exact locked Selection Rule and writes its completed normalized component into the existing `college_admission_scores` context.
+
+## Admission Form Stage 1 relationships — 2026-08-27
+`University -> Admission Form Template -> Steps -> Fields -> Field Options`
+
+`University/College + optional Degree Level/Degree/Program Template/Program Offering/Admission Cycle -> Form Mapping -> Form Template`
+
+`University/College + optional Degree Level/Degree/Program Template/Program Offering/Admission Cycle -> Application Fee Rule`
+
+`College Admission Application -> snapshotted Form Template + snapshotted Fee Rule/Amount -> Dynamic Field Values`
+
+Existing authoritative transaction chain remains:
+`College -> Admission Cycle -> Application -> Application Choice -> Intake/Seat Bucket -> [Selection Rule for REGULAR] -> Eligibility/Score/Interview -> Merit/Roster`
+
+DIRECT admission intentionally keeps `college_admission_selection_rule_id` nullable and bypasses Selection Rule-driven Score/Interview/Merit while remaining linked for future Seat Allocation/Admission Approval/Student Enrollment.
+
+### Stage 1 Admission Form authorization — existing RBAC
+`Permission -> Role -> scoped UserRole -> User -> College`
+
+- `college_admission_form.view`, `college_admission_form.manage`, `college_admission_form.map`, and `college_application_fee.manage` live in the common Permission catalog.
+- University `SUPER_ADMIN` receives them by default.
+- Custom roles receive them only through the existing Role → Permissions workflow.
+- College runtime authorization requires the permission through an active `user_roles` assignment scoped to the same College.
+- No separate Admission Form role allow-list or College enable flag participates in authorization.
+
+### Admission Form field conditional/applicability relationships — 2026-08-27
+- `college_admission_form_field_conditions.college_admission_form_field_id` → `college_admission_form_fields.id` (target; CASCADE).
+- `college_admission_form_field_conditions.source_field_id` → `college_admission_form_fields.id` (source; RESTRICT).
+- `college_admission_form_field_scopes.college_admission_form_field_id` → `college_admission_form_fields.id` (CASCADE).
+- `college_admission_form_field_scopes.degree_level_id` → `degree_levels.id` (RESTRICT).
+- `college_admission_form_field_scopes.degree_id` → `degrees.id` (RESTRICT).
+- `college_admission_form_field_scopes.program_template_id` → `program_templates.id` (RESTRICT).
+- `college_admission_form_field_scopes.college_program_offering_id` → `college_program_offerings.id` (RESTRICT).
+- `college_admission_form_field_scopes.curriculum_id` → `curricula.id` (RESTRICT).
+- `college_admission_form_field_scopes.college_admission_cycle_id` → `college_admission_cycles.id` (RESTRICT).
+
+### Admission Form governance/current Curriculum
+University Admission Form Template (`college_admission_form_templates`, college_id NULL)
+→ `allow_college_override = true`
+→ College Admission Form Template (`parent_template_id`)
+→ College-specific steps/fields
+→ Application Form resolver.
+
+Field applicability `curriculum_id`
+→ `curricula.id`
+→ only current approved ACTIVE Curriculum is valid for new configuration; approved superseded ancestors remain history only.

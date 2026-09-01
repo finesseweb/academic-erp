@@ -31,6 +31,7 @@ type DisciplineMapping = {
     discipline_id: number;
     discipline: Discipline;
     specializations: Specialization[];
+    specialization_required: boolean;
 };
 type Item = {
     id: number;
@@ -55,6 +56,7 @@ type Props = {
 type DisciplineSelection = {
     discipline_id: number;
     specialization_ids: number[];
+    specialization_required: boolean;
 };
 type FormData = {
     degree_id: string;
@@ -92,6 +94,7 @@ function TemplateEditor({
             record?.discipline_mappings.map((mapping) => ({
                 discipline_id: mapping.discipline_id,
                 specialization_ids: mapping.specializations.map((s) => s.id),
+                specialization_required: Boolean(mapping.specialization_required),
             })) ?? [],
         [record],
     );
@@ -119,7 +122,7 @@ function TemplateEditor({
             if (!selected(disciplineId)) {
                 form.setData('disciplines', [
                     ...form.data.disciplines,
-                    { discipline_id: disciplineId, specialization_ids: [] },
+                    { discipline_id: disciplineId, specialization_ids: [], specialization_required: false },
                 ]);
             }
             return;
@@ -596,8 +599,18 @@ function TemplateEditor({
                                                         )}
                                                     </div>
 
-                                                    <div className="border-t px-4 py-2 text-xs text-muted-foreground">
-                                                        {activeSelection.specialization_ids.length} specialization{activeSelection.specialization_ids.length === 1 ? '' : 's'} selected for {activeDiscipline.name}
+                                                    <div className="border-t px-4 py-3">
+                                                        <label className="flex items-start gap-3 rounded-lg border bg-background p-3 text-sm">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="mt-0.5 size-4"
+                                                                checked={activeSelection.specialization_required}
+                                                                disabled={activeSelection.specialization_ids.length === 0}
+                                                                onChange={(e) => form.setData('disciplines', form.data.disciplines.map((row) => row.discipline_id === activeDiscipline.id ? { ...row, specialization_required: e.target.checked } : row))}
+                                                            />
+                                                            <span><span className="font-medium">Specialization required for applicants</span><span className="mt-0.5 block text-xs text-muted-foreground">Default is optional. Enable only when this program structure requires every applicant in this discipline to select a specialization.</span></span>
+                                                        </label>
+                                                        <div className="mt-2 text-xs text-muted-foreground">{activeSelection.specialization_ids.length} specialization{activeSelection.specialization_ids.length === 1 ? '' : 's'} available for {activeDiscipline.name}</div>
                                                     </div>
                                                 </>
                                             )}

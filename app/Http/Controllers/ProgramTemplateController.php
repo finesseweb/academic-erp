@@ -153,6 +153,7 @@ class ProgramTemplateController extends Controller
                         ->where('status', 'ACTIVE')
                 ),
             ],
+            'disciplines.*.specialization_required' => ['nullable', 'boolean'],
             'disciplines.*.specialization_ids' => ['nullable', 'array'],
             'disciplines.*.specialization_ids.*' => [
                 'integer',
@@ -230,6 +231,8 @@ class ProgramTemplateController extends Controller
                 'program_template_id' => $template->id,
                 'discipline_id' => (int) $row['discipline_id'],
             ]);
+
+            $mapping->update(['specialization_required' => (bool) ($row['specialization_required'] ?? false)]);
 
             $mapping->specializations()->sync(
                 array_map('intval', $row['specialization_ids'] ?? [])

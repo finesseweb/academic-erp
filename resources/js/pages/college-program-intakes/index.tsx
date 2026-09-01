@@ -47,6 +47,8 @@ type Specialization = Option & { parent_id: number };
 type Discipline = Option & {
     mapping_id: number;
     program_template_id: number;
+    college_program_offering_id: number;
+    specialization_required?: boolean;
     specializations: Specialization[];
 };
 type Allocation = {
@@ -298,10 +300,10 @@ function AllocationForm({
         () =>
             disciplines.filter(
                 (discipline) =>
-                    discipline.program_template_id ===
-                    intake.offering.program_template_id,
+                    discipline.college_program_offering_id ===
+                    intake.offering.id,
             ),
-        [disciplines, intake.offering.program_template_id],
+        [disciplines, intake.offering.id],
     );
 
     const isSpecialization =

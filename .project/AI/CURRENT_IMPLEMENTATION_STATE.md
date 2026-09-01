@@ -109,3 +109,69 @@ The Admission Cycle foundation is now explicitly part of the delivered implement
 - Activation validates the exact offering's ACTIVE Intake and at least one ACTIVE Selection Rule; Reservation stays optional per bucket.
 - Applications inherit the cycle's Program Offering and can select only seat buckets/specializations from that exact offering.
 - Status: IMPLEMENTED — OWNER QA REQUIRED before continuing Score Capture / Normalization.
+
+## Interview Scheduling / Evaluation — 2026-08-27
+- Implemented after Score Capture for locked Selection Rules with Interview weight > 0.
+- Status: OWNER_QA_REQUIRED before Merit / Roster Generation.
+- See `CURRENT_IMPLEMENTATION_STATE_PATCH_INTERVIEW.md`.
+
+## Admission Form Configuration & Internal Application Entry — Stage 1 — 2026-08-27
+- Owner approved a prerequisite branch before Merit / Roster so the Admission transaction chain has a proper configurable entry foundation.
+- Existing `college_admission_applications` / `college_admission_application_choices` remain authoritative; this branch does not replace or fork the completed Admission work.
+- Added University/College-owned Form Templates with assigned manager, governance mode, REGULAR/DIRECT/BOTH applicability, dynamic steps, fields/options, file/image inputs and scoped mappings.
+- Added most-specific-wins Application Fee Rules across University/College -> Degree Level -> Degree -> Program -> Offering -> Admission Cycle, with fee/template snapshots on each application.
+- Internal Application Entry now resolves the configured template and renders extra fields in the existing ERP theme.
+- REGULAR retains Selection Rule lock and downstream Eligibility/Score/Interview/Merit behavior.
+- DIRECT shares the Application/Application Choice foundation but may be created/submitted without a Selection Rule so it can later route directly toward seat/admission processing.
+- Status: IMPLEMENTED_IN_PACKAGE / OWNER_QA_REQUIRED.
+- Frozen hierarchy resume point after acceptance: Interview Scheduling / Evaluation QA -> Merit / Roster Generation.
+- See `CURRENT_IMPLEMENTATION_STATE_PATCH_ADMISSION_FORM_STAGE1.md`, ADR 024 and the Stage 1 Page Spec.
+
+
+### Stage 1 governance correction — University controlled College access (2026-08-27)
+- University-side `Admission Form Setup` entry point added.
+- University can create/activate locked base templates and dynamic base steps/fields.
+- University explicitly enables/disables Admission Form Setup per affiliated College.
+- Per-College governance modes supported: University Controlled, University Base + College Extension, College Controlled.
+- College application-fee override is independently allowed/denied by University.
+- College menu requires University feature enablement + College-scoped RBAC permission.
+- Backend College setup routes enforce the same feature gate; direct URL/API access cannot bypass it.
+- University sidebar permissions are now evaluated from University scope separately from aggregated College permissions.
+- Full Academic Test Reset removes Stage 1 University→College access-control test records as well.
+
+## Patch — Admission Form stale access-control runtime removed (2026-08-31)
+
+- Fixed a Stage 1 regression where College Admission Form Setup queried the removed `college_admission_form_access_controls` table and returned SQLSTATE 42S02 / 1146.
+- Admission Form runtime authorization is now exclusively `User -> Role -> Permission -> Scope`.
+- Removed active runtime dependency from College controller, University controller, Inertia shared authorization data, and the obsolete University College-access route/UI.
+- `allow_college_override` on the University Base template remains the only structural extension governance flag; it does not replace RBAC and does not block College mapping/use of a locked base form.
+- No database migration is required for this correction.
+- See ADR 035.
+
+## Runtime correction — 2026-08-31 — College Admission Form Setup SSR relation normalization
+Status: IMPLEMENTED / QA REQUIRED
+
+College Admission Form Setup now recursively normalizes optional nested Eloquent relation arrays before SSR/render. This addresses the observed `undefined.map` white-screen regression and does not alter Admission Form business relationships or RBAC governance. See ADR 037.
+
+- Applicant verification runtime fix: User uses Laravel `Illuminate\Auth\MustVerifyEmail`. Public form mapping now has `seat_selection_required` default false; applicants are not forced to choose a seat bucket unless College enables it for that mapping.
+
+## Patch — Public Application Academic Preference + Premium Preview (2026-08-31)
+- Public application now has a dedicated Logout action and premium theme-aware journey UI.
+- Template `SAME_WINDOW`/`NEW_WINDOW` behavior remains respected; `NEW_WINDOW` renders step-by-step with premium progress/navigation.
+- The application starts with Program Offering academic selection: Discipline, optional Specialization, mandatory curriculum papers, and curriculum-defined choice papers.
+- Public submission is intentionally decoupled from seat capacity/buckets. Seats are processed later in the frozen Admission workflow.
+- Final Review & Submit preview added.
+- New tables persist applicant academic preference and course selections independently of seat allocation.
+- Governing decision: ADR 043.
+
+## Admission Form advanced dynamic field rules + builder runtime stabilization — 2026-09-01
+- Admission Form fields now support generic intrinsic validation: text minimum/maximum/exact length and number minimum/maximum/whole-number/decimal-place constraints.
+- Generic cross-field comparisons support compatible NUMBER-to-NUMBER and DATE-to-DATE fields with `<`, `<=`, `>`, `>=`, `=` and `!=`; backend validation remains authoritative. Example use case: Obtained Marks <= Total Marks.
+- Generic copy behavior supports copying a compatible source field into a target when a configured trigger matches, including optional target locking. Address copying is a configuration use case, not a hard-coded address feature.
+- Any DATE field may use dynamic minimum/maximum age rules with current-date or custom-cutoff reference; rules are not tied to DOB or a named field.
+- Panel and Field display order are configurable within a Step; lower values render first and existing automatic ordering remains the fallback when order is omitted.
+- Add/Edit Field collection discovery is defensive against nullable/malformed hydrated `steps`, `fields` and `panels` arrays.
+- Restored the missing `AcademicSelect` runtime helper used by Academic Applicability after browser QA identified `ReferenceError: AcademicSelect is not defined` when opening Add Field. SSR was healthy; this was a client-dialog render regression.
+- ACTIVE/RETIRED templates remain structurally frozen; these rules are configured only while the owning template is DRAFT.
+- Status: IMPLEMENTED / OWNER_QA_REQUIRED.
+- Governing decisions: ADR 061, 062, 063, 064 and 065.

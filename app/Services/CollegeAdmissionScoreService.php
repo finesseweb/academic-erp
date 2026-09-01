@@ -56,6 +56,21 @@ class CollegeAdmissionScoreService
         });
     }
 
+    public function applyInterviewScore(College $college, CollegeAdmissionApplicationChoice $choice, ?float $interviewNormalized, int $actorId, ?string $ip): CollegeAdmissionScore
+    {
+        $choice->load(['application','selectionRule','score']);
+        $application=$choice->application; $rule=$choice->selectionRule; $score=$choice->score;
+        if (! $application || (int)$application->college_id !== (int)$college->id) abort(404);
+        if (! $rule || (float)$rule->interview_weight_percent <= 0) throw ValidationException::withMessages(['interview'=>'The locked Selection Rule does not require Interview.']);
+        if (! $score) throw ValidationException::withMessages(['interview'=>'Score Capture / Normalization must exist before Interview evaluation.']);
+        $this->assertNoDownstream($choice);
+        [$status,$reason,$final]=$this->evaluate($rule,$score->merit_normalized_score!==null?(float)$score->merit_normalized_score:null,$score->entrance_normalized_score!==null?(float)$score->entrance_normalized_score:null,$interviewNormalized,true);
+        $before=$score->toArray();
+        $score->update(['interview_normalized_score'=>$interviewNormalized,'final_weighted_score'=>$final,'qualification_status'=>$status,'qualification_reason'=>$reason,'updated_by'=>$actorId]);
+        $this->audit($score,(int)$application->college_id,$actorId,$ip,$before,$score->fresh()->toArray());
+        return $score->fresh();
+    }
+
     private function component(string $label, bool $required, mixed $raw, mixed $max): array
     {
         if (! $required) return [null,null,null];
