@@ -27,7 +27,7 @@ class CollegeAdmissionApplicationController extends Controller
         $this->authorizeCollege($request, $college, 'college_admission_application.view');
 
         $cycles = CollegeAdmissionCycle::query()
-            ->with(['academicSession:id,name,code,is_current','programOffering.programTemplate:id,name,code','programOffering.academicSession:id,name,code,is_current'])
+            ->with(['academicSession:id,name,code,is_current','programOffering.programTemplate:id,name,code,degree_id','programOffering.programTemplate.degree:id,degree_level_id','programOffering.academicSession:id,name,code,is_current'])
             ->where('college_id', $college->id)
             ->orderByRaw("FIELD(status, 'ACTIVE', 'INACTIVE', 'CLOSED')")
             ->orderByDesc('id')
@@ -37,7 +37,7 @@ class CollegeAdmissionApplicationController extends Controller
             ->with([
                 'intake.allocations.discipline:id,name,code',
                 'intake.allocations.specialization:id,name,code',
-                'intake.offering.programTemplate:id,name,code',
+                'intake.offering.programTemplate:id,name,code,degree_id',
                 'intake.offering.academicSession:id,name,code,is_current',
                 'reservationPlan:id,status',
             ])
@@ -86,7 +86,7 @@ class CollegeAdmissionApplicationController extends Controller
         ])->values();
 
         $directSelectionContexts = CollegeProgramIntake::query()
-            ->with(['allocations.discipline:id,name,code','allocations.specialization:id,name,code','offering.programTemplate:id,name,code','offering.academicSession:id,name,code,is_current'])
+            ->with(['allocations.discipline:id,name,code','allocations.specialization:id,name,code','offering.programTemplate:id,name,code,degree_id','offering.academicSession:id,name,code,is_current'])
             ->where('status', 'ACTIVE')
             ->whereHas('offering', fn ($q) => $q->where('college_id', $college->id)->where('status', 'ACTIVE'))
             ->get()

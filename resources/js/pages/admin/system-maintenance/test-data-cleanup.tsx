@@ -82,12 +82,20 @@ type FullReset = {
     preserved: string[];
 };
 
+type LegacyUnlinkedRegularApplications = {
+    confirmation_code: string;
+    total: number;
+    cleanable: number;
+    blocked: number;
+};
+
 type Props = {
     enabled: boolean;
     environment: string;
     curricula: Curriculum[];
     academicPolicies: AcademicPolicy[];
     fullReset: FullReset;
+    legacyUnlinkedRegularApplications: LegacyUnlinkedRegularApplications;
     entities: {
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
@@ -141,6 +149,8 @@ type ActionTarget = {
         | 'reset_policy_approval'
         | 'cleanup_academic_policy'
         | 'cleanup_master'
+        | 'deactivate_admission_form_template'
+        | 'cleanup_legacy_unlinked_regular'
         | 'full_reset';
     type?: Exclude<TabKey, 'curriculum' | 'academic_policies'>;
     id: number;
@@ -179,6 +189,7 @@ export default function TestDataCleanup({
     academicPolicies,
     entities,
     fullReset,
+    legacyUnlinkedRegularApplications,
 }: Props) {
     const [tab, setTab] = useState<TabKey>('college_admission_applications');
     const [target, setTarget] = useState<ActionTarget | null>(null);
@@ -206,6 +217,17 @@ export default function TestDataCleanup({
         if (target.mode === 'full_reset') {
             form.delete(
                 '/admin/system-maintenance/test-data-cleanup/full-reset',
+                {
+                    preserveScroll: true,
+                    onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
+
+        if (target.mode === 'cleanup_legacy_unlinked_regular') {
+            form.delete(
+                '/admin/system-maintenance/test-data-cleanup/legacy-unlinked-regular-applications',
                 {
                     preserveScroll: true,
                     onSuccess: () => setTarget(null),
@@ -250,6 +272,17 @@ export default function TestDataCleanup({
         if (target.mode === 'cleanup_academic_policy') {
             form.delete(
                 `/admin/system-maintenance/test-data-cleanup/academic-policies/${target.id}`,
+                {
+                    preserveScroll: true,
+                    onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
+
+        if (target.mode === 'deactivate_admission_form_template') {
+            form.post(
+                `/admin/system-maintenance/test-data-cleanup/admission-form-templates/${target.id}/deactivate`,
                 {
                     preserveScroll: true,
                     onSuccess: () => setTarget(null),
@@ -610,7 +643,7 @@ export default function TestDataCleanup({
                     </Card>
                 ) : (
                     <Card>
-                        <CardHeader>
+                        <CardHeader className="space-y-3">
                             <CardTitle className="flex items-center gap-2">
                                 {tab === 'courses' ? (
                                     <GraduationCap className="size-5" />
@@ -623,6 +656,38 @@ export default function TestDataCleanup({
                                     )?.label
                                 }
                             </CardTitle>
+                            {tab === 'college_admission_applications' &&
+                                legacyUnlinkedRegularApplications.total > 0 && (
+                                    <div className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <div className="font-medium">Legacy unlinked Regular submissions detected</div>
+                                            <div className="text-muted-foreground">
+                                                {legacyUnlinkedRegularApplications.total} old PUBLIC + REGULAR + SUBMITTED application(s) have no processing choice link. {legacyUnlinkedRegularApplications.cleanable} can be cleaned now
+                                                {legacyUnlinkedRegularApplications.blocked > 0
+                                                    ? `; ${legacyUnlinkedRegularApplications.blocked} are protected by downstream references.`
+                                                    : '.'}
+                                                {' '}Applicant login identities and applicant profiles are preserved.
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={!enabled || legacyUnlinkedRegularApplications.cleanable === 0}
+                                            onClick={() =>
+                                                openAction({
+                                                    mode: 'cleanup_legacy_unlinked_regular',
+                                                    id: 0,
+                                                    code: legacyUnlinkedRegularApplications.confirmation_code,
+                                                    name: `Clean ${legacyUnlinkedRegularApplications.cleanable} legacy unlinked Regular application(s)`,
+                                                })
+                                            }
+                                        >
+                                            <Eraser className="size-4" />
+                                            Clean Legacy Unlinked
+                                        </Button>
+                                    </div>
+                                )}
                         </CardHeader>
 
                         <CardContent className="p-0">
@@ -702,7 +767,27 @@ export default function TestDataCleanup({
                                                     </td>
 
                                                     <td className="px-4 py-4">
-                                                        <div className="flex justify-end">
+                                                        <div className="flex flex-wrap justify-end gap-2">
+                                                            {tab === 'college_admission_form_templates' &&
+                                                                item.status === 'ACTIVE' && (
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        disabled={!enabled}
+                                                                        onClick={() =>
+                                                                            openAction({
+                                                                                mode: 'deactivate_admission_form_template',
+                                                                                id: item.id,
+                                                                                code: item.code,
+                                                                                name: item.name,
+                                                                            })
+                                                                        }
+                                                                    >
+                                                                        <RotateCcw className="size-4" />
+                                                                        Deactivate for Testing
+                                                                    </Button>
+                                                                )}
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
@@ -756,10 +841,14 @@ export default function TestDataCleanup({
                                 <AlertTriangle className="size-5 text-destructive" />
                                 {target.mode === 'full_reset'
                                     ? 'Full Academic Test Reset'
+                                    : target.mode === 'cleanup_legacy_unlinked_regular'
+                                      ? 'Clean Legacy Unlinked Applications'
                                     : target.mode === 'reset_approval' ||
                                         target.mode === 'reset_policy_approval'
                                       ? 'Reset Test Approval'
-                                      : 'Clean Test Data'}
+                                      : target.mode === 'deactivate_admission_form_template'
+                                        ? 'Deactivate Admission Form for Testing'
+                                        : 'Clean Test Data'}
                             </CardTitle>
                         </CardHeader>
 
@@ -780,13 +869,17 @@ export default function TestDataCleanup({
                                 <p className="text-sm text-muted-foreground">
                                     {target.mode === 'full_reset'
                                         ? 'All currently implemented academic/test records will be permanently deleted in dependency-safe order. University Profile, Colleges, Users, protected Roles, Permissions, access assignments, Audit Logs, migrations, and system tables are preserved.'
+                                        : target.mode === 'cleanup_legacy_unlinked_regular'
+                                          ? 'Only old PUBLIC + REGULAR + SUBMITTED applications with no eligibility-processing choice link will be removed. Dynamic answers, academic preferences and course choices for those applications are cleaned child-first. Applicant users/login identities, applicant profiles and registration numbers are preserved. Any record with downstream Score, Interview, Merit, Seat, Admission or Student references is skipped.'
                                         : target.mode === 'reset_approval'
                                           ? 'Approval requests/history for this test Curriculum will be removed and the Curriculum will return to DRAFT / NOT_SUBMITTED. Structure is preserved.'
                                         : target.mode === 'reset_policy_approval'
                                           ? 'Approval requests/history for this standalone test Academic Policy will be removed and the Policy will return to DRAFT / NOT_SUBMITTED. Configured policy rules are preserved.'
                                           : target.mode === 'cleanup_academic_policy'
                                             ? 'The complete Academic Policy test version chain and its policy-rule children will be permanently removed. Cleanup is blocked if operational references exist.'
-                                            : 'The selected test record will be permanently removed. Dependency checks are enforced by Laravel.'}
+                                            : target.mode === 'deactivate_admission_form_template'
+                                              ? 'Testing-only recovery action: the ACTIVE Admission Form Template will return to DRAFT so its setup can be corrected. No template structure or submitted application is deleted. Any enabled public applicant mapping for this template is switched off automatically. Normal Admission Form Setup still does not allow ACTIVE → DRAFT.'
+                                              : 'The selected test record will be permanently removed. Dependency checks are enforced by Laravel.'}
                                 </p>
 
                                 <div className="space-y-2">
@@ -854,7 +947,8 @@ export default function TestDataCleanup({
                                         type="submit"
                                         variant={
                                             target.mode === 'reset_approval' ||
-                                            target.mode === 'reset_policy_approval'
+                                            target.mode === 'reset_policy_approval' ||
+                                            target.mode === 'deactivate_admission_form_template'
                                                 ? 'default'
                                                 : 'destructive'
                                         }
@@ -870,9 +964,11 @@ export default function TestDataCleanup({
                                             : target.mode === 'reset_approval' ||
                                                 target.mode === 'reset_policy_approval'
                                               ? 'Reset Approval'
-                                              : target.mode === 'cleanup_academic_policy'
-                                                ? 'Permanently Clean Policy Chain'
-                                                : 'Permanently Clean'}
+                                              : target.mode === 'deactivate_admission_form_template'
+                                                ? 'Return Template to Draft'
+                                                : target.mode === 'cleanup_academic_policy'
+                                                  ? 'Permanently Clean Policy Chain'
+                                                  : 'Permanently Clean'}
                                     </Button>
                                 </div>
                             </form>

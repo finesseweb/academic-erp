@@ -20,11 +20,25 @@ class CollegeAdmissionDynamicFieldService
 
         $fields = $this->allFields($template)->where('status', 'ACTIVE')->values();
         $effectiveValues = $this->applyCopyRules($fields, $this->effectiveValues($fields, $input, $application));
+
+        // Applicability is evaluated before answer conditions. A conditional field must
+        // never become visible because a source field carries a stale/submitted value
+        // while that source itself is outside the current academic context.
+        $applicableFieldIds = $fields
+            ->filter(fn ($field) => $this->isApplicable($field, $cycle))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $applicableLookup = array_fill_keys($applicableFieldIds, true);
+        foreach ($fields as $field) {
+            if (! isset($applicableLookup[(int) $field->id])) $effectiveValues[$field->id] = null;
+        }
+
         $normalized = [];
         $errors = [];
 
         foreach ($fields as $field) {
-            if (! $this->isApplicable($field, $cycle) || ! $this->conditionsPass($field, $effectiveValues)) {
+            if (! isset($applicableLookup[(int) $field->id]) || ! $this->conditionsPass($field, $effectiveValues)) {
                 $normalized[$field->id] = null;
                 continue;
             }
@@ -225,6 +239,24 @@ class CollegeAdmissionDynamicFieldService
             if (isset($rules['exact_length']) && $length !== (int) $rules['exact_length']) return "{$field->label} must be exactly {$rules['exact_length']} characters.";
             if (isset($rules['min_length']) && $length < (int) $rules['min_length']) return "{$field->label} must be at least {$rules['min_length']} characters.";
             if (isset($rules['max_length']) && $length > (int) $rules['max_length']) return "{$field->label} may not be longer than {$rules['max_length']} characters.";
+            if (in_array($field->field_type, ['TEXT','TEXTAREA'], true)) {
+                $mode = $rules['text_input_mode'] ?? 'ANY';
+                $pattern = match ($mode) {
+                    'LETTERS_ONLY' => '/^[\p{L}\p{M}]+(?:[ \'-][\p{L}\p{M}]+)*$/u',
+                    'DIGITS_ONLY' => '/^\d+$/u',
+                    'ALPHANUMERIC' => '/^[\p{L}\p{M}\p{N}]+$/u',
+                    default => null,
+                };
+                if ($text !== '' && $pattern && ! preg_match($pattern, $text)) {
+                    $description = match ($mode) {
+                        'LETTERS_ONLY' => 'letters only',
+                        'DIGITS_ONLY' => 'digits only',
+                        'ALPHANUMERIC' => 'letters and numbers only',
+                        default => 'the configured format',
+                    };
+                    return "{$field->label} must contain {$description}.";
+                }
+            }
             if ($field->field_type === 'EMAIL' && ! filter_var($text, FILTER_VALIDATE_EMAIL)) return "Enter a valid email address for {$field->label}.";
         }
 

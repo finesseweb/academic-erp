@@ -79,6 +79,9 @@ class TestDataCleanupController extends Controller
                 'fullReset' =>
                     $this->service
                         ->fullAcademicResetPreview($university->id),
+                'legacyUnlinkedRegularApplications' =>
+                    $this->service
+                        ->legacyUnlinkedRegularApplicationsPreview($university->id),
             ]
         );
     }
@@ -203,6 +206,90 @@ class TestDataCleanupController extends Controller
         return back()->with(
             'success',
             'Full academic test data reset completed in dependency-safe order. System core and access data were preserved.'
+        );
+    }
+
+
+    public function cleanupLegacyUnlinkedRegularApplications(
+        Request $request
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+
+        $university = University::query()->firstOrFail();
+
+        $request->validate([
+            'confirmation_code' => ['required', 'string', 'max:120'],
+        ]);
+
+        $expected = 'CLEAN-UNLINKED-REGULAR-APPLICATIONS';
+        if (trim((string) $request->input('confirmation_code')) !== $expected) {
+            throw ValidationException::withMessages([
+                'confirmation_code' =>
+                    'Type CLEAN-UNLINKED-REGULAR-APPLICATIONS exactly to clean legacy unlinked Regular applications.',
+            ]);
+        }
+
+        $result = $this->service->cleanupLegacyUnlinkedRegularApplications(
+            $university->id,
+            $request->user()->id
+        );
+
+        $message = $result['deleted'].' legacy unlinked Regular application(s) cleaned successfully.';
+        if (($result['blocked'] ?? 0) > 0) {
+            $message .= ' '.$result['blocked'].' record(s) were preserved because downstream processing references exist.';
+        }
+
+        return back()->with('success', $message);
+    }
+
+
+    public function deactivateAdmissionFormTemplate(
+        Request $request,
+        int $template
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+
+        $university = University::query()->firstOrFail();
+
+        $request->validate([
+            'confirmation_code' => [
+                'required',
+                'string',
+                'max:120',
+            ],
+        ]);
+
+        $records =
+            $this->service
+                ->listMaintenanceEntities($university->id);
+
+        $record = collect(
+            $records['college_admission_form_templates'] ?? []
+        )->firstWhere('id', $template);
+
+        if (! $record) {
+            abort(404);
+        }
+
+        if (
+            trim((string) $request->input('confirmation_code'))
+                !== (string) $record['code']
+        ) {
+            throw ValidationException::withMessages([
+                'confirmation_code' =>
+                    'Type the exact Admission Form Template Code to confirm testing deactivation.',
+            ]);
+        }
+
+        $this->service->deactivateAdmissionFormTemplateForTesting(
+            $template,
+            $university->id,
+            $request->user()->id
+        );
+
+        return back()->with(
+            'success',
+            'Admission Form Template returned to DRAFT for testing corrections. Any public applicant access for this template was disabled.'
         );
     }
 

@@ -6,6 +6,8 @@ use App\Http\Requests\StoreCollegeAdmissionSelectionRuleRequest;
 use App\Http\Requests\UpdateCollegeAdmissionSelectionRuleRequest;
 use App\Models\College;
 use App\Models\CollegeAdmissionSelectionRule;
+use App\Models\CollegeAdmissionFormField;
+use App\Models\CollegeAdmissionFormMapping;
 use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationPlan;
 use App\Services\CollegeAdmissionSelectionRuleService;
@@ -73,6 +75,8 @@ class CollegeAdmissionSelectionRuleController extends Controller
                 'intake.offering.programTemplate:id,name,code',
                 'intake.offering.academicSession:id,name,code,is_current',
                 'reservationPlan:id,status',
+                'meritSources.obtainedField:id,label,field_key,field_type',
+                'meritSources.maximumField:id,label,field_key,field_type',
                 'tieBreakers',
             ])
             ->whereHas('intake.offering', fn ($q) => $q->where('college_id', $college->id))
@@ -85,11 +89,32 @@ class CollegeAdmissionSelectionRuleController extends Controller
                 return $rule;
             });
 
+        $offeringIds = $eligibleBuckets->pluck('college_program_offering_id')->unique()->values();
+        $mappings = CollegeAdmissionFormMapping::query()
+            ->where('college_id', $college->id)
+            ->where('status', 'ACTIVE')
+            ->whereIn('college_program_offering_id', $offeringIds)
+            ->get(['college_program_offering_id','college_admission_form_template_id']);
+        $templatesByOffering = $mappings->groupBy('college_program_offering_id');
+        $templateIds = $mappings->pluck('college_admission_form_template_id')->unique();
+        $numericFields = CollegeAdmissionFormField::query()
+            ->with('step:id,college_admission_form_template_id')
+            ->where('field_type', 'NUMBER')->where('status','ACTIVE')
+            ->whereHas('step', fn($q) => $q->whereIn('college_admission_form_template_id', $templateIds))
+            ->orderBy('display_order')->orderBy('id')->get(['id','college_admission_form_step_id','field_key','label','field_type']);
+        $scoreSourceFields = $offeringIds->flatMap(function ($offeringId) use ($templatesByOffering, $numericFields) {
+            $templateIds = $templatesByOffering->get($offeringId, collect())->pluck('college_admission_form_template_id')->map(fn($id)=>(int)$id)->all();
+            return $numericFields->filter(fn($field) => in_array((int)$field->step?->college_admission_form_template_id, $templateIds, true))->map(fn($field) => [
+                'college_program_offering_id'=>(int)$offeringId,'field_id'=>(int)$field->id,'label'=>$field->label,'field_key'=>$field->field_key,
+            ]);
+        })->values();
+
         return Inertia::render('college-admission-selection-rules/index', [
             'college' => $college->only(['id','name','code','status']),
             'eligibleBuckets' => $eligibleBuckets,
             'blockedBuckets' => $blockedBuckets,
             'rules' => $rules,
+            'scoreSourceFields' => $scoreSourceFields,
             'can' => [
                 'create' => $request->user()->hasCollegePermission('college_admission_selection_rule.create', $college->id),
                 'update' => $request->user()->hasCollegePermission('college_admission_selection_rule.update', $college->id),

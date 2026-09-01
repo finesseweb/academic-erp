@@ -1,5 +1,15 @@
 # Change Log
 
+## 2026-09-01 — Testing-only Admission Form Template deactivation
+
+- Added `Deactivate for Testing` under Test Data Cleanup -> Admission Form Templates for ACTIVE test templates.
+- The maintenance action returns only the selected template from ACTIVE to DRAFT; it does not delete template structure or Admission Applications.
+- Enabled public applicant mappings for that template are disabled automatically before the lifecycle change.
+- Reused `test_data_cleanup.manage`, exact template-Code confirmation, and the existing Test Data Cleanup environment guard.
+- Added audit event `TEST_ADMISSION_FORM_TEMPLATE_DEACTIVATED` with before/after state.
+- Normal Admission Form Setup remains structurally frozen after activation; this does not introduce a production Deactivate lifecycle action.
+- No database schema change. Governing decision: ADR 072.
+
 ## 2026-08-26 — Merit / Selection Rule responsive dialog consistency fix
 
 - Corrected Merit / Roster / Selection Rule create/edit dialog width and viewport overflow.
@@ -312,3 +322,30 @@ Approved prerequisite branch added before Merit/Roster continuation. Added scope
 - Hardened Add/Edit Field source/panel discovery against nullable hydrated relation arrays.
 - Fixed Add Field client white-screen regression caused by missing `AcademicSelect` runtime definition while preserving Academic Applicability and all advanced rules.
 - No schema change is introduced by the AcademicSelect runtime fix. See ADR 061–065.
+
+## 2026-09-01 — Admission Form conditional rendering integrity
+- Restored ADR 032 any-existing-non-file parent selection across University Base and College Extension templates.
+- Added condition editing/removal to Edit Field and circular dependency prevention.
+- Fixed runtime dependency parity so academic applicability is evaluated before conditions and dangling conditional children are pruned from effective form payloads.
+- No schema change. See ADR 073.
+
+## 2026-09-01 — Admission Form runtime validation parity
+- Added ADR 074.
+- Added a shared applicant/internal runtime validation helper so Admission Form Setup rules are visibly and consistently enforced wherever the effective form renders.
+- Public and college-internal forms now show configured validation hints and live inline violations for text length/input mode, number bounds/precision, date-age rules, and NUMBER/DATE cross-field comparisons.
+- Public step-by-step navigation now evaluates the complete configured field-rule set before unlocking the next step.
+- College internal rendering now restores native required constraints for visible dynamic controls while backend validation remains authoritative.
+
+## 2026-09-01 — Admission Form builder delete action integrity
+- Added ADR 075.
+- Replaced passive Admission Form Setup structural DELETE forms with explicit confirmed Inertia delete actions at University and College scope.
+- Delete failures now surface dependency validation messages instead of appearing to do nothing.
+- Hardened DRAFT Step deletion around RESTRICT condition/comparison/copy-rule source foreign keys: internal dependencies are removed transactionally, while external dependencies and submitted application values continue to block deletion.
+- Panel deletion continues to preserve fields by moving them directly under the Step; Field dependency protection remains unchanged.
+- No schema change.
+
+## 2026-09-01 — Admission Form copy-rule runtime payload parity
+- Fixed effective Admission Form payload to include active copy rules and comparison rules.
+- Public Applicant form and College Add Application/Edit Draft can now execute configured field-copy behavior.
+- Added applicability-safe handling for dangling advanced-rule dependencies.
+- Added ADR 076.

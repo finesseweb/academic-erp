@@ -14,6 +14,7 @@ class CollegeAdmissionFieldRuleService
     {
         return [
             'min_length'=>['nullable','integer','min:0','max:100000'], 'max_length'=>['nullable','integer','min:1','max:100000'], 'exact_length'=>['nullable','integer','min:1','max:100000'],
+            'text_input_mode'=>['nullable',Rule::in(['ANY','LETTERS_ONLY','DIGITS_ONLY','ALPHANUMERIC'])],
             'min_value'=>['nullable','numeric'], 'max_value'=>['nullable','numeric'], 'integer_only'=>['nullable','boolean'], 'decimal_places'=>['nullable','integer','min:0','max:8'],
             'min_age_years'=>['nullable','integer','min:0','max:150'], 'max_age_years'=>['nullable','integer','min:0','max:150'],
             'age_reference_mode'=>['nullable',Rule::in(['TODAY','CUSTOM'])], 'age_reference_date'=>['nullable','date_format:Y-m-d'],
@@ -26,6 +27,9 @@ class CollegeAdmissionFieldRuleService
     public function assertConfiguration(CollegeAdmissionFormTemplate $template, CollegeAdmissionFormStep $step, string $fieldType, array $data, ?CollegeAdmissionFormField $target = null): void
     {
         if (filled($data['exact_length'] ?? null) && (filled($data['min_length'] ?? null) || filled($data['max_length'] ?? null))) throw ValidationException::withMessages(['exact_length'=>'Use Exact Length OR Min/Max Length, not both.']);
+        $textLike = in_array($fieldType, ['TEXT','TEXTAREA','EMAIL','PHONE'], true);
+        if (filled($data['text_input_mode'] ?? null) && ! $textLike) throw ValidationException::withMessages(['text_input_mode'=>'Allowed Input applies only to text-based fields.']);
+        if (in_array($fieldType, ['EMAIL','PHONE'], true) && filled($data['text_input_mode'] ?? null) && ($data['text_input_mode'] ?? 'ANY') !== 'ANY') throw ValidationException::withMessages(['text_input_mode'=>'Email and Phone keep their own format validation. Use Allowed Input on Text/Text Area fields.']);
         if (filled($data['min_length'] ?? null) && filled($data['max_length'] ?? null) && (int)$data['min_length'] > (int)$data['max_length']) throw ValidationException::withMessages(['max_length'=>'Maximum length must be greater than or equal to minimum length.']);
         if (filled($data['min_value'] ?? null) && filled($data['max_value'] ?? null) && (float)$data['min_value'] > (float)$data['max_value']) throw ValidationException::withMessages(['max_value'=>'Maximum value must be greater than or equal to minimum value.']);
         if (filled($data['min_age_years'] ?? null) && filled($data['max_age_years'] ?? null) && (int)$data['min_age_years'] > (int)$data['max_age_years']) throw ValidationException::withMessages(['max_age_years'=>'Maximum age must be greater than or equal to minimum age.']);
@@ -56,6 +60,7 @@ class CollegeAdmissionFieldRuleService
         $rules = [];
         if (in_array($fieldType, ['TEXT','TEXTAREA','EMAIL','PHONE'], true)) {
             foreach (['min_length','max_length','exact_length'] as $key) if (filled($data[$key] ?? null)) $rules[$key]=(int)$data[$key];
+            if (in_array($fieldType, ['TEXT','TEXTAREA'], true)) $rules['text_input_mode']=$data['text_input_mode'] ?? ($existing['text_input_mode'] ?? 'ANY');
         }
         if ($fieldType === 'DATE') {
             foreach (['min_age_years','max_age_years'] as $key) if (filled($data[$key] ?? null) || ($data[$key] ?? null) === 0 || ($data[$key] ?? null) === '0') $rules[$key]=(int)$data[$key];

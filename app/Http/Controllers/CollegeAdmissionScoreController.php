@@ -21,10 +21,13 @@ class CollegeAdmissionScoreController extends Controller
 
         $choices=CollegeAdmissionApplicationChoice::query()
             ->with([
+                'application.fieldValues:id,college_admission_application_id,college_admission_form_field_id,value_text',
                 'application.admissionCycle.programOffering.programTemplate:id,name,code',
                 'application.admissionCycle.programOffering.academicSession:id,name,code,is_current',
                 'intake.allocations.discipline:id,name,code','intake.allocations.specialization:id,name,code',
                 'selectionRule:id,name,code,version_no,selection_mode,merit_weight_percent,entrance_weight_percent,interview_weight_percent,minimum_merit_score,minimum_entrance_score,minimum_interview_score,minimum_final_score',
+                'selectionRule.meritSources.obtainedField:id,label,field_key',
+                'selectionRule.meritSources.maximumField:id,label,field_key',
                 'score',
             ])
             ->where('eligibility_status','ELIGIBLE')

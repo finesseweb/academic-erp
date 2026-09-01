@@ -126,9 +126,11 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('admin/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     Route::get('admin/system-maintenance/test-data-cleanup', [TestDataCleanupController::class, 'index'])->name('test-data-cleanup.index');
     Route::delete('admin/system-maintenance/test-data-cleanup/full-reset', [TestDataCleanupController::class, 'fullReset'])->name('test-data-cleanup.full-reset');
+    Route::delete('admin/system-maintenance/test-data-cleanup/legacy-unlinked-regular-applications', [TestDataCleanupController::class, 'cleanupLegacyUnlinkedRegularApplications'])->name('test-data-cleanup.legacy-unlinked-regular-applications');
     Route::delete('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}', [TestDataCleanupController::class, 'destroyCurriculum'])->name('test-data-cleanup.curricula.destroy');
     Route::post('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}/reset-approval', [TestDataCleanupController::class, 'resetCurriculumApproval'])->name('test-data-cleanup.curricula.reset-approval');
     Route::delete('admin/system-maintenance/test-data-cleanup/academic-policies/{academicPolicy}', [TestDataCleanupController::class, 'destroyAcademicPolicy'])->name('test-data-cleanup.academic-policies.destroy');
+    Route::post('admin/system-maintenance/test-data-cleanup/admission-form-templates/{template}/deactivate', [TestDataCleanupController::class, 'deactivateAdmissionFormTemplate'])->name('test-data-cleanup.admission-form-templates.deactivate');
     Route::post('admin/system-maintenance/test-data-cleanup/academic-policies/{academicPolicy}/reset-approval', [TestDataCleanupController::class, 'resetAcademicPolicyApproval'])->name('test-data-cleanup.academic-policies.reset-approval');
     Route::delete('admin/system-maintenance/test-data-cleanup/{type}/{id}', [TestDataCleanupController::class, 'destroyMaster'])->name('test-data-cleanup.master.destroy');
 

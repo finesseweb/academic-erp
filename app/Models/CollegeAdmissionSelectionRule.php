@@ -40,6 +40,11 @@ class CollegeAdmissionSelectionRule extends Model
         return $this->belongsTo(CollegeProgramReservationPlan::class, 'college_program_reservation_plan_id');
     }
 
+    public function meritSources(): HasMany
+    {
+        return $this->hasMany(CollegeAdmissionSelectionRuleMeritSource::class, 'college_admission_selection_rule_id')->orderBy('display_order')->orderBy('id');
+    }
+
     public function tieBreakers(): HasMany
     {
         return $this->hasMany(CollegeAdmissionSelectionRuleTieBreaker::class, 'college_admission_selection_rule_id')

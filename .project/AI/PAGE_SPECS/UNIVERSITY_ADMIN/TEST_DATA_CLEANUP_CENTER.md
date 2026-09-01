@@ -94,3 +94,23 @@ The tab supports:
 - audit logging.
 
 The implementation reuses the existing Test Data Cleanup permission/environment guard and does not introduce a separate maintenance design.
+
+## Admission Form Template testing deactivation — 2026-09-01
+
+The **Admission Form Templates** section exposes a maintenance-only **Deactivate for Testing** action for an `ACTIVE` template.
+
+Flow:
+
+`ACTIVE -> Deactivate for Testing -> DRAFT -> correct builder setup -> Activate normally`
+
+Rules:
+- action is visible only for ACTIVE Admission Form Templates;
+- exact template Code confirmation is mandatory;
+- `test_data_cleanup.manage` remains mandatory;
+- Test Data Cleanup environment guard remains mandatory;
+- the action is non-destructive: Template, Steps, Panels, Fields, configured rules, mappings and Applications are preserved;
+- all enabled public applicant mappings belonging to the template are automatically switched off before the status changes to DRAFT;
+- audit event: `TEST_ADMISSION_FORM_TEMPLATE_DEACTIVATED`;
+- ordinary Admission Form Setup does not expose ACTIVE -> DRAFT.
+
+This is a QA/development recovery provision only. Production-safe changes to a live template remain governed by the future Draft Revision/version workflow in ADR 053.
