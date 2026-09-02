@@ -40,3 +40,10 @@ Status changes, role changes and administrative password reset actions must be a
 
 ## Realtime
 Not required.
+
+## 2026-09-02 Integrity Update
+- Internal Access Management excludes `APPLICANT` identities; applicants remain in Admission workflows.
+- College Staff rows expose `primary_college_id` as a visible College / Institute name and code.
+- College filter is server-side and applies to the College ownership field.
+- University visibility includes subordinate College staff; visibility is based on institutional ownership/scope rather than `created_by`.
+- Email uniqueness is global and normalized before validation/persistence.

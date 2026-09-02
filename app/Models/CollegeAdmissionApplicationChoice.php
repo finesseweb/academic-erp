@@ -51,6 +51,11 @@ class CollegeAdmissionApplicationChoice extends Model
         return $this->hasOne(CollegeAdmissionInterview::class, 'college_admission_application_choice_id');
     }
 
+    public function meritEntry(): HasOne
+    {
+        return $this->hasOne(CollegeAdmissionMeritEntry::class, 'college_admission_application_choice_id');
+    }
+
     public function eligibilityCheckedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'eligibility_checked_by');

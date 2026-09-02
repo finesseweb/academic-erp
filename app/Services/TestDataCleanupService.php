@@ -1039,6 +1039,10 @@ class TestDataCleanupService
                 $interviewIds = Schema::hasTable('college_admission_interviews')
                     ? DB::table('college_admission_interviews')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
                     : collect();
+                // Merit entries RESTRICT-delete their consumed Score/Application/Choice
+                // references, so full academic test reset must remove the generated
+                // downstream roster before Interview / Score / Application rows.
+                $this->deleteWhereIn('college_admission_merit_entries', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_interview_evaluators', 'college_admission_interview_id', $interviewIds);
                 $this->deleteWhereIn('college_admission_interviews', 'id', $interviewIds);
                 $this->deleteWhereIn('college_admission_scores', 'college_admission_application_id', $applicationIds);

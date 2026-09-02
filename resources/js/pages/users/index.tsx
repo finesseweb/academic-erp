@@ -41,6 +41,7 @@ type User = {
     status: 'ACTIVE' | 'INACTIVE';
     last_login_at: string | null;
     created_at: string;
+    primary_college: { id: number; name: string; code: string } | null;
     roles: {
         id: number;
         name: string;
@@ -56,11 +57,13 @@ type P = {
         total: number;
     };
     roles: { id: number; name: string }[];
+    colleges: { id: number; name: string; code: string }[];
     filters: {
         search?: string;
         status?: string;
         account_type?: string;
         role_id?: number;
+        college_id?: number;
     };
     summary: { total: number; active: number; inactive: number };
     can: {
@@ -151,12 +154,13 @@ function Confirm({ user, kind }: { user: User; kind: 'status' | 'reset' }) {
         </Dialog>
     );
 }
-export default function UsersIndex({ users, roles, filters, summary, can }: P) {
+export default function UsersIndex({ users, roles, colleges, filters, summary, can }: P) {
     const filtered = Boolean(
         filters.search ||
         filters.status ||
         filters.account_type ||
-        filters.role_id,
+        filters.role_id ||
+        filters.college_id,
     );
 
     return (
@@ -231,7 +235,7 @@ export default function UsersIndex({ users, roles, filters, summary, can }: P) {
                         <Form
                             action="/admin/users"
                             method="get"
-                            className="grid gap-3 xl:grid-cols-[1fr_190px_180px_180px_auto]"
+                            className="grid gap-3 xl:grid-cols-[1fr_180px_180px_190px_180px_auto]"
                         >
                             <div className="relative">
                                 <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -283,6 +287,24 @@ export default function UsersIndex({ users, roles, filters, summary, can }: P) {
                                 </SelectContent>
                             </Select>
                             <Select
+                                name="college_id"
+                                defaultValue={String(filters.college_id ?? 'all')}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All colleges
+                                    </SelectItem>
+                                    {colleges.map((college) => (
+                                        <SelectItem key={college.id} value={String(college.id)}>
+                                            {college.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Select
                                 name="status"
                                 defaultValue={filters.status ?? 'all'}
                             >
@@ -320,6 +342,7 @@ export default function UsersIndex({ users, roles, filters, summary, can }: P) {
                                         <th className="px-4 py-3">
                                             Type / scope
                                         </th>
+                                        <th className="px-4 py-3">College / Institute</th>
                                         <th className="px-4 py-3">Roles</th>
                                         <th className="px-4 py-3">Status</th>
                                         <th className="px-4 py-3">
@@ -347,10 +370,22 @@ export default function UsersIndex({ users, roles, filters, summary, can }: P) {
                                             <td className="px-4 py-4">
                                                 <p>{label(u.account_type)}</p>
                                                 <p className="text-xs text-muted-foreground">
-                                                    {u.roles[0]?.pivot
-                                                        .scope_type ??
-                                                        'No scope assigned'}
+                                                    {u.primary_college
+                                                        ? 'COLLEGE'
+                                                        : (u.roles[0]?.pivot.scope_type ?? 'No scope assigned')}
                                                 </p>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                {u.primary_college ? (
+                                                    <>
+                                                        <p className="font-medium">{u.primary_college.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{u.primary_college.code}</p>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-muted-foreground">
+                                                        {u.account_type === 'COLLEGE_STAFF' ? 'Not assigned' : 'University / Global'}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-4">
                                                 {u.roles

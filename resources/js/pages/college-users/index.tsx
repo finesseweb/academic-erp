@@ -28,6 +28,7 @@ type U = {
     email: string;
     mobile: string | null;
     status: string;
+    roles: { id: number; name: string; code: string }[];
 };
 export default function Index({
     college,
@@ -101,6 +102,7 @@ export default function Index({
                                         <tr>
                                             <th className="p-4">Name</th>
                                             <th className="p-4">Contact</th>
+                                            <th className="p-4">Role</th>
                                             <th className="p-4">Status</th>
                                             <th className="p-4 text-right">
                                                 Actions
@@ -118,6 +120,13 @@ export default function Index({
                                                     <span className="block text-xs text-muted-foreground">
                                                         {u.mobile}
                                                     </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    {u.roles.length ? (
+                                                        u.roles.map((role) => role.name).join(', ')
+                                                    ) : (
+                                                        <span className="text-muted-foreground">No role assigned</span>
+                                                    )}
                                                 </td>
                                                 <td className="p-4">
                                                     {u.status}

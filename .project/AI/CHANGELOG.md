@@ -349,3 +349,25 @@ Approved prerequisite branch added before Merit/Roster continuation. Added scope
 - Public Applicant form and College Add Application/Edit Draft can now execute configured field-copy behavior.
 - Added applicability-safe handling for dangling advanced-rule dependencies.
 - Added ADR 076.
+
+## 2026-09-02 — User visibility and duplicate identity integrity
+- Added ADR 077 for hierarchy-driven University/College user visibility.
+- University Users now requires College/Institute context and College filtering for College Staff.
+- College Users requires same-College `COLLEGE_STAFF` ownership and displays active College-scoped roles, including College Administrator visibility in the list.
+- Applicant identities are isolated from internal staff Access Management.
+- User email is normalized before validation/persistence and duplicate normalized emails are rejected across University and College creation/update flows.
+
+
+## 2026-09-02 — Test Cleanup User/Role Access Data
+- Added Users and Roles to System Maintenance → Test Data Cleanup.
+- Added individual dependency-aware cleanup for internal University/College staff users and custom roles.
+- Added `RESET-ACCESS-TEST-DATA` full User & Role test reset.
+- Current actor, SUPER_ADMIN identities, applicants, system roles, permissions, audit logs and operationally referenced access records remain protected.
+- See ADR 078.
+
+## 2026-09-02 — Role owner institution visibility
+- Added ADR 079.
+- University Role Management now resolves College-owned custom roles to the owning College name/code.
+- Added `Owner / Institution` column and owning-College filter.
+- University-owned and Global roles remain clearly labeled; role ownership is kept separate from user-role assignment scope.
+- No schema change.

@@ -63,7 +63,7 @@ class CollegeUserRoleController extends Controller
 
     private function assertUserOwned(College $college, User $user): void
     {
-        abort_unless($user->primary_college_id === $college->id, 404);
+        abort_unless($user->primary_college_id === $college->id && $user->account_type === 'COLLEGE_STAFF', 404);
     }
 
     private function assertAssignmentOwned(College $college, User $user, UserRole $assignment): void

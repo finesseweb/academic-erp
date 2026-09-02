@@ -202,3 +202,10 @@ University and College Admission Form Setup now use confirmed Inertia router DEL
 - Public Applicant and College Add Application/Edit Draft receive source field, trigger field, trigger values and read-only state.
 - Active copy rules are also reapplied server-side by `CollegeAdmissionDynamicFieldService` before validation/persistence.
 - Comparison rule metadata is included in the same effective runtime payload.
+
+
+### Access-management test cleanup (2026-09-02)
+System Maintenance → Test Data Cleanup now includes internal Users and Roles. Internal University/College staff users and custom roles can be cleaned individually when dependency-safe, or together with the dedicated Full User & Role Test Reset. Protected/system identities and roles, applicants, permissions, audit logs and operationally referenced records are preserved. See ADR 078.
+
+### Role ownership visibility (2026-09-02)
+University Access & Role Management now exposes the owning institution for College-owned custom roles. `owner_scope_reference=college:<id>` is resolved to College name/code in the University Roles list, with a College filter. University/Global role templates retain their actual owner classification; assignment scope is not confused with role ownership. No migration required. See ADR 079.

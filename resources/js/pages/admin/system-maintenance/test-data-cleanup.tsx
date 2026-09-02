@@ -82,6 +82,17 @@ type FullReset = {
     preserved: string[];
 };
 
+type AccessReset = {
+    confirmation_code: string;
+    users_total: number;
+    users_cleanable: number;
+    users_protected_or_blocked: number;
+    roles_total: number;
+    roles_cleanable: number;
+    roles_protected_or_blocked: number;
+    preserved: string[];
+};
+
 type LegacyUnlinkedRegularApplications = {
     confirmation_code: string;
     total: number;
@@ -95,8 +106,11 @@ type Props = {
     curricula: Curriculum[];
     academicPolicies: AcademicPolicy[];
     fullReset: FullReset;
+    accessReset: AccessReset;
     legacyUnlinkedRegularApplications: LegacyUnlinkedRegularApplications;
     entities: {
+        users: Entity[];
+        roles: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
         college_admission_scores: Entity[];
@@ -120,6 +134,8 @@ type Props = {
 };
 
 type TabKey =
+    | 'users'
+    | 'roles'
     | 'curriculum'
     | 'academic_policies'
     | 'college_admission_form_templates'
@@ -151,6 +167,7 @@ type ActionTarget = {
         | 'cleanup_master'
         | 'deactivate_admission_form_template'
         | 'cleanup_legacy_unlinked_regular'
+        | 'full_access_reset'
         | 'full_reset';
     type?: Exclude<TabKey, 'curriculum' | 'academic_policies'>;
     id: number;
@@ -159,6 +176,8 @@ type ActionTarget = {
 };
 
 const tabs: { key: TabKey; label: string }[] = [
+    { key: 'users', label: 'Users' },
+    { key: 'roles', label: 'Roles' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
     { key: 'college_admission_scores', label: 'Score Capture / Normalization' },
@@ -189,6 +208,7 @@ export default function TestDataCleanup({
     academicPolicies,
     entities,
     fullReset,
+    accessReset,
     legacyUnlinkedRegularApplications,
 }: Props) {
     const [tab, setTab] = useState<TabKey>('college_admission_applications');
@@ -217,6 +237,17 @@ export default function TestDataCleanup({
         if (target.mode === 'full_reset') {
             form.delete(
                 '/admin/system-maintenance/test-data-cleanup/full-reset',
+                {
+                    preserveScroll: true,
+                    onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
+
+        if (target.mode === 'full_access_reset') {
+            form.delete(
+                '/admin/system-maintenance/test-data-cleanup/access-reset',
                 {
                     preserveScroll: true,
                     onSuccess: () => setTarget(null),
@@ -335,6 +366,46 @@ export default function TestDataCleanup({
                         </div>
                     </div>
                 </div>
+
+                <Card className="border-amber-500/40">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <ShieldAlert className="size-5" />
+                            Full User & Role Test Reset
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Cleans test University/College staff users and custom roles together. The current logged-in user, SUPER_ADMIN identities, applicants, system roles, permissions and operationally referenced records are preserved.
+                        </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Users</div><div className="text-lg font-semibold">{accessReset.users_total}</div></div>
+                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Users cleanable</div><div className="text-lg font-semibold">{accessReset.users_cleanable}</div></div>
+                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Users preserved</div><div className="text-lg font-semibold">{accessReset.users_protected_or_blocked}</div></div>
+                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Roles</div><div className="text-lg font-semibold">{accessReset.roles_total}</div></div>
+                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Roles cleanable</div><div className="text-lg font-semibold">{accessReset.roles_cleanable}</div></div>
+                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Roles preserved</div><div className="text-lg font-semibold">{accessReset.roles_protected_or_blocked}</div></div>
+                        </div>
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                disabled={!enabled || (accessReset.users_cleanable === 0 && accessReset.roles_cleanable === 0)}
+                                onClick={() =>
+                                    openAction({
+                                        mode: 'full_access_reset',
+                                        id: 0,
+                                        code: accessReset.confirmation_code,
+                                        name: `Clean ${accessReset.users_cleanable} user(s) + ${accessReset.roles_cleanable} custom role(s)`,
+                                    })
+                                }
+                            >
+                                <Eraser className="size-4" />
+                                Clean All Users & Roles
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 <Card className="border-destructive/40">
                     <CardHeader>
@@ -762,7 +833,11 @@ export default function TestDataCleanup({
 
                                                     <td className="px-4 py-4 text-xs">
                                                         {item.blocked
-                                                            ? 'Clean dependencies first'
+                                                            ? tab === 'roles' && item.kind?.startsWith('SYSTEM')
+                                                                ? 'Protected system role'
+                                                                : tab === 'users'
+                                                                  ? 'Protected or operational references exist'
+                                                                  : 'Clean dependencies first'
                                                             : 'Ready for test cleanup'}
                                                     </td>
 
@@ -841,6 +916,8 @@ export default function TestDataCleanup({
                                 <AlertTriangle className="size-5 text-destructive" />
                                 {target.mode === 'full_reset'
                                     ? 'Full Academic Test Reset'
+                                    : target.mode === 'full_access_reset'
+                                      ? 'Full User & Role Test Reset'
                                     : target.mode === 'cleanup_legacy_unlinked_regular'
                                       ? 'Clean Legacy Unlinked Applications'
                                     : target.mode === 'reset_approval' ||
@@ -869,6 +946,8 @@ export default function TestDataCleanup({
                                 <p className="text-sm text-muted-foreground">
                                     {target.mode === 'full_reset'
                                         ? 'All currently implemented academic/test records will be permanently deleted in dependency-safe order. University Profile, Colleges, Users, protected Roles, Permissions, access assignments, Audit Logs, migrations, and system tables are preserved.'
+                                        : target.mode === 'full_access_reset'
+                                          ? 'All cleanable internal University/College staff test users and custom roles will be permanently removed. The current logged-in user, SUPER_ADMIN identities, applicants, system roles, permissions, audit logs and operationally referenced users/roles are preserved.'
                                         : target.mode === 'cleanup_legacy_unlinked_regular'
                                           ? 'Only old PUBLIC + REGULAR + SUBMITTED applications with no eligibility-processing choice link will be removed. Dynamic answers, academic preferences and course choices for those applications are cleaned child-first. Applicant users/login identities, applicant profiles and registration numbers are preserved. Any record with downstream Score, Interview, Merit, Seat, Admission or Student references is skipped.'
                                         : target.mode === 'reset_approval'
@@ -961,6 +1040,8 @@ export default function TestDataCleanup({
                                     >
                                         {target.mode === 'full_reset'
                                             ? 'Reset All Academic Test Data'
+                                            : target.mode === 'full_access_reset'
+                                              ? 'Clean All Users & Roles'
                                             : target.mode === 'reset_approval' ||
                                                 target.mode === 'reset_policy_approval'
                                               ? 'Reset Approval'
