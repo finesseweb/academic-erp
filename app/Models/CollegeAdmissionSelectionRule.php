@@ -50,4 +50,9 @@ class CollegeAdmissionSelectionRule extends Model
         return $this->hasMany(CollegeAdmissionSelectionRuleTieBreaker::class, 'college_admission_selection_rule_id')
             ->orderBy('priority');
     }
+
+    public function meritEntries(): HasMany
+    {
+        return $this->hasMany(CollegeAdmissionMeritEntry::class, 'college_admission_selection_rule_id')->orderBy('rank');
+    }
 }

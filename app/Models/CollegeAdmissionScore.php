@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CollegeAdmissionScore extends Model
 {
@@ -24,4 +25,5 @@ class CollegeAdmissionScore extends Model
     public function application(): BelongsTo { return $this->belongsTo(CollegeAdmissionApplication::class, 'college_admission_application_id'); }
     public function choice(): BelongsTo { return $this->belongsTo(CollegeAdmissionApplicationChoice::class, 'college_admission_application_choice_id'); }
     public function selectionRule(): BelongsTo { return $this->belongsTo(CollegeAdmissionSelectionRule::class, 'college_admission_selection_rule_id'); }
+    public function meritEntry(): HasOne { return $this->hasOne(CollegeAdmissionMeritEntry::class, 'college_admission_score_id'); }
 }

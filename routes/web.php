@@ -27,6 +27,7 @@ use App\Http\Controllers\CollegeAdmissionFormSetupController;
 use App\Http\Controllers\UniversityAdmissionFormSetupController;
 use App\Http\Controllers\CollegeAdmissionScoreController;
 use App\Http\Controllers\CollegeAdmissionInterviewController;
+use App\Http\Controllers\CollegeAdmissionMeritController;
 use App\Http\Controllers\ApplicantPortalController;
 use App\Http\Controllers\PublicAdmissionApplicationController;
 use App\Http\Controllers\StudentPortalController;
@@ -126,7 +127,6 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('admin/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     Route::get('admin/system-maintenance/test-data-cleanup', [TestDataCleanupController::class, 'index'])->name('test-data-cleanup.index');
     Route::delete('admin/system-maintenance/test-data-cleanup/full-reset', [TestDataCleanupController::class, 'fullReset'])->name('test-data-cleanup.full-reset');
-    Route::delete('admin/system-maintenance/test-data-cleanup/access-reset', [TestDataCleanupController::class, 'fullAccessReset'])->name('test-data-cleanup.access-reset');
     Route::delete('admin/system-maintenance/test-data-cleanup/legacy-unlinked-regular-applications', [TestDataCleanupController::class, 'cleanupLegacyUnlinkedRegularApplications'])->name('test-data-cleanup.legacy-unlinked-regular-applications');
     Route::delete('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}', [TestDataCleanupController::class, 'destroyCurriculum'])->name('test-data-cleanup.curricula.destroy');
     Route::post('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}/reset-approval', [TestDataCleanupController::class, 'resetCurriculumApproval'])->name('test-data-cleanup.curricula.reset-approval');
@@ -289,7 +289,10 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('college/{college}/admission-scores', [CollegeAdmissionScoreController::class, 'index'])->name('college-admission-scores.index');
     Route::put('college/{college}/admission-application-choices/{choice}/scores', [CollegeAdmissionScoreController::class, 'upsert'])->name('college-admission-scores.upsert');
     Route::get('college/{college}/admission-interviews', [CollegeAdmissionInterviewController::class, 'index'])->name('college-admission-interviews.index');
+    Route::post('college/{college}/admission-interview-panels', [CollegeAdmissionInterviewController::class, 'storePanel'])->name('college-admission-interview-panels.store');
     Route::put('college/{college}/admission-application-choices/{choice}/interview', [CollegeAdmissionInterviewController::class, 'upsert'])->name('college-admission-interviews.upsert');
+    Route::get('college/{college}/admission-merit', [CollegeAdmissionMeritController::class, 'index'])->name('college-admission-merit.index');
+    Route::post('college/{college}/admission-selection-rules/{rule}/merit-roster/generate', [CollegeAdmissionMeritController::class, 'generate'])->name('college-admission-merit.generate');
     Route::get('college/{college}/users', [CollegeUserController::class, 'index'])->name('college-users.index');
     Route::get('college/{college}/users/create', [CollegeUserController::class, 'create'])->name('college-users.create');
     Route::post('college/{college}/users', [CollegeUserController::class, 'store'])->name('college-users.store');
