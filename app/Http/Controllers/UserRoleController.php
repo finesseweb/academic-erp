@@ -18,6 +18,7 @@ class UserRoleController extends Controller
 {
     public function edit(Request $request, User $user): Response
     {
+        abort_if($user->account_type === 'APPLICANT', 404);
         abort_unless($request->user()->hasPermission('user.view') && $request->user()->hasPermission('role.view'), 403);
 
         $availableRoles = Role::query()->where('status', 'ACTIVE')->where(fn ($query) => $query->where('is_system_role', false)->orWhere('code', 'COLLEGE_ADMIN'))->with('permissions:id,code,description')->orderBy('name')->get(['id', 'name', 'code', 'description']);
@@ -27,6 +28,7 @@ class UserRoleController extends Controller
 
     public function store(Request $request, User $user, UserRoleService $service): RedirectResponse
     {
+        abort_if($user->account_type === 'APPLICANT', 404);
         abort_unless($request->user()->hasPermission('role.assign'), 403);
         $data = $request->validate(['role_id' => ['required', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('status', 'ACTIVE')->where(fn ($roles) => $roles->where('is_system_role', false)->orWhere('code', 'COLLEGE_ADMIN')))], 'scope_type' => ['required', Rule::in(['UNIVERSITY', 'COLLEGE'])], 'college_id' => ['nullable', 'required_if:scope_type,COLLEGE', 'integer', Rule::exists('colleges', 'id')->where(fn ($q) => $q->where('status', 'ACTIVE'))]]);
         $role = Role::findOrFail($data['role_id']);
@@ -49,6 +51,7 @@ class UserRoleController extends Controller
 
     public function destroy(Request $request, User $user, UserRole $assignment, UserRoleService $service): RedirectResponse
     {
+        abort_if($user->account_type === 'APPLICANT', 404);
         abort_unless($request->user()->hasPermission('role.unassign'), 403);
         abort_unless($assignment->user_id === $user->id, 404);
         abort_if($assignment->role()->where('is_system_role', true)->where('code', '!=', 'COLLEGE_ADMIN')->exists(), 422, 'Protected system role assignments cannot be removed here.');
@@ -60,6 +63,7 @@ class UserRoleController extends Controller
 
     public function updateScope(UpdateUserRoleScopeRequest $request, User $user, UserRole $assignment, UserRoleService $service): RedirectResponse
     {
+        abort_if($user->account_type === 'APPLICANT', 404);
         abort_unless($assignment->user_id === $user->id, 404);
         abort_if($assignment->role()->where('is_system_role', true)->where('code', '!=', 'COLLEGE_ADMIN')->exists(), 422, 'Protected system role assignments cannot be changed here.');
         abort_if($request->user()->is($user), 422, 'You cannot change your own access scope.');

@@ -23,3 +23,11 @@ Create Role, Edit, Configure Permissions, Enable/Disable where permitted. Protec
 ## API
 - `GET /admin/roles`
 - `PATCH /admin/roles/:id/status`
+
+## Institutional Ownership Visibility — 2026-09-02
+- University Role Management must expose the owning institution for every role.
+- College-owned custom roles (`owner_scope_type=COLLEGE`, `owner_scope_reference=college:<id>`) display the resolved College name and code.
+- University-owned roles display `University`; global protected/system roles display `Global`.
+- The list supports filtering by owning College.
+- Role ownership is distinct from assignment scope. For example, the protected `COLLEGE_ADMIN` role template is University-owned even when individual users receive that role at a specific College scope.
+- Missing/deleted College ownership references must never be silently presented as University-owned; the UI must expose the unresolved canonical scope reference for investigation.

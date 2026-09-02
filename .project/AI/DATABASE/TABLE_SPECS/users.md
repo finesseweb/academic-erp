@@ -32,3 +32,8 @@
 - 2026-08-13: Authentication service implemented active/disabled/locked handling.
 - 2026-08-13: Added optional one-to-one user theme preference relationship.
 - 2026-08-19: Added administrative account type, mobile, lifecycle status, last-login field and status/account-type/created-date index.
+
+## 2026-09-02 Access Integrity Clarification
+- `primary_college_id` is the authoritative College ownership link for a College Staff identity and is used by both University visibility and College isolation.
+- Internal Access Management must not treat Applicant identities as staff accounts.
+- Email uniqueness is global. All internal create/update entry points normalize email with trim + lowercase before uniqueness validation and persistence.

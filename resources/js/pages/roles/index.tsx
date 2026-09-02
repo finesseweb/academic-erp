@@ -37,6 +37,9 @@ type Role = {
     code: string;
     is_system_role: boolean;
     owner_scope_type: string;
+    owner_scope_reference: string;
+    owner_college_id: number | null;
+    owner_college: { id: number; name: string; code: string } | null;
     status: 'ACTIVE' | 'INACTIVE';
     permissions_count: number;
     users_count: number;
@@ -49,7 +52,18 @@ type P = {
         to: number | null;
         total: number;
     };
-    filters: { search?: string; status?: string; type?: string };
+    filters: {
+        search?: string;
+        status?: string;
+        type?: string;
+        college_id?: number | string;
+    };
+    colleges: {
+        id: number;
+        name: string;
+        code: string;
+        status: string;
+    }[];
     summary: { total: number; system: number; custom: number };
     can: {
         create: boolean;
@@ -121,8 +135,10 @@ function StatusAction({ role }: { role: Role }) {
         </Dialog>
     );
 }
-export default function RolesIndex({ roles, filters, summary, can }: P) {
-    const filtered = Boolean(filters.search || filters.status || filters.type);
+export default function RolesIndex({ roles, filters, colleges, summary, can }: P) {
+    const filtered = Boolean(
+        filters.search || filters.status || filters.type || filters.college_id,
+    );
     const summaryCards: { value: number; text: string; Icon: LucideIcon }[] = [
         { value: summary.total, text: 'Total roles', Icon: Shield },
         { value: summary.system, text: 'System roles', Icon: ShieldCheck },
@@ -177,7 +193,7 @@ export default function RolesIndex({ roles, filters, summary, can }: P) {
                         <Form
                             action="/admin/roles"
                             method="get"
-                            className="grid gap-3 lg:grid-cols-[1fr_200px_180px_auto]"
+                            className="grid gap-3 xl:grid-cols-[1fr_190px_230px_180px_auto]"
                         >
                             <div className="relative">
                                 <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -205,6 +221,34 @@ export default function RolesIndex({ roles, filters, summary, can }: P) {
                                     <SelectItem value="CUSTOM">
                                         Custom
                                     </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select
+                                name="college_id"
+                                defaultValue={
+                                    filters.college_id
+                                        ? String(filters.college_id)
+                                        : 'all'
+                                }
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All colleges" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All colleges
+                                    </SelectItem>
+                                    {colleges.map((college) => (
+                                        <SelectItem
+                                            key={college.id}
+                                            value={String(college.id)}
+                                        >
+                                            {college.name} ({college.code})
+                                            {college.status !== 'ACTIVE'
+                                                ? ' — inactive'
+                                                : ''}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                             <Select
@@ -244,6 +288,9 @@ export default function RolesIndex({ roles, filters, summary, can }: P) {
                                         <th className="px-4 py-3">Role</th>
                                         <th className="px-4 py-3">Type</th>
                                         <th className="px-4 py-3">
+                                            Owner / Institution
+                                        </th>
+                                        <th className="px-4 py-3">
                                             Permissions
                                         </th>
                                         <th className="px-4 py-3">
@@ -276,6 +323,49 @@ export default function RolesIndex({ roles, filters, summary, can }: P) {
                                                 <p className="text-xs text-muted-foreground">
                                                     {r.owner_scope_type}
                                                 </p>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                {r.owner_scope_type ===
+                                                'COLLEGE' ? (
+                                                    r.owner_college ? (
+                                                        <>
+                                                            <p className="font-medium">
+                                                                {r.owner_college.name}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {r.owner_college.code}
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <p className="font-medium text-destructive">
+                                                                College record unavailable
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {r.owner_scope_reference}
+                                                            </p>
+                                                        </>
+                                                    )
+                                                ) : r.owner_scope_type ===
+                                                  'UNIVERSITY' ? (
+                                                    <>
+                                                        <p className="font-medium">
+                                                            University
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            University-owned role
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <p className="font-medium">
+                                                            Global
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            System-wide role
+                                                        </p>
+                                                    </>
+                                                )}
                                             </td>
                                             <td className="px-4 py-4">
                                                 {r.permissions_count}

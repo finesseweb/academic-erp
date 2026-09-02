@@ -79,6 +79,9 @@ class TestDataCleanupController extends Controller
                 'fullReset' =>
                     $this->service
                         ->fullAcademicResetPreview($university->id),
+                'accessReset' =>
+                    $this->service
+                        ->accessResetPreview($university->id, $request->user()->id),
                 'legacyUnlinkedRegularApplications' =>
                     $this->service
                         ->legacyUnlinkedRegularApplicationsPreview($university->id),
@@ -209,6 +212,36 @@ class TestDataCleanupController extends Controller
         );
     }
 
+
+    public function fullAccessReset(
+        Request $request
+    ): RedirectResponse {
+        $this->authorizeCleanup($request);
+
+        $university = University::query()->firstOrFail();
+
+        $request->validate([
+            'confirmation_code' => ['required', 'string', 'max:120'],
+        ]);
+
+        $expected = 'RESET-ACCESS-TEST-DATA';
+        if (trim((string) $request->input('confirmation_code')) !== $expected) {
+            throw ValidationException::withMessages([
+                'confirmation_code' =>
+                    'Type RESET-ACCESS-TEST-DATA exactly to clean test Users and custom Roles.',
+            ]);
+        }
+
+        $result = $this->service->fullAccessReset(
+            $university->id,
+            $request->user()->id
+        );
+
+        return back()->with(
+            'success',
+            $result['users_deleted'].' user(s) and '.$result['roles_deleted'].' custom role(s) cleaned. Protected/system or operationally referenced records were preserved.'
+        );
+    }
 
     public function cleanupLegacyUnlinkedRegularApplications(
         Request $request

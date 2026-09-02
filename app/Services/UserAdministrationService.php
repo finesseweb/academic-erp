@@ -4,13 +4,17 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UserAdministrationService
 {
     public function create(array $data, int $actorId, ?string $ip): User
     {
         return DB::transaction(function () use ($data, $actorId, $ip) {
-            $data['email'] = mb_strtolower($data['email']);
+            $data['email'] = mb_strtolower(trim($data['email']));
+            if (User::query()->whereRaw('LOWER(email) = ?', [$data['email']])->exists()) {
+                throw ValidationException::withMessages(['email' => 'A user account with this email already exists. Duplicate users cannot be created.']);
+            }
             $user = User::query()->create($data);
             $this->audit('USER_CREATED', $user, $actorId, $ip, null, $user->only(['name', 'email', 'mobile', 'account_type', 'status']));
 
@@ -21,7 +25,10 @@ class UserAdministrationService
     public function update(User $user, array $data, int $actorId, ?string $ip): User
     {
         return DB::transaction(function () use ($user, $data, $actorId, $ip) {
-            $data['email'] = mb_strtolower($data['email']);
+            $data['email'] = mb_strtolower(trim($data['email']));
+            if (User::query()->whereKeyNot($user->id)->whereRaw('LOWER(email) = ?', [$data['email']])->exists()) {
+                throw ValidationException::withMessages(['email' => 'Another user account already uses this email.']);
+            }
             $before = $user->only(array_keys($data));
             $user->update($data);
             $this->audit('USER_UPDATED', $user, $actorId, $ip, $before, $user->fresh()->only(array_keys($data)));

@@ -706,6 +706,8 @@ class TestDataCleanupService
         int $universityId
     ): array {
         return [
+            'users' => $this->userRows($universityId),
+            'roles' => $this->roleRows($universityId),
             'college_admission_form_templates' =>
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
@@ -1522,6 +1524,364 @@ class TestDataCleanupService
         });
     }
 
+    public function accessResetPreview(int $universityId, int $actorId): array
+    {
+        $users = collect($this->userRows($universityId));
+        $roles = collect($this->roleRows($universityId));
+
+        return [
+            'confirmation_code' => 'RESET-ACCESS-TEST-DATA',
+            'users_total' => $users->count(),
+            'users_cleanable' => $users->where('blocked', false)->count(),
+            'users_protected_or_blocked' => $users->where('blocked', true)->count(),
+            'roles_total' => $roles->count(),
+            'roles_cleanable' => $roles->where('blocked', false)->count(),
+            'roles_protected_or_blocked' => $roles->where('blocked', true)->count(),
+            'preserved' => [
+                'Current logged-in cleanup user',
+                'SUPER_ADMIN / system-role identities',
+                'Applicant login identities',
+                'System roles',
+                'Permission catalog',
+                'Audit logs',
+                'Users or custom roles with operational RESTRICT references',
+            ],
+        ];
+    }
+
+    public function fullAccessReset(
+        int $universityId,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        return DB::transaction(function () use ($universityId, $actorId) {
+            $userRows = collect($this->userRows($universityId));
+            $cleanableUserIds = $userRows
+                ->where('blocked', false)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            $deletedUsers = 0;
+            foreach ($cleanableUserIds as $userId) {
+                $this->cleanupUser($userId, $universityId, $actorId);
+                $deletedUsers++;
+            }
+
+            // Recompute role dependencies after users are removed. Custom roles can
+            // then be deleted after their role-user and permission grants are cleaned.
+            $roleRows = collect($this->roleRows($universityId));
+            $cleanableRoleIds = $roleRows
+                ->where('blocked', false)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            $deletedRoles = 0;
+            foreach ($cleanableRoleIds as $roleId) {
+                $this->cleanupRole($roleId, $universityId, $actorId);
+                $deletedRoles++;
+            }
+
+            $result = [
+                'users_deleted' => $deletedUsers,
+                'users_preserved' => $userRows->count() - $deletedUsers,
+                'roles_deleted' => $deletedRoles,
+                'roles_preserved' => $roleRows->count() - $deletedRoles,
+            ];
+
+            $this->audit(
+                'TEST_ACCESS_DATA_FULL_RESET',
+                'test_data_cleanup',
+                $universityId,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
+    }
+
+    private function userRows(int $universityId): array
+    {
+        if (! Schema::hasTable('users')) {
+            return [];
+        }
+
+        $collegeIds = Schema::hasTable('colleges')
+            ? DB::table('colleges')
+                ->where('university_id', $universityId)
+                ->pluck('id')
+            : collect();
+
+        $superAdminRoleId = Schema::hasTable('roles')
+            ? DB::table('roles')->where('code', 'SUPER_ADMIN')->value('id')
+            : null;
+
+        return DB::table('users as u')
+            ->leftJoin('colleges as c', 'c.id', '=', 'u.primary_college_id')
+            ->whereIn('u.account_type', ['UNIVERSITY_STAFF', 'COLLEGE_STAFF'])
+            ->where(function ($query) use ($collegeIds) {
+                $query->whereNull('u.primary_college_id');
+                if ($collegeIds->isNotEmpty()) {
+                    $query->orWhereIn('u.primary_college_id', $collegeIds);
+                }
+            })
+            ->orderBy('u.name')
+            ->get([
+                'u.id', 'u.name', 'u.email', 'u.account_type', 'u.status',
+                'u.primary_college_id', 'c.name as college_name', 'c.code as college_code',
+            ])
+            ->map(function ($row) use ($superAdminRoleId) {
+                $isCurrentActor = auth()->id() && (int) auth()->id() === (int) $row->id;
+                $hasSuperAdmin = $superAdminRoleId
+                    ? DB::table('user_roles')
+                        ->where('user_id', $row->id)
+                        ->where('role_id', $superAdminRoleId)
+                        ->exists()
+                    : false;
+
+                $approvalRequests = $this->countIfExists(
+                    'approval_requests',
+                    'submitted_by',
+                    $row->id
+                );
+                $interviewEvaluations = $this->countIfExists(
+                    'college_admission_interview_evaluators',
+                    'evaluator_user_id',
+                    $row->id
+                );
+                $roleAssignments = $this->countIfExists(
+                    'user_roles',
+                    'user_id',
+                    $row->id
+                );
+
+                $blocking = [];
+                if ($isCurrentActor) {
+                    $blocking[] = [
+                        'table' => 'users',
+                        'column' => 'current_authenticated_user',
+                        'count' => 1,
+                    ];
+                }
+                if ($hasSuperAdmin) {
+                    $blocking[] = [
+                        'table' => 'user_roles',
+                        'column' => 'SUPER_ADMIN',
+                        'count' => 1,
+                    ];
+                }
+                if ($approvalRequests > 0) {
+                    $blocking[] = [
+                        'table' => 'approval_requests',
+                        'column' => 'submitted_by',
+                        'count' => $approvalRequests,
+                    ];
+                }
+                if ($interviewEvaluations > 0) {
+                    $blocking[] = [
+                        'table' => 'college_admission_interview_evaluators',
+                        'column' => 'evaluator_user_id',
+                        'count' => $interviewEvaluations,
+                    ];
+                }
+
+                $scope = $row->account_type === 'COLLEGE_STAFF'
+                    ? 'College Staff'.($row->college_name ? ' · '.$row->college_name : '')
+                    : 'University Staff';
+
+                return [
+                    'id' => (int) $row->id,
+                    'code' => (string) $row->email,
+                    'name' => $row->name.' · '.$scope,
+                    'status' => $row->status,
+                    'kind' => $row->account_type,
+                    'dependencies' => [
+                        'role_assignments' => $roleAssignments,
+                        'approval_submissions' => $approvalRequests,
+                        'interview_evaluator_rows' => $interviewEvaluations,
+                    ],
+                    'blocked' => count($blocking) > 0,
+                    'blocking_references' => $blocking,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function roleRows(int $universityId): array
+    {
+        if (! Schema::hasTable('roles')) {
+            return [];
+        }
+
+        $collegeIds = Schema::hasTable('colleges')
+            ? DB::table('colleges')
+                ->where('university_id', $universityId)
+                ->pluck('id')
+            : collect();
+        $collegeRefs = $collegeIds->map(fn ($id) => 'college:'.(int) $id)->all();
+
+        return DB::table('roles')
+            ->where(function ($query) use ($collegeRefs) {
+                $query->whereIn('owner_scope_type', ['GLOBAL', 'UNIVERSITY']);
+                if (count($collegeRefs) > 0) {
+                    $query->orWhere(function ($collegeQuery) use ($collegeRefs) {
+                        $collegeQuery
+                            ->where('owner_scope_type', 'COLLEGE')
+                            ->whereIn('owner_scope_reference', $collegeRefs);
+                    });
+                }
+            })
+            ->orderBy('name')
+            ->get()
+            ->map(function ($row) {
+                $assignments = $this->countIfExists('user_roles', 'role_id', $row->id);
+                $permissions = $this->countIfExists('role_permissions', 'role_id', $row->id);
+                $workflowStages = $this->countIfExists(
+                    'approval_workflow_stages',
+                    'approver_role_id',
+                    $row->id
+                );
+                $requestStages = $this->countIfExists(
+                    'approval_request_stages',
+                    'approver_role_id',
+                    $row->id
+                );
+
+                $blocking = [];
+                if ((bool) $row->is_system_role) {
+                    $blocking[] = [
+                        'table' => 'roles',
+                        'column' => 'is_system_role',
+                        'count' => 1,
+                    ];
+                }
+                if ($workflowStages > 0) {
+                    $blocking[] = [
+                        'table' => 'approval_workflow_stages',
+                        'column' => 'approver_role_id',
+                        'count' => $workflowStages,
+                    ];
+                }
+                if ($requestStages > 0) {
+                    $blocking[] = [
+                        'table' => 'approval_request_stages',
+                        'column' => 'approver_role_id',
+                        'count' => $requestStages,
+                    ];
+                }
+
+                return [
+                    'id' => (int) $row->id,
+                    'code' => (string) $row->code,
+                    'name' => (string) $row->name,
+                    'status' => $row->status,
+                    'kind' => ((bool) $row->is_system_role ? 'SYSTEM' : 'CUSTOM').' · '.$row->owner_scope_type,
+                    'dependencies' => [
+                        'assigned_users' => $assignments,
+                        'permissions' => $permissions,
+                        'approval_workflow_stages' => $workflowStages,
+                        'approval_request_stages' => $requestStages,
+                    ],
+                    'blocked' => count($blocking) > 0,
+                    'blocking_references' => $blocking,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupUser(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        $row = collect($this->userRows($universityId))->firstWhere('id', $id);
+        if (! $row) {
+            throw ValidationException::withMessages([
+                'record' => 'Selected internal staff user is outside this University scope or is not eligible for test cleanup.',
+            ]);
+        }
+        if ($row['blocked']) {
+            throw ValidationException::withMessages([
+                'record' => 'User is protected or has operational references. Clean those references first; the current user and SUPER_ADMIN identities cannot be removed.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($id, $actorId, $row) {
+            if (Schema::hasTable('user_roles')) {
+                DB::table('user_roles')->where('user_id', $id)->delete();
+            }
+            if (Schema::hasTable('passkeys')) {
+                DB::table('passkeys')->where('user_id', $id)->delete();
+            }
+            if (Schema::hasTable('sessions') && Schema::hasColumn('sessions', 'user_id')) {
+                DB::table('sessions')->where('user_id', $id)->delete();
+            }
+
+            DB::table('users')->where('id', $id)->delete();
+
+            $this->audit(
+                'TEST_ACCESS_USER_CLEANED',
+                'User',
+                $id,
+                $row,
+                $actorId
+            );
+
+            return ['deleted' => 1];
+        });
+    }
+
+    private function cleanupRole(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        $this->assertCleanupEnabled();
+
+        $row = collect($this->roleRows($universityId))->firstWhere('id', $id);
+        if (! $row) {
+            throw ValidationException::withMessages([
+                'record' => 'Selected role is outside this University scope.',
+            ]);
+        }
+        if ($row['blocked']) {
+            throw ValidationException::withMessages([
+                'record' => 'System roles and roles used by approval workflow/request stages cannot be removed.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($id, $actorId, $row) {
+            if (Schema::hasTable('college_admission_form_access_roles')) {
+                DB::table('college_admission_form_access_roles')->where('role_id', $id)->delete();
+            }
+            if (Schema::hasTable('user_roles')) {
+                DB::table('user_roles')->where('role_id', $id)->delete();
+            }
+            if (Schema::hasTable('role_permissions')) {
+                DB::table('role_permissions')->where('role_id', $id)->delete();
+            }
+
+            DB::table('roles')->where('id', $id)->delete();
+
+            $this->audit(
+                'TEST_ACCESS_ROLE_CLEANED',
+                'Role',
+                $id,
+                $row,
+                $actorId
+            );
+
+            return ['deleted' => 1];
+        });
+    }
+
     public function cleanupMaster(
         string $type,
         int $id,
@@ -1531,6 +1891,10 @@ class TestDataCleanupService
         $this->assertCleanupEnabled();
 
         return match ($type) {
+            'users' =>
+                $this->cleanupUser($id, $universityId, $actorId),
+            'roles' =>
+                $this->cleanupRole($id, $universityId, $actorId),
             'college_admission_form_templates' =>
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>

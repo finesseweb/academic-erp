@@ -12,8 +12,13 @@ class CollegeAdmissionInterviewService {
   if(!$choice->score)throw ValidationException::withMessages(['interview'=>'Complete Score Capture / Normalization before scheduling the Interview.']);
   $this->assertNoDownstream($choice);
   $evaluators=collect($data['evaluators']);
-  $users=User::query()->whereIn('id',$evaluators->pluck('user_id'))->where('primary_college_id',$college->id)->where('status','ACTIVE')->get()->keyBy('id');
-  if($users->count()!==$evaluators->count())throw ValidationException::withMessages(['evaluators'=>'Every evaluator must be an ACTIVE user of this College.']);
+  $users=User::query()->whereIn('id',$evaluators->pluck('user_id'))
+   ->where('primary_college_id',$college->id)
+   ->where('account_type','COLLEGE_STAFF')
+   ->where('status','ACTIVE')
+   ->whereHas('roles',fn($q)=>$q->where('roles.status','ACTIVE')->where('user_roles.status','ACTIVE')->where('user_roles.scope_type','COLLEGE')->where('user_roles.scope_reference',"college:{$college->id}")->where(fn($r)=>$r->whereNull('user_roles.effective_from')->orWhere('user_roles.effective_from','<=',now()))->where(fn($r)=>$r->whereNull('user_roles.effective_until')->orWhere('user_roles.effective_until','>=',now())))
+   ->get()->keyBy('id');
+  if($users->count()!==$evaluators->count())throw ValidationException::withMessages(['evaluators'=>'Every evaluator must be an ACTIVE College Staff user with an active role assignment in this College. Applicant/Student accounts cannot be interview evaluators.']);
   $completed=$data['status']==='COMPLETED';$normalized=[];
   foreach($evaluators as $i=>$e){$raw=$e['raw_score']??null;$max=$e['max_score']??null;if($completed&&($raw===null||$max===null))throw ValidationException::withMessages(["evaluators.$i.raw_score"=>'Raw and maximum score are required for every evaluator when completing an Interview.']);if($raw!==null||$max!==null){$raw=(float)$raw;$max=(float)$max;if($max<=0||$raw<0||$raw>$max)throw ValidationException::withMessages(["evaluators.$i.raw_score"=>'Evaluator raw score must be between 0 and maximum score.']);$normalized[$i]=round(($raw/$max)*100,3);}}
   return DB::transaction(function()use($application,$choice,$rule,$data,$actorId,$ip,$evaluators,$users,$normalized,$completed,$scoreService,$college){
