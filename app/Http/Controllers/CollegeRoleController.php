@@ -22,14 +22,60 @@ class CollegeRoleController extends Controller
     {
         $this->authorizeCollege($request, $college, 'college_role.view');
 
-        return Inertia::render('college-roles/index', ['college' => $college->only(['id', 'name', 'code']), 'roles' => Role::query()->where('owner_scope_type', 'COLLEGE')->where('owner_scope_reference', "college:{$college->id}")->orderBy('name')->paginate(15), 'can' => ['create' => $request->user()->hasCollegePermission('college_role.create', $college->id), 'update' => $request->user()->hasCollegePermission('college_role.update', $college->id), 'disable' => $request->user()->hasCollegePermission('college_role.disable', $college->id), 'managePermissions' => $request->user()->hasCollegePermission('college_permission.assign', $college->id) || $request->user()->hasCollegePermission('college_permission.remove', $college->id)]]);
+        $search = trim((string) $request->query('search', ''));
+        $status = strtoupper((string) $request->query('status', ''));
+        $status = in_array($status, ['ACTIVE', 'INACTIVE'], true) ? $status : '';
+
+        $baseQuery = Role::query()
+            ->where('owner_scope_type', 'COLLEGE')
+            ->where('owner_scope_reference', "college:{$college->id}")
+            ->where('is_system_role', false);
+
+        $summary = [
+            'total' => (clone $baseQuery)->count(),
+            'active' => (clone $baseQuery)->where('status', 'ACTIVE')->count(),
+            'inactive' => (clone $baseQuery)->where('status', 'INACTIVE')->count(),
+        ];
+
+        $roles = (clone $baseQuery)
+            ->withCount(['permissions', 'users'])
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->when($status !== '', fn ($query) => $query->where('status', $status))
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
+
+        return Inertia::render('college-roles/index', [
+            'college' => $college->only(['id', 'name', 'code']),
+            'roles' => $roles,
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+            ],
+            'summary' => $summary,
+            'can' => [
+                'create' => $request->user()->hasCollegePermission('college_role.create', $college->id),
+                'update' => $request->user()->hasCollegePermission('college_role.update', $college->id),
+                'disable' => $request->user()->hasCollegePermission('college_role.disable', $college->id),
+                'managePermissions' => $request->user()->hasCollegePermission('college_permission.assign', $college->id)
+                    || $request->user()->hasCollegePermission('college_permission.remove', $college->id),
+            ],
+        ]);
     }
 
     public function store(Request $request, College $college): RedirectResponse
     {
         $this->authorizeCollege($request, $college, 'college_role.create');
         $data = $request->validate(['name' => ['required', 'string', 'max:100'], 'code' => ['required', 'string', 'max:80', 'regex:/^[A-Z0-9_]+$/', Rule::unique('roles')], 'description' => ['nullable', 'string', 'max:500']]);
-        app(RoleService::class)->createForCollege($data, $college->id, $request->user()->id, $request->ip());
+        $creatorScopeType = $request->user()->primary_college_id === null ? 'UNIVERSITY' : 'COLLEGE';
+        app(RoleService::class)->createForCollege($data, $college->id, $request->user()->id, $request->ip(), $creatorScopeType);
 
         return back()->with('toast', ['type' => 'success', 'message' => 'College role created.']);
     }

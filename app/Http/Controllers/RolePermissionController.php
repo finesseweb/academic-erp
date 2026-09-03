@@ -15,6 +15,7 @@ class RolePermissionController extends Controller
     public function edit(Request $request, Role $role): Response
     {
         abort_unless($request->user()->hasPermission('role.view') && $request->user()->hasPermission('permission.view'), 403);
+        abort_unless($role->isUniversityManaged(), 404);
         $permissions = Permission::query()->where('status', 'ACTIVE')->orderBy('module')->orderBy('resource')->orderBy('action')->get();
 
         return Inertia::render('roles/permissions', [
@@ -29,6 +30,7 @@ class RolePermissionController extends Controller
 
     public function update(Request $request, Role $role, RolePermissionService $service): RedirectResponse
     {
+        abort_unless($role->isUniversityManaged(), 404);
         abort_if($role->is_system_role, 422, 'System role permissions are managed by application migrations.');
         $request->merge(['permission_ids' => $request->input('permission_ids', [])]);
         $data = $request->validate(['permission_ids' => ['present', 'array'], 'permission_ids.*' => ['integer', 'distinct', 'exists:permissions,id']]);

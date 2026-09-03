@@ -32,7 +32,7 @@ class RoleController extends Controller
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
 
-        $q = Role::query()->withCount(['permissions', 'users']);
+        $q = Role::query()->visibleToUniversityAdministration()->withCount(['permissions', 'users']);
         $q->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($i) => $i
             ->where('name', 'like', "%{$s}%")
             ->orWhere('code', 'like', "%{$s}%")))
@@ -86,9 +86,9 @@ class RoleController extends Controller
             'colleges' => College::query()->orderBy('name')->get(['id', 'name', 'code', 'status']),
             'filters' => $filters,
             'summary' => [
-                'total' => Role::count(),
-                'system' => Role::where('is_system_role', true)->count(),
-                'custom' => Role::where('is_system_role', false)->count(),
+                'total' => Role::query()->visibleToUniversityAdministration()->count(),
+                'system' => Role::query()->visibleToUniversityAdministration()->where('is_system_role', true)->count(),
+                'custom' => Role::query()->visibleToUniversityAdministration()->where('is_system_role', false)->count(),
             ],
             'can' => [
                 'create' => $request->user()->hasPermission('role.create'),
@@ -116,12 +116,14 @@ class RoleController extends Controller
     public function edit(Request $request, Role $role): Response
     {
         abort_unless($request->user()->hasPermission('role.view') && $request->user()->hasPermission('role.update'), 403);
+        $this->assertUniversityManaged($role);
 
         return Inertia::render('roles/edit', ['role' => $role->loadCount(['permissions', 'users'])]);
     }
 
     public function update(UpdateRoleRequest $request, Role $role, RoleService $service): RedirectResponse
     {
+        $this->assertUniversityManaged($role);
         abort_if($role->is_system_role, 422, 'System role identity is protected.');
         $service->update($role, $request->validated(), $request->user()->id, $request->ip());
 
@@ -131,10 +133,15 @@ class RoleController extends Controller
     public function status(Request $request, Role $role, RoleService $service): RedirectResponse
     {
         abort_unless($request->user()->hasPermission('role.disable'), 403);
+        $this->assertUniversityManaged($role);
         abort_if($role->is_system_role, 422, 'System roles cannot be disabled.');
         $data = $request->validate(['status' => ['required', Rule::in(['ACTIVE', 'INACTIVE'])]]);
         $service->status($role, $data['status'], $request->user()->id, $request->ip());
 
         return back()->with('toast', ['type' => 'success', 'message' => $data['status'] === 'ACTIVE' ? 'Role activated.' : 'Role deactivated.']);
+    }
+    private function assertUniversityManaged(Role $role): void
+    {
+        abort_unless($role->isUniversityManaged(), 404);
     }
 }

@@ -40,7 +40,7 @@ class UserController extends Controller
 
         // Access Management is for internal ERP identities. Applicant identities are
         // managed by the Admission workflow and must not be mixed into staff RBAC.
-        $base = User::query()->where('account_type', '!=', 'APPLICANT');
+        $base = User::query()->visibleToUniversityAdministration()->where('account_type', '!=', 'APPLICANT');
 
         $query = (clone $base)->with([
             'primaryCollege:id,name,code,university_id',
@@ -65,7 +65,7 @@ class UserController extends Controller
 
         return Inertia::render('users/index', [
             'users' => $query->orderBy($filters['sort'] ?? 'name', $filters['direction'] ?? 'asc')->paginate(15)->withQueryString(),
-            'roles' => Role::query()->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']),
+            'roles' => Role::query()->visibleToUniversityAdministration()->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']),
             'colleges' => College::query()->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name', 'code']),
             'filters' => $filters,
             'summary' => [
@@ -101,14 +101,14 @@ class UserController extends Controller
     public function edit(Request $request, User $user): Response
     {
         abort_unless($request->user()->hasPermission('user.view') && $request->user()->hasPermission('user.update'), 403);
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManaged($user);
 
         return Inertia::render('users/edit', ['managedUser' => $user->load('roles:id,name')]);
     }
 
     public function update(UpdateUserRequest $request, User $user, UserAdministrationService $service): RedirectResponse
     {
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManaged($user);
         $service->update($user, $request->validated(), $request->user()->id, $request->ip());
 
         return back()->with('toast', ['type' => 'success', 'message' => 'User account updated.']);
@@ -116,7 +116,7 @@ class UserController extends Controller
 
     public function status(Request $request, User $user, UserAdministrationService $service): RedirectResponse
     {
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManaged($user);
         $data = $request->validate(['status' => ['required', Rule::in(['ACTIVE', 'INACTIVE'])]]);
         abort_unless($request->user()->hasPermission($data['status'] === 'ACTIVE' ? 'user.enable' : 'user.disable'), 403);
         abort_if($request->user()->is($user) && $data['status'] === 'INACTIVE', 422, 'You cannot disable your own account.');
@@ -128,7 +128,7 @@ class UserController extends Controller
 
     public function resetPassword(Request $request, User $user, UserAdministrationService $service): RedirectResponse
     {
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManaged($user);
         abort_unless($request->user()->hasPermission('user.reset_password'), 403);
         $status = Password::sendResetLink(['email' => $user->email]);
         if ($status !== Password::RESET_LINK_SENT) {
@@ -137,5 +137,9 @@ class UserController extends Controller
         $service->auditPasswordReset($user, $request->user()->id, $request->ip());
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Password reset link sent.']);
+    }
+    private function assertUniversityManaged(User $user): void
+    {
+        abort_unless($user->account_type !== 'APPLICANT' && $user->isUniversityManaged(), 404);
     }
 }

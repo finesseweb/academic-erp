@@ -7,6 +7,7 @@ use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramReservationAllocation;
 use App\Models\CollegeProgramReservationPlan;
 use App\Models\CollegeAdmissionSelectionRule;
+use App\Models\CollegeAdmissionMeritEntry;
 use App\Models\ReservationCategory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -364,6 +365,16 @@ class CollegeReservationService
                     'plan' => 'This Reservation plan is used by an ACTIVE Selection Rule. Retire the Selection Rule before deactivating the Reservation plan.',
                 ]);
             }
+
+            $generatedRosterDependsOnPlan = CollegeAdmissionMeritEntry::query()
+                ->whereHas('selectionRule', fn ($query) => $query->where('college_program_reservation_plan_id', $plan->id))
+                ->exists();
+
+            if ($generatedRosterDependsOnPlan) {
+                throw ValidationException::withMessages([
+                    'plan' => 'This Reservation plan is locked by a generated Merit / Roster and must remain unchanged through Seat Allocation and Admission Confirmation.',
+                ]);
+            }
         }
 
         $before = ['status' => $plan->status];
@@ -499,6 +510,16 @@ class CollegeReservationService
         if ($plan->status !== 'INACTIVE') {
             throw ValidationException::withMessages([
                 'plan' => 'Deactivate the Reservation plan before changing its allocations.',
+            ]);
+        }
+
+        $generatedRosterDependsOnPlan = CollegeAdmissionMeritEntry::query()
+            ->whereHas('selectionRule', fn ($query) => $query->where('college_program_reservation_plan_id', $plan->id))
+            ->exists();
+
+        if ($generatedRosterDependsOnPlan) {
+            throw ValidationException::withMessages([
+                'plan' => 'This Reservation plan is already locked by a generated Merit / Roster. Its seat/quota structure can no longer be edited.',
             ]);
         }
     }

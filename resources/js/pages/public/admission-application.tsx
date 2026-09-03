@@ -1,6 +1,6 @@
 import { Form, Head, router } from '@inertiajs/react';
-import { ArrowLeft, ArrowRight, BookOpenCheck, Check, CheckCircle2, Clock3, FileCheck2, GraduationCap, LogOut, ShieldCheck, Sparkles, UserRoundCheck } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, BookOpenCheck, Check, CheckCircle2, Clock3, FileCheck2, GraduationCap, LogOut, Mail, MessageSquareText, Phone, ShieldCheck, Sparkles, UserRoundCheck } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,8 +19,8 @@ type AcademicSlot={id:number;name:string;selection_mode:'MANDATORY'|'CHOICE';min
 type AcademicTerm={id:number;name:string;sequence_no:number;slots:AcademicSlot[]};
 type AcademicDiscipline={id:number;name:string;code:string;specialization_required?:boolean;specializations:{id:number;name:string;code:string}[]};
 type AcademicOptions={curriculum:{id:number;name:string;code:string;version:string}|null;disciplines:AcademicDiscipline[];terms:AcademicTerm[]};
-type PublicForm={slug:string;step_display_mode?:'SAME_WINDOW'|'NEW_WINDOW';seat_selection_required:boolean;college:{id:number;name:string;code:string};cycle:{id:number;name:string;code:string;application_start_date:string;application_end_date:string;status:string};program:{name:string;code:string;session?:string|null};template:{id:number;name:string;code:string;steps?:Step[]}|null;fee:{required:boolean;amount:string;currency:string};choices:unknown[];academic_options:AcademicOptions;availability:{can_submit:boolean;state:string;message:string;opens_on?:string;closes_on?:string};help_text?:string|null};
-type Props={publicForm:PublicForm;applicant:{name:string;email:string;phone?:string|null;date_of_birth?:string|null;registration_no:string};successApplicationNo?:string|null};
+type PublicForm={slug:string;step_display_mode?:'SAME_WINDOW'|'NEW_WINDOW';seat_selection_required:boolean;college:{id:number;name:string;code:string};cycle:{id:number;name:string;code:string;application_start_date:string;application_end_date:string;status:string};program:{name:string;code:string;session?:string|null};template:{id:number;name:string;code:string;steps?:Step[]}|null;fee:{required:boolean;amount:string;currency:string};choices:unknown[];academic_options:AcademicOptions;availability:{can_submit:boolean;state:string;message:string;opens_on?:string;closes_on?:string};help?:{phone?:string|null;email?:string|null;description?:string|null}};
+type Props={publicForm:PublicForm;applicant:{name:string;email:string;phone?:string|null;date_of_birth?:string|null;registration_no?:string|null;registration_no_preview?:string|null};successApplicationNo?:string|null};
 
 type ChoiceSourcePackage={key:string;name:string;bySlot:Record<number,AcademicMapping[]>};
 type ChoiceCategory={name:string;slots:AcademicSlot[];packageMode:boolean;packages:ChoiceSourcePackage[]};
@@ -55,6 +55,30 @@ const sameIds=(a:number[],b:number[])=>[...a].sort((x,y)=>x-y).join(',')===[...b
 
 
 const selectClass='h-11 w-full rounded-xl border bg-background px-3 text-sm shadow-xs outline-none transition focus:border-primary/60 focus:ring-[3px] focus:ring-primary/10';
+
+function HelpCard({help,className=''}:{help:PublicForm['help'];className?:string}){
+    const phone=help?.phone?.trim();
+    const email=help?.email?.trim();
+    const description=help?.description?.trim()||'For application assistance, contact the admission office using the details provided here.';
+    return <Card className={`overflow-hidden rounded-2xl border-primary/15 bg-background/95 shadow-sm ${className}`}>
+        <CardContent className="p-4 md:p-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(190px,0.75fr)_minmax(0,1.8fr)] lg:items-stretch">
+                <div className="flex items-start gap-3">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/15 bg-primary/10"><MessageSquareText className="size-5 text-primary"/></div>
+                    <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Need Help?</div>
+                        <p className="mt-1.5 text-sm leading-5 text-muted-foreground">We&apos;re here to help with your application.</p>
+                    </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {phone&&<a href={`tel:${phone}`} className="group flex min-h-[72px] items-center gap-3 rounded-xl border border-primary/10 bg-primary/[0.025] px-3.5 py-3 transition hover:border-primary/25 hover:bg-primary/[0.055]"><div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10"><Phone className="size-4 text-primary"/></div><div className="min-w-0"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Call us</div><div className="mt-0.5 truncate text-sm font-semibold text-foreground">{phone}</div></div></a>}
+                    {email&&<a href={`mailto:${email}`} className="group flex min-h-[72px] items-center gap-3 rounded-xl border border-primary/10 bg-primary/[0.025] px-3.5 py-3 transition hover:border-primary/25 hover:bg-primary/[0.055]"><div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10"><Mail className="size-4 text-primary"/></div><div className="min-w-0"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Email us</div><div className="mt-0.5 break-all text-sm font-semibold text-foreground">{email}</div></div></a>}
+                    <div className="min-h-[72px] rounded-xl border border-primary/10 bg-muted/[0.16] px-3.5 py-3 sm:col-span-2 xl:col-span-1"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Help &amp; instructions</div><p className="mt-1 whitespace-pre-line text-sm leading-5 text-foreground/80">{description}</p></div>
+                </div>
+            </div>
+        </CardContent>
+    </Card>;
+}
 const errorFor=(errors:Record<string,string>,key:string)=>errors[key]??errors[key.replaceAll('[','.').replaceAll(']','')];
 const safe=<T,>(value:T[]|undefined|null)=>Array.isArray(value)?value:[];
 
@@ -85,7 +109,13 @@ function DynamicField({field,values,setValue,errors}:{field:Field;values:Record<
     if(field.field_type==='SELECT')return <div className="space-y-2">{common}<select id={`field-${field.id}`} name={name} className={selectClass} required={field.is_required} disabled={copyLocked} value={String(values[field.id]??'')} onChange={e=>setValue(field.id,e.target.value)}><option value="">{field.placeholder??`Select ${field.label}`}</option>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>{validationHint&&<p className="text-[11px] text-muted-foreground">{validationHint}</p>}{displayError&&<p className="text-xs text-destructive">{displayError}</p>}</div>;
     if(field.field_type==='RADIO'||field.field_type==='YES_NO')return <div className="space-y-2">{common}<div className="flex flex-wrap gap-3">{options.map(o=><label key={o.value} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${String(values[field.id]??'')===o.value?'border-primary/50 bg-primary/5':'bg-background hover:bg-muted/30'}`}><input type="radio" name={name} value={o.value} required={field.is_required} disabled={copyLocked} checked={String(values[field.id]??'')===o.value} onChange={()=>setValue(field.id,o.value)}/>{o.label}</label>)}</div>{validationHint&&<p className="text-[11px] text-muted-foreground">{validationHint}</p>}{displayError&&<p className="text-xs text-destructive">{displayError}</p>}</div>;
     if(field.field_type==='CHECKBOX'||field.field_type==='MULTISELECT')return <div className="space-y-2">{common}<div className="grid gap-2 sm:grid-cols-2">{options.map(o=>{const selected=Array.isArray(values[field.id])?(values[field.id] as unknown[]).map(String):[];return <label key={o.value} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${selected.includes(o.value)?'border-primary/50 bg-primary/5':'bg-background'}`}><input type="checkbox" name={`${name}[]`} value={o.value} checked={selected.includes(o.value)} disabled={copyLocked} onChange={e=>setValue(field.id,e.target.checked?[...selected,o.value]:selected.filter(v=>v!==o.value))}/>{o.label}</label>})}</div>{validationHint&&<p className="text-[11px] text-muted-foreground">{validationHint}</p>}{displayError&&<p className="text-xs text-destructive">{displayError}</p>}</div>;
-    if(field.field_type==='FILE'||field.field_type==='IMAGE')return <div className="space-y-2">{common}<Input id={`field-${field.id}`} type="file" name={name} required={field.is_required} accept={field.field_type==='IMAGE'?'image/*':undefined} className="h-11 rounded-xl"/>{validationHint&&<p className="text-[11px] text-muted-foreground">{validationHint}</p>}{displayError&&<p className="text-xs text-destructive">{displayError}</p>}</div>;
+    if(field.field_type==='FILE'||field.field_type==='IMAGE'){
+        const selectedFile=currentValue instanceof File?currentValue:null;
+        const extensions=Array.isArray(vr.extensions)?(vr.extensions as unknown[]).map(value=>String(value).trim().toLowerCase().replace(/^\./,'')).filter(Boolean):[];
+        const accept=field.field_type==='IMAGE'&&!extensions.length?'image/*':extensions.length?extensions.map(ext=>`.${ext}`).join(','):undefined;
+        const maxKb=Number(vr.max_kb??0)||undefined;
+        return <div className="space-y-2">{common}<Input id={`field-${field.id}`} type="file" name={name} required={field.is_required} accept={accept} onChange={e=>{const file=e.currentTarget.files?.[0]??null;setValue(field.id,file);e.currentTarget.setCustomValidity('');}} className="h-11 rounded-xl"/>{selectedFile&&<div className="rounded-xl border border-primary/15 bg-primary/[0.035] px-3 py-2 text-xs"><div className="font-medium text-foreground">{selectedFile.name}</div><div className="mt-0.5 text-muted-foreground">{Math.max(1,Math.round(selectedFile.size/1024)).toLocaleString()} KB selected{maxKb?` · limit ${maxKb.toLocaleString()} KB`:''}</div></div>}{validationHint&&<p className="text-[11px] text-muted-foreground">{validationHint}</p>}{displayError&&<p className="text-xs text-destructive">{displayError}</p>}</div>;
+    }
     if(field.field_type==='TEXTAREA')return <div className="space-y-2">{common}<textarea id={`field-${field.id}`} name={name} required={field.is_required} disabled={copyLocked} minLength={minLength} maxLength={maxLength} placeholder={field.placeholder??''} value={String(values[field.id]??'')} onChange={e=>{validateTextInput(e.currentTarget,e.target.value);setValue(field.id,e.target.value)}} onInvalid={e=>validateTextInput(e.currentTarget,String(values[field.id]??''))} className="min-h-28 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:border-primary/60 focus:ring-[3px] focus:ring-primary/10"/>{validationHint&&<p className="text-[11px] text-muted-foreground">{validationHint}</p>}{displayError&&<p className="text-xs text-destructive">{displayError}</p>}</div>;
     if(field.field_type==='DATE')return <div className="space-y-2">{common}<DatePicker id={`field-${field.id}`} name={name} value={String(values[field.id]??'')} onValueChange={value=>setValue(field.id,value)} invalid={Boolean(error)}/>{validationHint&&<p className="text-[11px] text-muted-foreground">{validationHint}</p>}{displayError&&<p className="text-xs text-destructive">{displayError}</p>}</div>;
     const inputType=field.field_type==='NUMBER'?'number':field.field_type==='EMAIL'?'email':field.field_type==='PHONE'?'tel':'text';
@@ -122,8 +152,31 @@ function PublicAdmissionApplication({publicForm,applicant,successApplicationNo}:
     const nextPage=()=>{if(!validateCurrentPage())return;const next=Math.min(activePage+1,totalPages-1);setHighestUnlockedPage(current=>Math.max(current,next));setActivePage(next);};
     const previousPage=()=>setActivePage(page=>Math.max(page-1,0));
     const goToPage=(index:number)=>{if(index<=highestUnlockedPage)setActivePage(index);};
+    const pageForServerError=(key:string)=>{
+        if(key.startsWith('academic_preference.'))return 0;
+        if(key==='preview_confirmed')return totalPages-1;
+        const customMatch=key.match(/^custom_fields[.\[]?(\d+)/);
+        if(customMatch){
+            const fieldId=Number(customMatch[1]);
+            const stepIndex=steps.findIndex(step=>safe(step.fields).some(field=>field.id===fieldId));
+            if(stepIndex>=0)return stepIndex+1;
+        }
+        return activePage;
+    };
+    const handleSubmitError=(serverErrors:Record<string,string>)=>{
+        if(!stepByStep)return;
+        const firstKey=Object.keys(serverErrors)[0];
+        if(!firstKey)return;
+        const page=pageForServerError(firstKey);
+        setHighestUnlockedPage(current=>Math.max(current,page));
+        setActivePage(page);
+        requestAnimationFrame(()=>document.querySelector(`[data-public-form-page=\"${page}\"]`)?.scrollIntoView({behavior:'smooth',block:'start'}));
+    };
+    const handleFormSubmit=(event:FormEvent<HTMLFormElement>)=>{
+        if(stepByStep&&!validateCurrentPage())event.preventDefault();
+    };
     const logout=()=>router.post(`/apply/${publicForm.slug}/logout`,{}, {preserveScroll:false});
-    const dynamicSummary=steps.flatMap(step=>safe(step.fields).map(field=>{const value=values[field.id];const display=Array.isArray(value)?value.join(', '):String(value??'');return display?{label:field.label,value:display,step:step.title}:null}).filter(Boolean) as {label:string;value:string;step:string}[]);
+    const dynamicSummary=steps.flatMap(step=>safe(step.fields).map(field=>{const value=values[field.id];const display=value instanceof File?value.name:Array.isArray(value)?value.join(', '):String(value??'');return display?{label:field.label,value:display,step:step.title}:null}).filter(Boolean) as {label:string;value:string;step:string}[]);
 
     if(successApplicationNo)return <><Head title="Application submitted"/><main className="min-h-screen bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.10),transparent_34%)] p-4"><div className="mx-auto grid min-h-[90vh] max-w-3xl place-items-center"><Card className="w-full overflow-hidden rounded-3xl border-primary/15 shadow-xl"><div className="h-1.5 bg-primary"/><CardContent className="py-14 text-center"><div className="mx-auto grid size-16 place-items-center rounded-2xl bg-primary/10"><CheckCircle2 className="size-9 text-primary"/></div><h1 className="mt-5 text-3xl font-semibold tracking-tight">Application submitted successfully</h1><p className="mt-2 text-muted-foreground">Your application number is</p><div className="mx-auto mt-4 max-w-sm rounded-2xl border bg-muted/30 px-5 py-4 text-2xl font-semibold tracking-wide">{successApplicationNo}</div><p className="mt-4 text-sm text-muted-foreground">Keep this number for future admission communication.</p><Button variant="outline" className="mt-7 rounded-xl" onClick={logout}><LogOut/>Log out</Button></CardContent></Card></div></main></>;
 
@@ -159,8 +212,10 @@ function PublicAdmissionApplication({publicForm,applicant,successApplicationNo}:
             <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <section className="min-h-0 overflow-hidden rounded-3xl border border-primary/10 bg-background/70 shadow-sm backdrop-blur">
                     <div className="h-full overflow-y-auto p-3 md:p-5">
-                        <Form action={`/apply/${publicForm.slug}/application`} method="post">{({processing,errors})=><div className="space-y-5 pb-3">
+                        <HelpCard help={publicForm.help} className="mb-5"/>
+                        <Form action={`/apply/${publicForm.slug}/application`} method="post" noValidate onSubmit={handleFormSubmit} onError={handleSubmitError}>{({processing,errors})=><div className="space-y-5 pb-3">
                             {errors.application&&<div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{errors.application}</div>}
+                            {!errors.application&&Object.keys(errors).length>0&&<div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"><div className="font-medium">We couldn't submit the application yet.</div><div className="mt-1 text-xs opacity-90">Please correct the highlighted field below. Your entered information is still on the form.</div></div>}
 
             <div data-public-form-page="0" className={stepByStep&&activePage!==0?'hidden':'space-y-5'}>
                 <Card className="overflow-hidden rounded-3xl border-primary/15 shadow-sm"><div className="h-1 bg-primary/80"/><CardHeader className="pb-3"><div className="flex items-start gap-3"><div className="grid size-10 place-items-center rounded-xl bg-primary/10"><BookOpenCheck className="size-5 text-primary"/></div><div><CardTitle>Choose your academic path</CardTitle><p className="mt-1 text-sm text-muted-foreground">Select the Discipline and, where applicable, Specialization offered under this Program. Mandatory subjects are auto-allotted from the mapped curriculum; only curriculum-defined choice subjects need your selection.</p></div></div></CardHeader><CardContent className="space-y-5">
@@ -209,7 +264,7 @@ function PublicAdmissionApplication({publicForm,applicant,successApplicationNo}:
                                 </div>
                                 <div className="mt-4 rounded-2xl border border-primary/15 bg-primary/[0.04] p-3">
                                     <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Registration Number</div>
-                                    <div className="mt-1 font-mono text-sm font-semibold tracking-wide">{applicant.registration_no}</div>
+                                    <div className="mt-1 font-mono text-sm font-semibold tracking-wide">{applicant.registration_no??applicant.registration_no_preview??'Assigned on final submission'}</div>{!applicant.registration_no&&<div className="mt-1 text-[11px] text-muted-foreground">Current format preview · final sequence is reserved on submission</div>}
                                 </div>
                                 <dl className="mt-4 space-y-3 text-sm">
                                     <div><dt className="text-xs text-muted-foreground">Date of Birth</dt><dd className="mt-0.5 font-medium">{applicant.date_of_birth??'—'}</dd></div>
@@ -218,6 +273,7 @@ function PublicAdmissionApplication({publicForm,applicant,successApplicationNo}:
                                 </dl>
                             </CardContent>
                         </Card>
+
 
                         {stepByStep&&<Card className="mt-4 overflow-hidden rounded-3xl border-primary/15 shadow-sm">
                             <CardContent className="p-5">
@@ -230,13 +286,6 @@ function PublicAdmissionApplication({publicForm,applicant,successApplicationNo}:
                                 <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{width:`${Math.round(((highestUnlockedPage+1)/totalPages)*100)}%`}}/></div>
                             </CardContent>
                         </Card>}
-
-                        <Card className="mt-4 overflow-hidden rounded-3xl border-primary/10 shadow-sm">
-                            <CardContent className="p-5">
-                                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-primary">Need Help?</div>
-                                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">{publicForm.help_text?.trim()||'For help with this application, please contact the college admission office.'}</p>
-                            </CardContent>
-                        </Card>
 
                     </div>
                 </aside>

@@ -15,6 +15,7 @@ import {
     ScrollText,
     Shield,
     ShieldCheck,
+    TicketCheck,
     UsersRound,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -586,6 +587,20 @@ export function AppSidebar() {
                                   href: `/college/${collegeId}/admission-merit`,
                                   icon: ClipboardCheck,
                                   permission: 'college_admission_merit.view',
+                                  directNavigation: true,
+                              },
+                              {
+                                  title: 'Document Verification',
+                                  href: `/college/${collegeId}/admission-document-verification`,
+                                  icon: ClipboardCheck,
+                                  permission: 'college_admission_document_verification.view',
+                                  directNavigation: true,
+                              },
+                              {
+                                  title: 'Seat Allocation / Consumption',
+                                  href: `/college/${collegeId}/admission-seat-allocations`,
+                                  icon: TicketCheck,
+                                  permission: 'college_admission_seat_allocation.view',
                                   directNavigation: true,
                               },
                           ],

@@ -6,6 +6,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Auth\MustVerifyEmail;
@@ -29,12 +30,22 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'mobile', 'account_type', 'primary_college_id', 'status', 'password'])]
+#[Fillable(['name', 'email', 'mobile', 'account_type', 'primary_college_id', 'status', 'password', 'created_by_user_id', 'created_by_scope_type'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, MustVerifyEmail, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    public function scopeVisibleToUniversityAdministration(Builder $query): Builder
+    {
+        return $query->where('created_by_scope_type', 'UNIVERSITY');
+    }
+
+    public function isUniversityManaged(): bool
+    {
+        return $this->created_by_scope_type === 'UNIVERSITY';
+    }
 
     public function primaryCollege(): BelongsTo
     {

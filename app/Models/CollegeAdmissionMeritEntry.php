@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CollegeAdmissionMeritEntry extends Model
 {
@@ -50,5 +51,10 @@ class CollegeAdmissionMeritEntry extends Model
     public function selectionRule(): BelongsTo
     {
         return $this->belongsTo(CollegeAdmissionSelectionRule::class, 'college_admission_selection_rule_id');
+    }
+
+    public function seatAllocation(): HasOne
+    {
+        return $this->hasOne(CollegeAdmissionSeatAllocation::class, 'college_admission_merit_entry_id');
     }
 }
