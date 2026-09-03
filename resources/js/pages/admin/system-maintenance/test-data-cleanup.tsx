@@ -74,6 +74,10 @@ type Entity = {
     dependencies: Record<string, number>;
     blocked: boolean;
     blocking_references: Ref[];
+    email?: string | null;
+    college_name?: string | null;
+    program_offering_ids?: number[];
+    program_offerings?: { id: number; code?: string | null; name: string }[];
 };
 
 type FullReset = {
@@ -111,9 +115,13 @@ type Props = {
     entities: {
         users: Entity[];
         roles: Entity[];
+        applicants: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
+        college_admission_document_verifications: Entity[];
+        college_admission_seat_allocations: Entity[];
         college_admission_scores: Entity[];
+        college_admission_merit_rosters: Entity[];
         college_admission_applications: Entity[];
         college_admission_selection_rules: Entity[];
         college_program_reservation_plans: Entity[];
@@ -136,11 +144,15 @@ type Props = {
 type TabKey =
     | 'users'
     | 'roles'
+    | 'applicants'
     | 'curriculum'
     | 'academic_policies'
     | 'college_admission_form_templates'
     | 'college_application_fee_rules'
+    | 'college_admission_document_verifications'
+    | 'college_admission_seat_allocations'
     | 'college_admission_scores'
+    | 'college_admission_merit_rosters'
     | 'college_admission_applications'
     | 'college_admission_selection_rules'
     | 'college_program_reservation_plans'
@@ -178,9 +190,13 @@ type ActionTarget = {
 const tabs: { key: TabKey; label: string }[] = [
     { key: 'users', label: 'Users' },
     { key: 'roles', label: 'Roles' },
+    { key: 'applicants', label: 'Applicants' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
+    { key: 'college_admission_document_verifications', label: 'Document Verification' },
+    { key: 'college_admission_seat_allocations', label: 'Seat Allocation / Consumption' },
     { key: 'college_admission_scores', label: 'Score Capture / Normalization' },
+    { key: 'college_admission_merit_rosters', label: 'Generated Merit / Roster' },
     { key: 'college_admission_applications', label: 'Admission Applications' },
     { key: 'college_admission_selection_rules', label: 'Merit / Roster / Selection Rules' },
     { key: 'college_program_reservation_plans', label: 'Reservation / Seat Distribution' },
@@ -201,6 +217,56 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'academic_sessions', label: 'Academic Sessions' },
 ];
 
+const tabGroups: { label: string; keys: TabKey[] }[] = [
+    {
+        label: 'Access & Security',
+        keys: ['users', 'roles'],
+    },
+    {
+        label: 'Admission Processing',
+        keys: [
+            'applicants',
+            'college_admission_applications',
+            'college_admission_scores',
+            'college_admission_merit_rosters',
+            'college_admission_selection_rules',
+            'college_admission_document_verifications',
+            'college_admission_seat_allocations',
+        ],
+    },
+    {
+        label: 'Admission Setup',
+        keys: [
+            'college_admission_form_templates',
+            'college_application_fee_rules',
+            'college_program_offerings',
+            'college_program_intakes',
+            'reservation_categories',
+            'college_program_reservation_plans',
+        ],
+    },
+    {
+        label: 'Academic Setup',
+        keys: [
+            'academic_sessions',
+            'degree_levels',
+            'degrees',
+            'disciplines',
+            'program_templates',
+            'course_types',
+            'course_categories',
+            'courses',
+            'approval_workflows',
+            'curriculum',
+            'academic_policies',
+            'academic_calendars',
+        ],
+    },
+];
+
+const tabLabel = (key: TabKey) =>
+    tabs.find((item) => item.key === key)?.label ?? key;
+
 export default function TestDataCleanup({
     enabled,
     environment,
@@ -212,16 +278,52 @@ export default function TestDataCleanup({
     legacyUnlinkedRegularApplications,
 }: Props) {
     const [tab, setTab] = useState<TabKey>('college_admission_applications');
+    const [applicantOfferingFilter, setApplicantOfferingFilter] = useState('all');
     const [target, setTarget] = useState<ActionTarget | null>(null);
 
     const form = useForm({
         confirmation_code: '',
     });
 
-    const currentEntities = useMemo(
-        () => (tab === 'curriculum' || tab === 'academic_policies' ? [] : entities[tab]),
-        [tab, entities],
-    );
+    const applicantOfferingOptions = useMemo(() => {
+        const offerings = new Map<number, string>();
+
+        entities.applicants.forEach((applicant) => {
+            applicant.program_offerings?.forEach((offering) => {
+                offerings.set(
+                    offering.id,
+                    `${offering.name}${offering.code ? ` · ${offering.code}` : ''}`,
+                );
+            });
+        });
+
+        return Array.from(offerings.entries())
+            .map(([id, label]) => ({ id, label }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [entities.applicants]);
+
+    const currentEntities = useMemo(() => {
+        if (tab === 'curriculum' || tab === 'academic_policies') {
+            return [];
+        }
+
+        const rows = entities[tab];
+
+        if (tab !== 'applicants' || applicantOfferingFilter === 'all') {
+            return rows;
+        }
+
+        if (applicantOfferingFilter === 'unlinked') {
+            return rows.filter(
+                (item) => !item.program_offering_ids?.length,
+            );
+        }
+
+        const offeringId = Number(applicantOfferingFilter);
+        return rows.filter((item) =>
+            item.program_offering_ids?.includes(offeringId),
+        );
+    }, [tab, entities, applicantOfferingFilter]);
 
     const openAction = (value: ActionTarget) => {
         setTarget(value);
@@ -367,108 +469,162 @@ export default function TestDataCleanup({
                     </div>
                 </div>
 
-                <Card className="border-amber-500/40">
-                    <CardHeader>
+                <Card>
+                    <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2">
                             <ShieldAlert className="size-5" />
-                            Full User & Role Test Reset
+                            Quick Test Resets
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">
-                            Cleans test University/College staff users and custom roles together. The current logged-in user, SUPER_ADMIN identities, applicants, system roles, permissions and operationally referenced records are preserved.
+                            High-level reset actions stay compact here. Open details only when you need the table-wise breakdown.
                         </p>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
-                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Users</div><div className="text-lg font-semibold">{accessReset.users_total}</div></div>
-                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Users cleanable</div><div className="text-lg font-semibold">{accessReset.users_cleanable}</div></div>
-                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Users preserved</div><div className="text-lg font-semibold">{accessReset.users_protected_or_blocked}</div></div>
-                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Roles</div><div className="text-lg font-semibold">{accessReset.roles_total}</div></div>
-                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Roles cleanable</div><div className="text-lg font-semibold">{accessReset.roles_cleanable}</div></div>
-                            <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Roles preserved</div><div className="text-lg font-semibold">{accessReset.roles_protected_or_blocked}</div></div>
-                        </div>
-                        <div className="flex justify-end">
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                disabled={!enabled || (accessReset.users_cleanable === 0 && accessReset.roles_cleanable === 0)}
-                                onClick={() =>
-                                    openAction({
-                                        mode: 'full_access_reset',
-                                        id: 0,
-                                        code: accessReset.confirmation_code,
-                                        name: `Clean ${accessReset.users_cleanable} user(s) + ${accessReset.roles_cleanable} custom role(s)`,
-                                    })
-                                }
-                            >
-                                <Eraser className="size-4" />
-                                Clean All Users & Roles
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-destructive/40">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-destructive">
-                            <ShieldAlert className="size-5" />
-                            Full Academic Test Reset
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                            Deletes all currently implemented academic/test data in explicit child-first dependency order. It does not disable foreign keys or use raw TRUNCATE.
-                        </p>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                            {Object.entries(fullReset.counts).map(([name, count]) => (
-                                <div key={name} className="rounded-md border p-3">
-                                    <div className="text-xs text-muted-foreground">
-                                        {name.replaceAll('_', ' ')}
+                    <CardContent>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                            <div className="rounded-lg border border-amber-500/40 p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="font-medium">Full User & Role Test Reset</div>
+                                        <div className="mt-1 text-xs text-muted-foreground">
+                                            Cleans test staff users and custom roles while preserving protected identities and referenced records.
+                                        </div>
                                     </div>
-                                    <div className="text-lg font-semibold">{count}</div>
+                                    <Button
+                                        type="button"
+                                        variant="destructive"
+                                        className="shrink-0"
+                                        disabled={!enabled || (accessReset.users_cleanable === 0 && accessReset.roles_cleanable === 0)}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'full_access_reset',
+                                                id: 0,
+                                                code: accessReset.confirmation_code,
+                                                name: `Clean ${accessReset.users_cleanable} user(s) + ${accessReset.roles_cleanable} custom role(s)`,
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Clean Users & Roles
+                                    </Button>
                                 </div>
-                            ))}
-                        </div>
-                        <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">Preserved:</span>{' '}
-                            {fullReset.preserved.join(' · ')}
-                        </div>
-                        <div className="flex justify-end">
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                disabled={!enabled}
-                                onClick={() =>
-                                    openAction({
-                                        mode: 'full_reset',
-                                        id: 0,
-                                        code: fullReset.confirmation_code,
-                                        name: 'Full Academic Test Data Reset',
-                                    })
-                                }
-                            >
-                                <Eraser className="size-4" />
-                                Reset All Academic Test Data
-                            </Button>
+
+                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+                                    <div><span className="text-muted-foreground">Users:</span> <span className="font-semibold">{accessReset.users_total}</span></div>
+                                    <div><span className="text-muted-foreground">Cleanable:</span> <span className="font-semibold">{accessReset.users_cleanable}</span></div>
+                                    <div><span className="text-muted-foreground">Roles:</span> <span className="font-semibold">{accessReset.roles_total}</span></div>
+                                    <div><span className="text-muted-foreground">Cleanable:</span> <span className="font-semibold">{accessReset.roles_cleanable}</span></div>
+                                </div>
+
+                                <details className="mt-3 rounded-md bg-muted/30 px-3 py-2 text-xs">
+                                    <summary className="cursor-pointer font-medium">View preservation details</summary>
+                                    <div className="mt-2 text-muted-foreground">
+                                        Users preserved/blocked: {accessReset.users_protected_or_blocked} · Roles preserved/blocked: {accessReset.roles_protected_or_blocked}
+                                    </div>
+                                    <div className="mt-1 text-muted-foreground">
+                                        {accessReset.preserved.join(' · ')}
+                                    </div>
+                                </details>
+                            </div>
+
+                            <div className="rounded-lg border border-destructive/40 p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="font-medium text-destructive">Full Academic Test Reset</div>
+                                        <div className="mt-1 text-xs text-muted-foreground">
+                                            Deletes implemented academic/test data in child-first dependency order without disabling foreign keys.
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="destructive"
+                                        className="shrink-0"
+                                        disabled={!enabled}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'full_reset',
+                                                id: 0,
+                                                code: fullReset.confirmation_code,
+                                                name: 'Full Academic Test Data Reset',
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Reset Academic Data
+                                    </Button>
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                                    <div>
+                                        <span className="text-muted-foreground">Records:</span>{' '}
+                                        <span className="font-semibold">
+                                            {Object.values(fullReset.counts).reduce((sum, count) => sum + count, 0)}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Tables with data:</span>{' '}
+                                        <span className="font-semibold">
+                                            {Object.values(fullReset.counts).filter((count) => count > 0).length}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Tracked tables:</span>{' '}
+                                        <span className="font-semibold">{Object.keys(fullReset.counts).length}</span>
+                                    </div>
+                                </div>
+
+                                <details className="mt-3 rounded-md bg-muted/30 px-3 py-2 text-xs">
+                                    <summary className="cursor-pointer font-medium">
+                                        View table-wise counts ({Object.keys(fullReset.counts).length})
+                                    </summary>
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                        {Object.entries(fullReset.counts).map(([name, count]) => (
+                                            <div key={name} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
+                                                <span className="min-w-0 truncate text-muted-foreground" title={name.replaceAll('_', ' ')}>
+                                                    {name.replaceAll('_', ' ')}
+                                                </span>
+                                                <span className="shrink-0 font-semibold text-foreground">{count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-3 border-t pt-2 text-muted-foreground">
+                                        <span className="font-medium text-foreground">Preserved:</span>{' '}
+                                        {fullReset.preserved.join(' · ')}
+                                    </div>
+                                </details>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <div className="flex flex-wrap gap-2 rounded-lg border bg-card p-2">
-                    {tabs.map((item) => (
-                        <Button
-                            key={item.key}
-                            type="button"
-                            size="sm"
-                            variant={
-                                tab === item.key
-                                    ? 'default'
-                                    : 'ghost'
-                            }
-                            onClick={() => setTab(item.key)}
+                <div className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <div className="text-sm font-medium">Cleanup section</div>
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                            Current: {tabLabel(tab)}
+                        </div>
+                    </div>
+
+                    <div className="w-full sm:w-auto">
+                        <label className="sr-only" htmlFor="cleanup-section">
+                            Select cleanup section
+                        </label>
+                        <select
+                            id="cleanup-section"
+                            value={tab}
+                            onChange={(event) => setTab(event.target.value as TabKey)}
+                            className="h-9 w-full rounded-md border border-input bg-background px-3 pr-8 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:min-w-[320px]"
                         >
-                            {item.label}
-                        </Button>
-                    ))}
+                            {tabGroups.map((group) => (
+                                <optgroup key={group.label} label={group.label}>
+                                    {group.keys.map((key) => (
+                                        <option key={key} value={key}>
+                                            {tabLabel(key)}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 {tab === 'curriculum' ? (
@@ -727,6 +883,35 @@ export default function TestDataCleanup({
                                     )?.label
                                 }
                             </CardTitle>
+                            {tab === 'applicants' && (
+                                <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-end sm:justify-between">
+                                    <div>
+                                        <div className="text-sm font-medium">Program Offering filter</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Filter applicant accounts by the Program Offering linked through their Admission Application. Cleanup remains one applicant at a time.
+                                        </div>
+                                    </div>
+                                    <div className="w-full sm:w-[360px]">
+                                        <label className="sr-only" htmlFor="applicant-program-offering">
+                                            Filter applicants by Program Offering
+                                        </label>
+                                        <select
+                                            id="applicant-program-offering"
+                                            value={applicantOfferingFilter}
+                                            onChange={(event) => setApplicantOfferingFilter(event.target.value)}
+                                            className="h-9 w-full rounded-md border border-input bg-background px-3 pr-8 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <option value="all">All Program Offerings</option>
+                                            {applicantOfferingOptions.map((offering) => (
+                                                <option key={offering.id} value={offering.id}>
+                                                    {offering.label}
+                                                </option>
+                                            ))}
+                                            <option value="unlinked">No Program Offering linked yet</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
                             {tab === 'college_admission_applications' &&
                                 legacyUnlinkedRegularApplications.total > 0 && (
                                     <div className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between">
@@ -801,6 +986,21 @@ export default function TestDataCleanup({
                                                                 ? ` · ${item.kind}`
                                                                 : ''}
                                                         </div>
+                                                        {tab === 'applicants' && (
+                                                            <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                                                {item.email && <div>{item.email}</div>}
+                                                                <div>
+                                                                    Program Offering:{' '}
+                                                                    {item.program_offerings?.length
+                                                                        ? item.program_offerings
+                                                                              .map((offering) =>
+                                                                                  `${offering.name}${offering.code ? ` (${offering.code})` : ''}`,
+                                                                              )
+                                                                              .join(' · ')
+                                                                        : 'Not linked yet'}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </td>
 
                                                     <td className="px-4 py-4">
@@ -837,8 +1037,12 @@ export default function TestDataCleanup({
                                                                 ? 'Protected system role'
                                                                 : tab === 'users'
                                                                   ? 'Protected or operational references exist'
-                                                                  : 'Clean dependencies first'
-                                                            : 'Ready for test cleanup'}
+                                                                  : tab === 'applicants'
+                                                                    ? 'Protected: already linked to Admission / Student lifecycle'
+                                                                    : 'Clean dependencies first'
+                                                            : tab === 'applicants'
+                                                              ? 'Ready: applicant account + linked test admission data'
+                                                              : 'Ready for test cleanup'}
                                                     </td>
 
                                                     <td className="px-4 py-4">

@@ -66,4 +66,9 @@ class CollegeAdmissionApplication extends Model
     {
         return $this->hasMany(CollegeAdmissionApplicationCourseChoice::class, 'college_admission_application_id');
     }
+
+    public function documentVerification(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CollegeAdmissionDocumentVerification::class, 'college_admission_application_id');
+    }
 }

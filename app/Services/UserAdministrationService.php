@@ -8,10 +8,12 @@ use Illuminate\Validation\ValidationException;
 
 class UserAdministrationService
 {
-    public function create(array $data, int $actorId, ?string $ip): User
+    public function create(array $data, int $actorId, ?string $ip, string $creatorScopeType = 'UNIVERSITY'): User
     {
-        return DB::transaction(function () use ($data, $actorId, $ip) {
+        return DB::transaction(function () use ($data, $actorId, $ip, $creatorScopeType) {
             $data['email'] = mb_strtolower(trim($data['email']));
+            $data['created_by_user_id'] = $actorId;
+            $data['created_by_scope_type'] = $creatorScopeType;
             if (User::query()->whereRaw('LOWER(email) = ?', [$data['email']])->exists()) {
                 throw ValidationException::withMessages(['email' => 'A user account with this email already exists. Duplicate users cannot be created.']);
             }

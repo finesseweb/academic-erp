@@ -10,17 +10,17 @@ class RoleService
     public function create(array $data, int $actorId, ?string $ip): Role
     {
         return DB::transaction(function () use ($data, $actorId, $ip) {
-            $role = Role::create([...$data, 'is_system_role' => false, 'owner_scope_type' => 'UNIVERSITY', 'owner_scope_reference' => 'university']);
+            $role = Role::create([...$data, 'is_system_role' => false, 'owner_scope_type' => 'UNIVERSITY', 'owner_scope_reference' => 'university', 'created_by_user_id' => $actorId, 'created_by_scope_type' => 'UNIVERSITY']);
             $this->audit('ROLE_CREATED', $role, $actorId, $ip, null, $role->toArray());
 
             return $role;
         });
     }
 
-    public function createForCollege(array $data, int $collegeId, int $actorId, ?string $ip): Role
+    public function createForCollege(array $data, int $collegeId, int $actorId, ?string $ip, string $creatorScopeType = 'COLLEGE'): Role
     {
-        return DB::transaction(function () use ($data, $collegeId, $actorId, $ip) {
-            $role = Role::create([...$data, 'is_system_role' => false, 'owner_scope_type' => 'COLLEGE', 'owner_scope_reference' => "college:{$collegeId}", 'status' => 'ACTIVE']);
+        return DB::transaction(function () use ($data, $collegeId, $actorId, $ip, $creatorScopeType) {
+            $role = Role::create([...$data, 'is_system_role' => false, 'owner_scope_type' => 'COLLEGE', 'owner_scope_reference' => "college:{$collegeId}", 'status' => 'ACTIVE', 'created_by_user_id' => $actorId, 'created_by_scope_type' => $creatorScopeType]);
             $this->audit('ROLE_CREATED', $role, $actorId, $ip, null, $role->toArray());
 
             return $role;

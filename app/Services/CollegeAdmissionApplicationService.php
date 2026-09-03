@@ -39,6 +39,27 @@ class CollegeAdmissionApplicationService
         $fee = $this->formResolver->resolveFee($college, $cycle);
 
         return DB::transaction(function () use ($college, $cycle, $data, $contexts, $academicPreference, $actorId, $ip, $template, $customValues, $fee, $admissionMode, $entrySource) {
+            $applicantUserId = isset($data['applicant_user_id']) ? (int) $data['applicant_user_id'] : null;
+            if ($applicantUserId) {
+                // Serialize application creation for one applicant so two browser tabs /
+                // concurrent requests cannot create the same active application twice.
+                DB::table('users')->where('id', $applicantUserId)->lockForUpdate()->first();
+
+                $existing = CollegeAdmissionApplication::query()
+                    ->where('college_id', $college->id)
+                    ->where('college_admission_cycle_id', $cycle->id)
+                    ->where('applicant_user_id', $applicantUserId)
+                    ->whereIn('status', ['DRAFT', 'SUBMITTED'])
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($existing) {
+                    throw ValidationException::withMessages([
+                        'application' => 'You already have an application for this Program Offering in this Admission Cycle ('.$existing->application_no.'). A second application is not allowed.',
+                    ]);
+                }
+            }
+
             $application = CollegeAdmissionApplication::create([
                 'college_id' => $college->id,
                 'applicant_user_id' => $data['applicant_user_id'] ?? null,

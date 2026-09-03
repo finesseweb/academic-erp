@@ -60,7 +60,8 @@ class CollegeUserController extends Controller
             ['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email:rfc', Rule::unique('users', 'email')], 'mobile' => ['nullable', 'string', 'max:30'], 'password' => ['required', 'confirmed', Password::min(12)->letters()->numbers()]],
             ['email.unique' => 'A user account with this email already exists. Duplicate users cannot be created.'],
         );
-        $service->create([...$data, 'account_type' => 'COLLEGE_STAFF', 'primary_college_id' => $college->id, 'status' => 'ACTIVE'], $request->user()->id, $request->ip());
+        $creatorScopeType = $request->user()->primary_college_id === null ? 'UNIVERSITY' : 'COLLEGE';
+        $service->create([...$data, 'account_type' => 'COLLEGE_STAFF', 'primary_college_id' => $college->id, 'status' => 'ACTIVE'], $request->user()->id, $request->ip(), $creatorScopeType);
 
         return to_route('college-users.index', $college)->with('toast', ['type' => 'success', 'message' => 'College user created.']);
     }

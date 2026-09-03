@@ -18,19 +18,19 @@ class UserRoleController extends Controller
 {
     public function edit(Request $request, User $user): Response
     {
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManagedUser($user);
         abort_unless($request->user()->hasPermission('user.view') && $request->user()->hasPermission('role.view'), 403);
 
-        $availableRoles = Role::query()->where('status', 'ACTIVE')->where(fn ($query) => $query->where('is_system_role', false)->orWhere('code', 'COLLEGE_ADMIN'))->with('permissions:id,code,description')->orderBy('name')->get(['id', 'name', 'code', 'description']);
+        $availableRoles = Role::query()->visibleToUniversityAdministration()->where('status', 'ACTIVE')->where(fn ($query) => $query->where('is_system_role', false)->orWhere('code', 'COLLEGE_ADMIN'))->with('permissions:id,code,description')->orderBy('name')->get(['id', 'name', 'code', 'description']);
 
-        return Inertia::render('users/roles', ['managedUser' => $user->load(['roles' => fn ($q) => $q->with('permissions:id,code')]), 'availableRoles' => $availableRoles, 'colleges' => College::where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name', 'code']), 'can' => ['assign' => $request->user()->hasPermission('role.assign'), 'unassign' => $request->user()->hasPermission('role.unassign'), 'updateScope' => $request->user()->hasPermission('scope.update') && ! $request->user()->is($user)]]);
+        return Inertia::render('users/roles', ['managedUser' => $user->load(['roles' => fn ($q) => $q->where('roles.created_by_scope_type', 'UNIVERSITY')->with('permissions:id,code')]), 'availableRoles' => $availableRoles, 'colleges' => College::where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name', 'code']), 'can' => ['assign' => $request->user()->hasPermission('role.assign'), 'unassign' => $request->user()->hasPermission('role.unassign'), 'updateScope' => $request->user()->hasPermission('scope.update') && ! $request->user()->is($user)]]);
     }
 
     public function store(Request $request, User $user, UserRoleService $service): RedirectResponse
     {
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManagedUser($user);
         abort_unless($request->user()->hasPermission('role.assign'), 403);
-        $data = $request->validate(['role_id' => ['required', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('status', 'ACTIVE')->where(fn ($roles) => $roles->where('is_system_role', false)->orWhere('code', 'COLLEGE_ADMIN')))], 'scope_type' => ['required', Rule::in(['UNIVERSITY', 'COLLEGE'])], 'college_id' => ['nullable', 'required_if:scope_type,COLLEGE', 'integer', Rule::exists('colleges', 'id')->where(fn ($q) => $q->where('status', 'ACTIVE'))]]);
+        $data = $request->validate(['role_id' => ['required', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('status', 'ACTIVE')->where('created_by_scope_type', 'UNIVERSITY')->where(fn ($roles) => $roles->where('is_system_role', false)->orWhere('code', 'COLLEGE_ADMIN')))], 'scope_type' => ['required', Rule::in(['UNIVERSITY', 'COLLEGE'])], 'college_id' => ['nullable', 'required_if:scope_type,COLLEGE', 'integer', Rule::exists('colleges', 'id')->where(fn ($q) => $q->where('status', 'ACTIVE'))]]);
         $role = Role::findOrFail($data['role_id']);
         abort_if($role->status !== 'ACTIVE' || ($role->is_system_role && $role->code !== 'COLLEGE_ADMIN'), 422, 'This role cannot be assigned here.');
         if ($role->code === 'COLLEGE_ADMIN') {
@@ -51,9 +51,10 @@ class UserRoleController extends Controller
 
     public function destroy(Request $request, User $user, UserRole $assignment, UserRoleService $service): RedirectResponse
     {
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManagedUser($user);
         abort_unless($request->user()->hasPermission('role.unassign'), 403);
         abort_unless($assignment->user_id === $user->id, 404);
+        abort_unless($assignment->role()->where('created_by_scope_type', 'UNIVERSITY')->exists(), 404);
         abort_if($assignment->role()->where('is_system_role', true)->where('code', '!=', 'COLLEGE_ADMIN')->exists(), 422, 'Protected system role assignments cannot be removed here.');
         abort_if($request->user()->is($user), 422, 'You cannot remove your own role assignment.');
         $service->remove($assignment, $request->user()->id, $request->ip());
@@ -63,8 +64,9 @@ class UserRoleController extends Controller
 
     public function updateScope(UpdateUserRoleScopeRequest $request, User $user, UserRole $assignment, UserRoleService $service): RedirectResponse
     {
-        abort_if($user->account_type === 'APPLICANT', 404);
+        $this->assertUniversityManagedUser($user);
         abort_unless($assignment->user_id === $user->id, 404);
+        abort_unless($assignment->role()->where('created_by_scope_type', 'UNIVERSITY')->exists(), 404);
         abort_if($assignment->role()->where('is_system_role', true)->where('code', '!=', 'COLLEGE_ADMIN')->exists(), 422, 'Protected system role assignments cannot be changed here.');
         abort_if($request->user()->is($user), 422, 'You cannot change your own access scope.');
 
@@ -96,5 +98,9 @@ class UserRoleController extends Controller
         }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Assignment scope updated.']);
+    }
+    private function assertUniversityManagedUser(User $user): void
+    {
+        abort_unless($user->account_type !== 'APPLICANT' && $user->isUniversityManaged(), 404);
     }
 }

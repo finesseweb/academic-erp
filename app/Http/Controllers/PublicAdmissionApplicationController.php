@@ -53,6 +53,22 @@ class PublicAdmissionApplicationController extends Controller
             ->firstOrFail();
 
         $availability = $this->availability($mapping, $cycle);
+        $existingApplication = DB::table('college_admission_applications')
+            ->where('college_id', $mapping->college_id)
+            ->where('college_admission_cycle_id', $cycle->id)
+            ->where('applicant_user_id', $request->user()->id)
+            ->whereIn('status', ['DRAFT', 'SUBMITTED'])
+            ->orderByDesc('id')
+            ->first(['id', 'application_no', 'status']);
+        if ($existingApplication) {
+            $availability = [
+                'can_submit' => false,
+                'state' => 'ALREADY_APPLIED',
+                'message' => 'You already have an application for this Program Offering in this Admission Cycle: '.$existingApplication->application_no.'. A second application is not allowed.',
+                'existing_application_no' => $existingApplication->application_no,
+                'existing_application_status' => $existingApplication->status,
+            ];
+        }
         // Public applications are intentionally NOT seat-capacity gated.
         // Discipline / specialization / curriculum choices are collected now; seat allocation is downstream.
         $contexts = collect();
@@ -60,8 +76,25 @@ class PublicAdmissionApplicationController extends Controller
         $fee = $formResolver->resolveFee(\App\Models\College::query()->findOrFail($mapping->college_id), $cycle);
 
         $applicantProfile = \App\Models\ApplicantProfile::where('user_id',$request->user()->id)->firstOrFail();
-        $registrationNo = $registrationNumbers->ensure($applicantProfile);
+        // A legacy pre-submission registration number may already exist on older applicant
+        // profiles. Do not expose it as final. A Registration Number becomes visible only
+        // after this applicant has at least one successfully SUBMITTED application.
+        $hasSubmittedApplication = DB::table('college_admission_applications')
+            ->where('college_id', $mapping->college_id)
+            ->where('applicant_user_id', $request->user()->id)
+            ->where('status', 'SUBMITTED')
+            ->exists();
+        $registrationNo = $hasSubmittedApplication ? $applicantProfile->registration_no : null;
         $portalSettings = \App\Models\CollegeApplicantRegistrationSetting::forCollege($mapping->college_id);
+        $registrationPreview = $registrationNumbers->preview(
+            (string) $portalSettings->registration_number_format,
+            \App\Models\College::query()->findOrFail($mapping->college_id),
+            (int) $portalSettings->registration_sequence_next,
+        );
+        $helpDescription = trim((string) ($portalSettings->application_help_text ?? ''));
+        if ($helpDescription === '') {
+            $helpDescription = 'For help with this application, please contact the college admission office.';
+        }
 
         return Inertia::render('public/admission-application', [
             'publicForm' => [
@@ -85,9 +118,13 @@ class PublicAdmissionApplicationController extends Controller
                 'choices' => [],
                 'academic_options' => $academicOptions,
                 'availability' => $availability,
-                'help_text' => $portalSettings->application_help_text,
+                'help' => [
+                    'phone' => $portalSettings->application_help_phone,
+                    'email' => $portalSettings->application_help_email,
+                    'description' => $helpDescription,
+                ],
             ],
-            'applicant' => ['name'=>$request->user()->name,'email'=>$request->user()->email,'phone'=>$request->user()->mobile,'date_of_birth'=>$applicantProfile->date_of_birth?->toDateString(),'registration_no'=>$registrationNo],
+            'applicant' => ['name'=>$request->user()->name,'email'=>$request->user()->email,'phone'=>$request->user()->mobile,'date_of_birth'=>$applicantProfile->date_of_birth?->toDateString(),'registration_no'=>$registrationNo,'registration_no_preview'=>$registrationPreview],
             'successApplicationNo' => $request->session()->pull('public_application_success'),
         ]);
     }
@@ -98,6 +135,7 @@ class PublicAdmissionApplicationController extends Controller
         CollegeReservationService $reservationService,
         CollegeAdmissionApplicationService $applicationService,
         ApplicantAcademicPreferenceService $academicPreferenceService,
+        ApplicantRegistrationNumberService $registrationNumbers,
     ): RedirectResponse {
         abort_unless($request->user() && $request->user()->account_type === 'APPLICANT', 403);
         $mapping = $this->publicMapping($slug);
@@ -145,10 +183,16 @@ class PublicAdmissionApplicationController extends Controller
             'admission_mode' => 'REGULAR',
         ];
 
-        $application = DB::transaction(function () use ($applicationService, $academicPreferenceService, $resolvedAcademicPreference, $college, $payload, $request) {
+        $application = DB::transaction(function () use ($applicationService, $academicPreferenceService, $registrationNumbers, $resolvedAcademicPreference, $college, $payload, $profile, $request) {
             $application = $applicationService->create($college, $payload, null, $request->ip(), 'PUBLIC');
             $academicPreferenceService->persist($application, $resolvedAcademicPreference);
-            return $applicationService->submit($application, $college, null, $request->ip());
+            $application = $applicationService->submit($application, $college, null, $request->ip());
+
+            // Registration Number is applicant-level and becomes final only after a
+            // successful first submission, using the College's current saved format.
+            $registrationNumbers->finalizeForSubmission($profile, $application->id);
+
+            return $application;
         });
 
         return redirect()->route('applicant.application', ['slug'=>$slug])
