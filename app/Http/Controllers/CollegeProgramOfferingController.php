@@ -31,6 +31,20 @@ class CollegeProgramOfferingController extends Controller
             ->orderBy('program_template_id')
             ->get();
 
+        $activeBatchCounts = DB::table('batches')
+            ->selectRaw('college_program_offering_id, COUNT(*) as total')
+            ->where('status', 'ACTIVE')
+            ->whereIn('college_program_offering_id', $offerings->pluck('id'))
+            ->groupBy('college_program_offering_id')
+            ->pluck('total', 'college_program_offering_id');
+
+        $offerings->each(function ($offering) use ($activeBatchCounts) {
+            $offering->setAttribute(
+                'active_batch_count',
+                (int) ($activeBatchCounts[$offering->id] ?? 0)
+            );
+        });
+
         $programTemplates = DB::table('program_templates')
             ->where('university_id', $college->university_id)
             ->where('status', 'ACTIVE')

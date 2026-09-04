@@ -28,4 +28,9 @@ class College extends Model
     {
         return $this->hasMany(CollegeProgramOffering::class);
     }
+
+    public function collegeAcademicCalendars(): HasMany
+    {
+        return $this->hasMany(CollegeAcademicCalendar::class);
+    }
 }

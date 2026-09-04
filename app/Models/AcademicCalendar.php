@@ -22,4 +22,9 @@ class AcademicCalendar extends Model
     {
         return $this->hasMany(AcademicCalendarEvent::class)->orderBy('start_date')->orderBy('display_order');
     }
+
+    public function collegeCalendars(): HasMany
+    {
+        return $this->hasMany(CollegeAcademicCalendar::class, 'university_academic_calendar_id');
+    }
 }

@@ -6,6 +6,7 @@ use App\Models\AcademicCalendar;
 use App\Models\AcademicCalendarEvent;
 use App\Models\AcademicSession;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class AcademicCalendarService
@@ -55,6 +56,12 @@ class AcademicCalendarService
 
     public function changeStatus(AcademicCalendar $calendar, string $status, int $actorId, ?string $ip): void
     {
+        if ($status === 'INACTIVE' && Schema::hasTable('college_academic_calendars')
+            && DB::table('college_academic_calendars')->where('university_academic_calendar_id', $calendar->id)->where('status', 'ACTIVE')->exists()) {
+            throw ValidationException::withMessages([
+                'status' => 'This University Academic Calendar is used by an ACTIVE College Academic Calendar. Deactivate the dependent College Calendar first.',
+            ]);
+        }
         DB::transaction(function () use ($calendar, $status, $actorId, $ip) {
             $before = ['status' => $calendar->status];
             $calendar->update(['status' => $status, 'updated_by' => $actorId]);
@@ -99,6 +106,12 @@ class AcademicCalendarService
         $this->assertCalendarActive($calendar);
         $this->assertEventOwned($calendar, $event);
         $this->assertEventDatesInsideSession($calendar, $data['start_date'], $data['end_date']);
+        if (! (bool) ($data['allow_college_override'] ?? false) && Schema::hasTable('college_calendar_overrides')
+            && DB::table('college_calendar_overrides')->where('academic_calendar_event_id', $event->id)->where('status', 'ACTIVE')->exists()) {
+            throw ValidationException::withMessages([
+                'allow_college_override' => 'Active College overrides exist for this event. Disable those College overrides before locking the University event.',
+            ]);
+        }
 
         return DB::transaction(function () use ($event, $data, $actorId, $ip) {
             $before = $event->toArray();
@@ -116,6 +129,12 @@ class AcademicCalendarService
     public function changeEventStatus(AcademicCalendar $calendar, AcademicCalendarEvent $event, string $status, int $actorId, ?string $ip): void
     {
         $this->assertEventOwned($calendar, $event);
+        if ($status === 'INACTIVE' && Schema::hasTable('college_calendar_overrides')
+            && DB::table('college_calendar_overrides')->where('academic_calendar_event_id', $event->id)->where('status', 'ACTIVE')->exists()) {
+            throw ValidationException::withMessages([
+                'status' => 'This University event has an ACTIVE College override. Disable the College override first.',
+            ]);
+        }
 
         DB::transaction(function () use ($event, $status, $actorId, $ip) {
             $before = ['status' => $event->status];

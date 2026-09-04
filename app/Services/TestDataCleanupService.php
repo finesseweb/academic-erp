@@ -798,10 +798,18 @@ class TestDataCleanupService
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
                 $this->collegeApplicationFeeRuleRows($universityId),
+            'fee_structures' =>
+                $this->feeStructureRows($universityId),
+            'fee_heads' =>
+                $this->feeHeadRows($universityId),
+            'fee_categories' =>
+                $this->feeCategoryRows($universityId),
             'college_admission_document_verifications' =>
                 $this->collegeAdmissionDocumentVerificationRows($universityId),
             'college_admission_seat_allocations' =>
                 $this->collegeAdmissionSeatAllocationRows($universityId),
+            'admissions' =>
+                $this->admissionRows($universityId),
             'college_admission_scores' =>
                 $this->collegeAdmissionScoreRows($universityId),
             'college_admission_merit_rosters' =>
@@ -816,6 +824,12 @@ class TestDataCleanupService
                 $this->reservationCategoryRows($universityId),
             'college_program_intakes' =>
                 $this->collegeProgramIntakeRows($universityId),
+            'sections' =>
+                $this->sectionRows($universityId),
+            'college_academic_calendars' =>
+                $this->collegeAcademicCalendarRows($universityId),
+            'batches' =>
+                $this->batchRows($universityId),
             'college_program_offerings' =>
                 $this->collegeProgramOfferingRows($universityId),
             'academic_calendars' =>
@@ -976,6 +990,8 @@ class TestDataCleanupService
                     $this->countCollegeScopedRowsForUniversity('college_admission_document_verifications', $universityId),
                 'college_admission_seat_allocations' =>
                     $this->countCollegeScopedRowsForUniversity('college_admission_seat_allocations', $universityId),
+                'admissions' =>
+                    $this->countCollegeScopedRowsForUniversity('admissions', $universityId),
                 'college_admission_scores' =>
                     $this->countCollegeAdmissionScoresForUniversity($universityId),
                 'college_admission_application_choices' =>
@@ -998,6 +1014,14 @@ class TestDataCleanupService
                     $this->countCollegeIntakeAllocationsForUniversity($universityId),
                 'college_program_intakes' =>
                     $this->countCollegeIntakesForUniversity($universityId),
+                'sections' =>
+                    $this->countSectionsForUniversity($universityId),
+                'college_academic_calendars' =>
+                    $this->countCollegeAcademicCalendarsForUniversity($universityId),
+                'college_calendar_overrides' =>
+                    $this->countCollegeCalendarOverridesForUniversity($universityId),
+                'batches' =>
+                    $this->countBatchesForUniversity($universityId),
                 'college_program_offerings' =>
                     $this->countCollegeOfferingsForUniversity($universityId),
                 'academic_calendar_events' =>
@@ -1145,6 +1169,7 @@ class TestDataCleanupService
                 $seatAllocationIds = Schema::hasTable('college_admission_seat_allocations')
                     ? DB::table('college_admission_seat_allocations')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
                     : collect();
+                $this->deleteWhereIn('admissions', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_seat_allocation_horizontal_categories', 'college_admission_seat_allocation_id', $seatAllocationIds);
                 $this->deleteWhereIn('college_admission_seat_allocations', 'college_admission_application_id', $applicationIds);
                 $verificationIds = Schema::hasTable('college_admission_document_verifications')
@@ -1238,7 +1263,16 @@ class TestDataCleanupService
                 );
             }
 
-            // 2) College operational setup: allocations -> intake -> offering.
+            // 4) College operational setup: sections -> batches -> allocations -> intake -> offering.
+            if (Schema::hasTable('batches') && Schema::hasTable('college_program_offerings') && $collegeIds->isNotEmpty()) {
+                $batchOfferingIds = DB::table('college_program_offerings')
+                    ->whereIn('college_id', $collegeIds)
+                    ->pluck('id');
+                $batchIdsForReset = DB::table('batches')->whereIn('college_program_offering_id', $batchOfferingIds)->pluck('id');
+                $this->deleteWhereIn('sections', 'batch_id', $batchIdsForReset);
+                DB::table('batches')->whereIn('college_program_offering_id', $batchOfferingIds)->delete();
+            }
+
             if (
                 Schema::hasTable('college_program_intakes') &&
                 Schema::hasTable('college_program_offerings') &&
@@ -1321,6 +1355,13 @@ class TestDataCleanupService
                 DB::table('college_program_offerings')
                     ->whereIn('college_id', $collegeIds)
                     ->delete();
+            }
+
+            // College Calendar overrides/adoptions must be removed before their University Calendar parents.
+            if (Schema::hasTable('college_academic_calendars') && $collegeIds->isNotEmpty()) {
+                $collegeCalendarIds = DB::table('college_academic_calendars')->whereIn('college_id', $collegeIds)->pluck('id');
+                $this->deleteWhereIn('college_calendar_overrides', 'college_academic_calendar_id', $collegeCalendarIds);
+                $this->deleteWhereIn('college_academic_calendars', 'id', $collegeCalendarIds);
             }
 
             // 3) Calendar children before Calendar headers.
@@ -1655,10 +1696,18 @@ class TestDataCleanupService
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>
                 $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
+            'fee_structures' =>
+                $this->cleanupFeeStructure($id, $universityId, $actorId),
+            'fee_heads' =>
+                $this->cleanupFeeHead($id, $universityId, $actorId),
+            'fee_categories' =>
+                $this->cleanupFeeCategory($id, $universityId, $actorId),
             'college_admission_document_verifications' =>
                 $this->cleanupCollegeAdmissionDocumentVerification($id, $universityId, $actorId),
             'college_admission_seat_allocations' =>
                 $this->cleanupCollegeAdmissionSeatAllocation($id, $universityId, $actorId),
+            'admissions' =>
+                $this->cleanupAdmission($id, $universityId, $actorId),
             'college_admission_scores' =>
                 $this->cleanupCollegeAdmissionScore($id, $universityId, $actorId),
             'college_admission_merit_rosters' =>
@@ -1698,6 +1747,12 @@ class TestDataCleanupService
                     $universityId,
                     $actorId
                 ),
+            'sections' =>
+                $this->cleanupSection($id, $universityId, $actorId),
+            'college_academic_calendars' =>
+                $this->cleanupCollegeAcademicCalendar($id, $universityId, $actorId),
+            'batches' =>
+                $this->cleanupBatch($id, $universityId, $actorId),
             'college_program_offerings' =>
                 $this->cleanupCollegeProgramOffering(
                     $id,
@@ -1818,6 +1873,283 @@ class TestDataCleanupService
                 'type' => 'Unsupported cleanup type.',
             ]),
         };
+    }
+
+    private function feeStructureRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_structures')) {
+            return [];
+        }
+
+        return DB::table('fee_structures as fs')
+            ->leftJoin('colleges as c', 'c.id', '=', 'fs.college_id')
+            ->leftJoin('program_templates as pt', 'pt.id', '=', 'fs.program_template_id')
+            ->leftJoin('college_program_offerings as cpo', 'cpo.id', '=', 'fs.college_program_offering_id')
+            ->leftJoin('program_templates as cpt', 'cpt.id', '=', 'cpo.program_template_id')
+            ->join('academic_sessions as s', 's.id', '=', 'fs.academic_session_id')
+            ->where('fs.university_id', $universityId)
+            ->orderByRaw('CASE WHEN fs.college_id IS NULL THEN 0 ELSE 1 END')
+            ->orderBy('c.name')
+            ->orderBy('fs.name')
+            ->get([
+                'fs.id', 'fs.code', 'fs.name', 'fs.status', 'fs.purpose', 'fs.college_applicability',
+                'c.name as college_name', 'pt.name as university_program_name',
+                'cpt.name as college_program_name', 's.name as session_name',
+            ])
+            ->map(function ($row) {
+                $items = $this->countIfExists('fee_structure_items', 'fee_structure_id', $row->id);
+                $adoptions = $this->countIfExists('college_fee_structure_adoptions', 'university_fee_structure_id', $row->id);
+                $scope = $row->college_name
+                    ? 'College · '.$row->college_name.' · '.($row->college_program_name ?: 'Program Offering')
+                    : 'University · '.($row->university_program_name ?: 'All Programs');
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $scope.' · '.$row->session_name.' · '.$row->name,
+                    'status' => $row->status,
+                    'kind' => 'FEE_STRUCTURE',
+                    'dependencies' => [
+                        'fee_items' => $items,
+                        'college_adoptions' => $adoptions,
+                    ],
+                    'blocked' => false,
+                    'blocking_references' => [],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupFeeStructure(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_structures')) {
+            abort(404);
+        }
+
+        $record = DB::table('fee_structures')
+            ->where('id', $id)
+            ->where('university_id', $universityId)
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        // Fee Demand/payment tables are intentionally treated as operational consumers.
+        // Once they exist, setup cleanup must never remove a structure referenced by them.
+        $operationalRefs = $this->downstreamReferences($id, [
+            ['fee_demands', 'fee_structure_id'],
+            ['student_fee_demands', 'fee_structure_id'],
+        ]);
+
+        if (count($operationalRefs) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Fee Structure is already referenced by operational Fee Demand data. Clean the downstream test transactions first.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $itemIds = Schema::hasTable('fee_structure_items')
+                ? DB::table('fee_structure_items')->where('fee_structure_id', $record->id)->pluck('id')
+                : collect();
+            $itemCount = $itemIds->count();
+            $periodAmountCount = Schema::hasTable('fee_structure_item_period_amounts') && $itemIds->isNotEmpty()
+                ? DB::table('fee_structure_item_period_amounts')->whereIn('fee_structure_item_id', $itemIds)->count()
+                : 0;
+            $periodExclusionCount = Schema::hasTable('fee_structure_item_period_exclusions') && $itemIds->isNotEmpty()
+                ? DB::table('fee_structure_item_period_exclusions')->whereIn('fee_structure_item_id', $itemIds)->count()
+                : 0;
+            $adoptionCount = $this->countIfExists('college_fee_structure_adoptions', 'university_fee_structure_id', $record->id);
+
+            if (Schema::hasTable('college_fee_structure_adoptions')) {
+                DB::table('college_fee_structure_adoptions')
+                    ->where('university_fee_structure_id', $record->id)
+                    ->delete();
+            }
+            if (Schema::hasTable('fee_structure_item_period_exclusions') && $itemIds->isNotEmpty()) {
+                DB::table('fee_structure_item_period_exclusions')
+                    ->whereIn('fee_structure_item_id', $itemIds)
+                    ->delete();
+            }
+            if (Schema::hasTable('fee_structure_item_period_amounts') && $itemIds->isNotEmpty()) {
+                DB::table('fee_structure_item_period_amounts')
+                    ->whereIn('fee_structure_item_id', $itemIds)
+                    ->delete();
+            }
+            if (Schema::hasTable('fee_structure_items')) {
+                DB::table('fee_structure_items')
+                    ->where('fee_structure_id', $record->id)
+                    ->delete();
+            }
+            DB::table('fee_structures')->where('id', $record->id)->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_fee_items' => $itemCount,
+                'deleted_period_amount_overrides' => $periodAmountCount,
+                'deleted_period_exclusions' => $periodExclusionCount,
+                'deleted_college_adoptions' => $adoptionCount,
+            ];
+            $this->audit('TEST_FEE_STRUCTURE_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+            return $result;
+        });
+    }
+
+    private function feeHeadRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_heads')) {
+            return [];
+        }
+
+        return DB::table('fee_heads as fh')
+            ->leftJoin('colleges as c', 'c.id', '=', 'fh.college_id')
+            ->leftJoin('fee_categories as fc', 'fc.id', '=', 'fh.fee_category_id')
+            ->where('fh.university_id', $universityId)
+            ->orderByRaw('CASE WHEN fh.college_id IS NULL THEN 0 ELSE 1 END')
+            ->orderBy('c.name')
+            ->orderBy('fh.name')
+            ->get(['fh.id', 'fh.code', 'fh.name', 'fh.status', 'c.name as college_name', 'fc.name as category_name'])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences($row->id, [
+                    ['fee_structure_items', 'fee_head_id'],
+                    ['fee_demand_items', 'fee_head_id'],
+                    ['student_fee_demand_items', 'fee_head_id'],
+                ]);
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => ($row->college_name ? 'College · '.$row->college_name : 'University').' · '.($row->category_name ?: 'Uncategorised').' · '.$row->name,
+                    'status' => $row->status,
+                    'kind' => 'FEE_HEAD',
+                    'dependencies' => [],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupFeeHead(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_heads')) {
+            abort(404);
+        }
+
+        $record = DB::table('fee_heads')
+            ->where('id', $id)
+            ->where('university_id', $universityId)
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences($id, [
+            ['fee_structure_items', 'fee_head_id'],
+            ['fee_demand_items', 'fee_head_id'],
+            ['student_fee_demand_items', 'fee_head_id'],
+        ]);
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Fee Head is still used by a Fee Structure or Fee Demand. Clean the dependent test records first.',
+            ]);
+        }
+
+        DB::table('fee_heads')->where('id', $id)->delete();
+        $result = ['record' => (array) $record];
+        $this->audit('TEST_FEE_HEAD_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+        return $result;
+    }
+
+    private function feeCategoryRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_categories')) {
+            return [];
+        }
+
+        $protectedUniversityDefaults = [
+            'ADMISSION', 'TUITION', 'REGISTRATION', 'EXAMINATION', 'LIBRARY', 'LAB',
+            'HOSTEL', 'TRANSPORT', 'DEVELOPMENT', 'CERTIFICATE', 'OTHER',
+        ];
+
+        return DB::table('fee_categories as fc')
+            ->leftJoin('colleges as c', 'c.id', '=', 'fc.college_id')
+            ->where('fc.university_id', $universityId)
+            ->orderByRaw('CASE WHEN fc.college_id IS NULL THEN 0 ELSE 1 END')
+            ->orderBy('c.name')
+            ->orderBy('fc.display_order')
+            ->orderBy('fc.name')
+            ->get(['fc.id', 'fc.code', 'fc.name', 'fc.status', 'fc.college_id', 'c.name as college_name'])
+            ->map(function ($row) use ($protectedUniversityDefaults) {
+                $downstream = $this->downstreamReferences($row->id, [
+                    ['fee_heads', 'fee_category_id'],
+                ]);
+                $isProtectedDefault = $row->college_id === null && in_array(strtoupper((string) $row->code), $protectedUniversityDefaults, true);
+                if ($isProtectedDefault) {
+                    $downstream[] = [
+                        'table' => 'fee_categories',
+                        'column' => 'system_default',
+                        'count' => 1,
+                    ];
+                }
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => ($row->college_name ? 'College · '.$row->college_name : 'University').' · '.$row->name,
+                    'status' => $row->status,
+                    'kind' => 'FEE_CATEGORY',
+                    'dependencies' => [],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupFeeCategory(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_categories')) {
+            abort(404);
+        }
+
+        $record = DB::table('fee_categories')
+            ->where('id', $id)
+            ->where('university_id', $universityId)
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $protectedUniversityDefaults = [
+            'ADMISSION', 'TUITION', 'REGISTRATION', 'EXAMINATION', 'LIBRARY', 'LAB',
+            'HOSTEL', 'TRANSPORT', 'DEVELOPMENT', 'CERTIFICATE', 'OTHER',
+        ];
+        if ($record->college_id === null && in_array(strtoupper((string) $record->code), $protectedUniversityDefaults, true)) {
+            throw ValidationException::withMessages([
+                'record' => 'System default University Fee Categories are baseline setup and are not removed by Test Data Cleanup.',
+            ]);
+        }
+
+        $downstream = $this->downstreamReferences($id, [
+            ['fee_heads', 'fee_category_id'],
+        ]);
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Fee Category is still used by a Fee Head. Clean the dependent test Fee Heads first.',
+            ]);
+        }
+
+        DB::table('fee_categories')->where('id', $id)->delete();
+        $result = ['record' => (array) $record];
+        $this->audit('TEST_FEE_CATEGORY_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+        return $result;
     }
 
     private function accessUserRows(
@@ -2495,6 +2827,90 @@ class TestDataCleanupService
 
             return $result;
         });
+    }
+
+
+    private function admissionRows(int $universityId): array
+    {
+        if (! Schema::hasTable('admissions')) {
+            return [];
+        }
+
+        return DB::table('admissions as ad')
+            ->join('colleges as c', 'c.id', '=', 'ad.college_id')
+            ->join('college_admission_applications as a', 'a.id', '=', 'ad.college_admission_application_id')
+            ->where('c.university_id', $universityId)
+            ->orderByDesc('ad.id')
+            ->get([
+                'ad.id', 'ad.admission_no', 'ad.status', 'ad.college_admission_application_id',
+                'ad.college_admission_seat_allocation_id', 'a.application_no', 'a.candidate_name',
+                'c.name as college_name',
+            ])
+            ->map(function ($row) {
+                $downstream = [];
+                if (Schema::hasTable('students')) {
+                    if (Schema::hasColumn('students', 'admission_id')) {
+                        $downstream = array_merge($downstream, $this->downstreamReferences($row->id, [['students', 'admission_id']]));
+                    }
+                    if (Schema::hasColumn('students', 'college_admission_application_id')) {
+                        $downstream = array_merge($downstream, $this->downstreamReferences($row->college_admission_application_id, [['students', 'college_admission_application_id']]));
+                    }
+                }
+
+                return [
+                    'id' => (int) $row->id,
+                    'code' => $row->admission_no,
+                    'name' => $row->candidate_name.' · '.$row->application_no.' · '.$row->college_name,
+                    'status' => $row->status,
+                    'kind' => 'ADMISSION_CONFIRMATION',
+                    'dependencies' => [],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupAdmission(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('admissions')) {
+            abort(404);
+        }
+
+        $record = DB::table('admissions as ad')
+            ->join('colleges as c', 'c.id', '=', 'ad.college_id')
+            ->join('college_admission_applications as a', 'a.id', '=', 'ad.college_admission_application_id')
+            ->where('ad.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select('ad.*', 'a.application_no', 'a.candidate_name', 'c.name as college_name')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = [];
+        if (Schema::hasTable('students')) {
+            if (Schema::hasColumn('students', 'admission_id')) {
+                $downstream = array_merge($downstream, $this->downstreamReferences($record->id, [['students', 'admission_id']]));
+            }
+            if (Schema::hasColumn('students', 'college_admission_application_id')) {
+                $downstream = array_merge($downstream, $this->downstreamReferences($record->college_admission_application_id, [['students', 'college_admission_application_id']]));
+            }
+        }
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Admission Confirmation is already consumed by Student Enrollment. Clean the dependent Student test record first.',
+            ]);
+        }
+
+        DB::table('admissions')->where('id', $record->id)->delete();
+        $result = ['record' => (array) $record];
+        $this->audit('TEST_ADMISSION_CONFIRMATION_CLEANED', 'test_data_cleanup', (int) $record->id, $result, $actorId);
+
+        return $result;
     }
 
 
@@ -3447,6 +3863,199 @@ class TestDataCleanupService
         });
     }
 
+    private function cleanupSection(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('sections')) {
+            abort(404);
+        }
+
+        $record = DB::table('sections as s')
+            ->join('batches as b', 'b.id', '=', 's.batch_id')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->where('s.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select('s.*')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences($id, [
+            ['student_enrollments', 'section_id'],
+        ]);
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Section already has Student Enrollment records. Clean those dependent test records first.',
+            ]);
+        }
+
+        DB::table('sections')->where('id', $id)->delete();
+        $this->audit('TEST_COLLEGE_SECTION_CLEANED', 'test_data_cleanup', $id, ['record' => (array) $record], $actorId);
+
+        return ['record' => (array) $record];
+    }
+
+    private function sectionRows(int $universityId): array
+    {
+        if (! Schema::hasTable('sections')) {
+            return [];
+        }
+
+        return DB::table('sections as sec')
+            ->join('batches as b', 'b.id', '=', 'sec.batch_id')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->join('program_templates as pt', 'pt.id', '=', 'cpo.program_template_id')
+            ->join('academic_sessions as s', 's.id', '=', 'cpo.academic_session_id')
+            ->where('c.university_id', $universityId)
+            ->orderBy('c.name')->orderBy('pt.name')->orderBy('b.name')->orderBy('sec.name')
+            ->get([
+                'sec.id', 'sec.code', 'sec.name', 'sec.status', 'b.name as batch_name',
+                'c.name as college_name', 'pt.name as program_name', 's.name as session_name',
+            ])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences($row->id, [
+                    ['student_enrollments', 'section_id'],
+                ]);
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->college_name.' · '.$row->program_name.' · '.$row->batch_name.' · '.$row->name.' · '.$row->session_name,
+                    'status' => $row->status,
+                    'kind' => 'COLLEGE_SECTION',
+                    'dependencies' => [],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()->all();
+    }
+
+    private function countSectionsForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('sections')) {
+            return 0;
+        }
+
+        return (int) DB::table('sections as sec')
+            ->join('batches as b', 'b.id', '=', 'sec.batch_id')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
+    private function cleanupBatch(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('batches')) {
+            abort(404);
+        }
+
+        $record = DB::table('batches as b')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->where('b.id', $id)
+            ->where('c.university_id', $universityId)
+            ->select('b.*')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $downstream = $this->downstreamReferences(
+            $id,
+            [
+                ['sections', 'batch_id'],
+                ['student_enrollments', 'batch_id'],
+            ]
+        );
+
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Batch already has downstream Section/Student records. Clean those dependent test records first.',
+            ]);
+        }
+
+        DB::table('batches')->where('id', $id)->delete();
+
+        $this->audit(
+            'TEST_COLLEGE_BATCH_CLEANED',
+            'test_data_cleanup',
+            $id,
+            ['record' => (array) $record],
+            $actorId
+        );
+
+        return ['record' => (array) $record];
+    }
+
+    private function batchRows(int $universityId): array
+    {
+        if (! Schema::hasTable('batches')) {
+            return [];
+        }
+
+        return DB::table('batches as b')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->join('program_templates as pt', 'pt.id', '=', 'cpo.program_template_id')
+            ->join('academic_sessions as s', 's.id', '=', 'cpo.academic_session_id')
+            ->where('c.university_id', $universityId)
+            ->orderBy('c.name')
+            ->orderBy('pt.name')
+            ->orderBy('b.name')
+            ->get([
+                'b.id', 'b.code', 'b.name', 'b.status',
+                'c.name as college_name', 'pt.name as program_name', 's.name as session_name',
+            ])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences(
+                    $row->id,
+                    [
+                        ['sections', 'batch_id'],
+                        ['student_enrollments', 'batch_id'],
+                    ]
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->college_name.' · '.$row->program_name.' · '.$row->name.' · '.$row->session_name,
+                    'status' => $row->status,
+                    'kind' => 'COLLEGE_BATCH',
+                    'dependencies' => [],
+                    'blocked' => count($downstream) > 0,
+                    'blocking_references' => $downstream,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function countBatchesForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('batches')) {
+            return 0;
+        }
+
+        return (int) DB::table('batches as b')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->where('c.university_id', $universityId)
+            ->count();
+    }
+
     private function cleanupCollegeProgramOffering(
         int $id,
         int $universityId,
@@ -3499,6 +4108,61 @@ class TestDataCleanupService
         );
 
         return ['record' => (array) $record];
+    }
+
+    private function cleanupCollegeAcademicCalendar(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('college_academic_calendars')) abort(404);
+        $record = DB::table('college_academic_calendars as cac')
+            ->join('colleges as c', 'c.id', '=', 'cac.college_id')
+            ->where('cac.id', $id)->where('c.university_id', $universityId)
+            ->select('cac.*')->first();
+        if (! $record) abort(404);
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $overrideCount = $this->countIfExists('college_calendar_overrides', 'college_academic_calendar_id', $record->id);
+            if (Schema::hasTable('college_calendar_overrides')) {
+                DB::table('college_calendar_overrides')->where('college_academic_calendar_id', $record->id)->delete();
+            }
+            DB::table('college_academic_calendars')->where('id', $record->id)->delete();
+            $result = ['record' => (array) $record, 'deleted_overrides' => $overrideCount];
+            $this->audit('TEST_COLLEGE_ACADEMIC_CALENDAR_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+            return $result;
+        });
+    }
+
+    private function collegeAcademicCalendarRows(int $universityId): array
+    {
+        if (! Schema::hasTable('college_academic_calendars')) return [];
+        return DB::table('college_academic_calendars as cac')
+            ->join('colleges as c', 'c.id', '=', 'cac.college_id')
+            ->join('academic_calendars as ac', 'ac.id', '=', 'cac.university_academic_calendar_id')
+            ->join('academic_sessions as s', 's.id', '=', 'ac.academic_session_id')
+            ->where('c.university_id', $universityId)
+            ->orderBy('c.name')->orderByDesc('s.starts_on')
+            ->get(['cac.id','cac.status','c.name as college_name','ac.code as calendar_code','ac.name as calendar_name','s.name as session_name'])
+            ->map(fn ($row) => [
+                'id' => $row->id,
+                'code' => $row->calendar_code,
+                'name' => $row->college_name.' · '.$row->session_name.' · '.$row->calendar_name,
+                'status' => $row->status,
+                'kind' => 'COLLEGE_ACADEMIC_CALENDAR',
+                'dependencies' => ['overrides' => $this->countIfExists('college_calendar_overrides', 'college_academic_calendar_id', $row->id)],
+                'blocked' => false,
+                'blocking_references' => [],
+            ])->values()->all();
+    }
+
+    private function countCollegeAcademicCalendarsForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_academic_calendars')) return 0;
+        return (int) DB::table('college_academic_calendars as cac')->join('colleges as c','c.id','=','cac.college_id')->where('c.university_id',$universityId)->count();
+    }
+
+    private function countCollegeCalendarOverridesForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('college_calendar_overrides') || ! Schema::hasTable('college_academic_calendars')) return 0;
+        return (int) DB::table('college_calendar_overrides as cco')->join('college_academic_calendars as cac','cac.id','=','cco.college_academic_calendar_id')->join('colleges as c','c.id','=','cac.college_id')->where('c.university_id',$universityId)->count();
     }
 
     private function cleanupAcademicCalendar(

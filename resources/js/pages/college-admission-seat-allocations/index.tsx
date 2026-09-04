@@ -29,6 +29,7 @@ type Allocation = {
     id:number; status:'ALLOCATED'|'CANCELLED'; physical_seat_type:'OPEN'|'RESERVED';
     physical_category_code:string|null; physical_category_name:string|null; allocation_round:number;
     decision_note:string|null; allocated_at:string|null; cancellation_reason:string|null;
+    admission_status:'CONFIRMED'|'REVOKED'|null;
     horizontal_categories:{id:number;code:string;name:string;fulfills_target:boolean}[];
 };
 type Row = {
@@ -81,12 +82,29 @@ function AllocationDialog({collegeId,row,capacity}:{collegeId:number;row:Row;cap
 }
 
 function CancelButton({collegeId,row}:{collegeId:number;row:Row}) {
+    const [processing,setProcessing]=useState(false);
+    const blockedByConfirmedAdmission=row.allocation?.admission_status==='CONFIRMED';
     const cancel=()=>{
+        if(processing||blockedByConfirmedAdmission) return;
         const reason=window.prompt('Reason for cancelling this seat allocation:');
         if(!reason?.trim()) return;
-        router.patch(`/college/${collegeId}/admission-seat-allocations/${row.allocation?.id}/cancel`,{reason:reason.trim()},{preserveScroll:true});
+        setProcessing(true);
+        router.patch(`/college/${collegeId}/admission-seat-allocations/${row.allocation?.id}/cancel`,{reason:reason.trim()},{
+            preserveScroll:true,
+            onError:(errors)=>{
+                const message=Object.values(errors??{})[0];
+                window.alert(message ? String(message) : 'Seat allocation could not be cancelled. Please review the admission status and try again.');
+            },
+            onFinish:()=>setProcessing(false),
+        });
     };
-    return <Button size="sm" variant="outline" onClick={cancel}><CircleX/>Cancel Allocation</Button>;
+    return <Button
+        size="sm"
+        variant="outline"
+        onClick={cancel}
+        disabled={processing||blockedByConfirmedAdmission}
+        title={blockedByConfirmedAdmission?'Admission is CONFIRMED. Revoke the admission before cancelling this seat allocation.':undefined}
+    ><CircleX/>{processing?'Cancelling…':'Cancel Allocation'}</Button>;
 }
 
 export default function CollegeAdmissionSeatAllocations({college,rules,selectedRuleId,screen,can}:Props) {

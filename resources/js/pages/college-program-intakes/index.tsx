@@ -69,6 +69,7 @@ type Intake = {
     approved_capacity: number;
     allocation_mode: 'PROGRAM' | 'DISCIPLINE';
     status: 'ACTIVE' | 'INACTIVE';
+    active_batch_count: number;
     notes: string | null;
     offering: Offering;
     allocations: Allocation[];
@@ -565,6 +566,25 @@ function IntakeStatusDialog({
     remainingForActivation: number;
 }) {
     const activating = intake.status !== 'ACTIVE';
+    const blockedByActiveBatch = !activating && intake.active_batch_count > 0;
+    const blockedReason = blockedByActiveBatch
+        ? `Cannot deactivate this Intake / Seat Capacity because ${intake.active_batch_count} ACTIVE Batch${intake.active_batch_count === 1 ? '' : 'es'} depend${intake.active_batch_count === 1 ? 's' : ''} on it. Deactivate the Batch first.`
+        : null;
+
+    if (blockedByActiveBatch) {
+        return (
+            <span title={blockedReason ?? undefined}>
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Deactivate Intake / Seat Capacity unavailable"
+                    disabled
+                >
+                    <Power />
+                </Button>
+            </span>
+        );
+    }
 
     return (
         <Dialog>
@@ -577,9 +597,7 @@ function IntakeStatusDialog({
                             ? 'Activate Intake / Seat Capacity'
                             : 'Deactivate Intake / Seat Capacity'
                     }
-                    disabled={
-                        activating && !readyToActivate
-                    }
+                    disabled={activating && !readyToActivate}
                     title={
                         activating && !readyToActivate
                             ? `Allocate the remaining ${remainingForActivation} Discipline seats before activation.`
@@ -609,43 +627,47 @@ function IntakeStatusDialog({
                     action={`/college/${collegeId}/intakes/${intake.id}/status`}
                     method="patch"
                 >
-                    {({ processing }) => (
-                        <DialogFooter>
+                    {({ processing, errors }) => (
+                        <div className="space-y-4">
                             <input
                                 type="hidden"
                                 name="status"
-                                value={
-                                    activating
-                                        ? 'ACTIVE'
-                                        : 'INACTIVE'
-                                }
+                                value={activating ? 'ACTIVE' : 'INACTIVE'}
                             />
 
-                            <DialogClose asChild>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                >
-                                    Cancel
-                                </Button>
-                            </DialogClose>
+                            {(errors.intake || errors.status) && (
+                                <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                                    {errors.intake ?? errors.status}
+                                </p>
+                            )}
 
-                            <Button
-                                type="submit"
-                                disabled={
-                                    processing ||
-                                    (activating &&
-                                        !readyToActivate)
-                                }
-                            >
-                                {processing && <Spinner />}
-                                {processing
-                                    ? 'Working...'
-                                    : activating
-                                      ? 'Activate'
-                                      : 'Deactivate'}
-                            </Button>
-                        </DialogFooter>
+                            <DialogFooter>
+                                <DialogClose asChild>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </DialogClose>
+
+                                <Button
+                                    type="submit"
+                                    disabled={
+                                        processing ||
+                                        (activating && !readyToActivate)
+                                    }
+                                >
+                                    {processing && <Spinner />}
+                                    {processing
+                                        ? 'Working...'
+                                        : activating
+                                          ? 'Activate'
+                                          : 'Deactivate'}
+                                </Button>
+                            </DialogFooter>
+                        </div>
                     )}
                 </Form>
             </DialogContent>

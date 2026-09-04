@@ -81,4 +81,9 @@ class CollegeAdmissionSeatAllocation extends Model
     {
         return $this->hasMany(CollegeAdmissionSeatAllocationHorizontalCategory::class, 'college_admission_seat_allocation_id');
     }
+
+    public function admission(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Admission::class, 'college_admission_seat_allocation_id');
+    }
 }

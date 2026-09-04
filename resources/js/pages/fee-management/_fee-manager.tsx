@@ -1,0 +1,228 @@
+import { Form } from '@inertiajs/react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
+import { ChevronDown, ChevronRight, Layers3, Pencil, Plus, Power, ReceiptText, Tags } from 'lucide-react';
+import { useState } from 'react';
+
+export type FeeCategory={id:number;name:string;code:string;description?:string|null;display_order:number;status:'ACTIVE'|'INACTIVE';owner_scope?:'UNIVERSITY'|'COLLEGE';college_id?:number|null};
+export type FeeHead={id:number;fee_category_id:number;name:string;code:string;category:FeeCategory;description?:string|null;is_refundable:boolean;status:'ACTIVE'|'INACTIVE';owner_scope?:'UNIVERSITY'|'COLLEGE';college_id?:number|null};
+export type FeeItem={id:number;fee_head_id:number;amount:string;period_amounts?:{period_no:number;amount:string}[];period_exclusions?:{period_no:number}[];is_mandatory:boolean;is_enrollment_clearance_required:boolean;installment_allowed:boolean;display_order:number;status:'ACTIVE'|'INACTIVE';head:FeeHead};
+export type FeeStructure={id:number;name:string;code:string;purpose:string;charge_basis:'ONE_TIME'|'PER_TERM'|'PER_ACADEMIC_YEAR'|'SPECIFIC_TERM'|'SPECIFIC_ACADEMIC_YEAR';charge_period_no?:number|null;college_applicability?:'MANDATORY'|'OPTIONAL'|null;currency:string;status:'ACTIVE'|'INACTIVE';notes?:string|null;adoption_status?:'ADOPTED'|'NOT_ADOPTED'|null;effective_for_college?:boolean;academic_session?:{id:number;name:string;code:string;status:string};program_template?:{id:number;name:string;code:string;term_structure?:string;duration_terms?:number}|null;offering?:{id:number;program_template:{id:number;name:string;code:string;term_structure?:string;duration_terms?:number};academic_session:{id:number;name:string;code:string;status:string};curriculum?:{terms?:{sequence_no:number;name:string;status:string}[]}|null}|null;items:FeeItem[]};
+export type Can={categoryCreate:boolean;categoryUpdate:boolean;categoryEnable:boolean;categoryDisable:boolean;headCreate:boolean;headUpdate:boolean;headEnable:boolean;headDisable:boolean;structureCreate:boolean;structureUpdate:boolean;structureEnable:boolean;structureDisable:boolean;structureAdopt:boolean};
+const selectClass='flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring';
+const purposes=['ADMISSION','ACADEMIC','EXAMINATION','OTHER'];
+
+type ScopeOption={id:number;label:string;status?:string;term_structure?:string;duration_terms?:number;curriculum_terms?:{sequence_no:number;name:string;status:string}[]};
+
+function CategoryDialog({basePath,category,canEdit}:{basePath:string;category?:FeeCategory;canEdit:boolean}){
+ if(!canEdit)return null;
+ const action=category?`${basePath}/categories/${category.id}`:`${basePath}/categories`;
+ return <Dialog><DialogTrigger asChild><Button size={category?'icon':'sm'} variant={category?'ghost':'outline'}>{category?<Pencil/>:<Plus/>}{!category&&'Add Fee Category'}</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>{category?'Edit Fee Category':'Add Fee Category'}</DialogTitle><DialogDescription>Fee Categories are reusable classifications such as Tuition, Examination or Hostel. They are not tied to a degree; Program-wise amounts are defined later in Fee Structures.</DialogDescription></DialogHeader><Form action={action} method={category?'patch':'post'}>{({processing,errors})=><><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Name</Label><Input name="name" defaultValue={category?.name??''} placeholder="Examination"/>{errors.name&&<p className="text-xs text-destructive">{errors.name}</p>}</div><div className="space-y-2"><Label>Code</Label><Input name="code" defaultValue={category?.code??''} placeholder="EXAMINATION"/>{errors.code&&<p className="text-xs text-destructive">{errors.code}</p>}</div><div className="space-y-2"><Label>Display Order</Label><Input name="display_order" type="number" min="0" defaultValue={category?.display_order??0}/></div><div className="space-y-2 sm:col-span-2"><Label>Description</Label><Textarea name="description" defaultValue={category?.description??''}/></div></div>{Object.keys(errors).length>0&&<p className="mt-3 text-xs text-destructive">{Object.values(errors)[0]}</p>}<DialogFooter className="mt-5"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button disabled={processing} type="submit">{processing&&<Spinner/>}Save Fee Category</Button></DialogFooter></>}</Form></DialogContent></Dialog>;
+}
+
+function HeadDialog({basePath,head,categories,canEdit}:{basePath:string;head?:FeeHead;categories:FeeCategory[];canEdit:boolean}){
+ if(!canEdit)return null;
+ const action=head?`${basePath}/heads/${head.id}`:`${basePath}/heads`;
+ const available=categories.filter(c=>c.status==='ACTIVE'||c.id===head?.fee_category_id);
+ return <Dialog><DialogTrigger asChild><Button size={head?'icon':'sm'} variant={head?'ghost':'outline'}>{head?<Pencil/>:<Plus/>}{!head&&'Add Fee Head'}</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>{head?'Edit Fee Head':'Add Fee Head'}</DialogTitle><DialogDescription>Fee Heads define an actual charge inside a Fee Category. A new head starts INACTIVE and must be activated before it can be used in a Fee Structure.</DialogDescription></DialogHeader><Form action={action} method={head?'patch':'post'}>{({processing,errors})=><><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Name</Label><Input name="name" defaultValue={head?.name??''} placeholder="Admission Fee"/>{errors.name&&<p className="text-xs text-destructive">{errors.name}</p>}</div><div className="space-y-2"><Label>Code</Label><Input name="code" defaultValue={head?.code??''} placeholder="ADM_FEE"/>{errors.code&&<p className="text-xs text-destructive">{errors.code}</p>}</div><div className="space-y-2"><Label>Fee Category</Label><select name="fee_category_id" defaultValue={head?.fee_category_id??''} className={selectClass} required><option value="" disabled>Select active Fee Category</option>{available.map(c=><option key={c.id} value={c.id}>{c.name} ({c.code}){c.owner_scope==='UNIVERSITY'?' · University':''}</option>)}</select>{errors.fee_category_id&&<p className="text-xs text-destructive">{errors.fee_category_id}</p>}</div><label className="mt-6 flex items-center gap-2 text-sm"><input type="hidden" name="is_refundable" value="0"/><input type="checkbox" name="is_refundable" value="1" defaultChecked={head?.is_refundable??false}/>Refundable</label><div className="space-y-2 sm:col-span-2"><Label>Description</Label><Textarea name="description" defaultValue={head?.description??''}/></div></div><DialogFooter className="mt-5"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button disabled={processing} type="submit">{processing&&<Spinner/>}Save Fee Head</Button></DialogFooter></>}</Form></DialogContent></Dialog>;
+}
+
+function StatusForm({action,current,canEnable,canDisable,label}:{action:string;current:'ACTIVE'|'INACTIVE';canEnable:boolean;canDisable:boolean;label:string}){
+ const target=current==='ACTIVE'?'INACTIVE':'ACTIVE';
+ if((target==='ACTIVE'&&!canEnable)||(target==='INACTIVE'&&!canDisable))return null;
+ return <Form action={action} method="patch">{({processing,errors})=><div className="space-y-1"><input type="hidden" name="status" value={target}/><Button type="submit" size="sm" variant={target==='ACTIVE'?'default':'outline'} disabled={processing}>{processing?<Spinner/>:<Power/>}{target==='ACTIVE'?'Activate':`Deactivate ${label}`}</Button>{errors.status&&<p className="max-w-sm text-xs text-destructive">{errors.status}</p>}</div>}</Form>;
+}
+
+function StructureDialog({basePath,structure,canEdit,scopeKind,scopeOptions,programOptions}:{basePath:string;structure?:FeeStructure;canEdit:boolean;scopeKind:'UNIVERSITY'|'COLLEGE';scopeOptions:ScopeOption[];programOptions?:ScopeOption[]}){
+ if(!canEdit)return null;
+ const action=structure?`${basePath}/structures/${structure.id}`:`${basePath}/structures`;
+ const currentScope=scopeKind==='COLLEGE'?structure?.offering?.id:structure?.academic_session?.id;
+ const initialProgramId=scopeKind==='UNIVERSITY'?(structure?.program_template?.id??''):(structure?.offering?.id??'');
+ const [selectedProgramKey,setSelectedProgramKey]=useState<string>(String(initialProgramId));
+ const [basis,setBasis]=useState(structure?.charge_basis??'ONE_TIME');
+ const programMeta=scopeKind==='COLLEGE'?scopeOptions.find(x=>String(x.id)===selectedProgramKey):programOptions?.find(x=>String(x.id)===selectedProgramKey);
+ const term=(programMeta?.term_structure??structure?.program_template?.term_structure??structure?.offering?.program_template?.term_structure??'TERM').toUpperCase();
+ const duration=Number(programMeta?.duration_terms??structure?.program_template?.duration_terms??structure?.offering?.program_template?.duration_terms??0);
+ const termLabel=term==='SEMESTER'?'Semester':term==='TRIMESTER'?'Trimester':term==='YEAR'?'Year':'Term';
+ const termsPerYear=term==='SEMESTER'?2:term==='TRIMESTER'?3:1;
+ const maxYears=duration?Math.ceil(duration/termsPerYear):0;
+ const needsSpecific=basis==='SPECIFIC_TERM'||basis==='SPECIFIC_ACADEMIC_YEAR';
+ const periodMax=basis==='SPECIFIC_TERM'?duration:maxYears;
+ const curriculumTerms=scopeKind==='COLLEGE'?(programMeta?.curriculum_terms??[]):[];
+ const activeTermNos=new Set(curriculumTerms.filter(t=>t.status==='ACTIVE').map(t=>t.sequence_no));
+ const eligibleAcademicYears=Array.from({length:maxYears},(_,i)=>i+1).filter(year=>{
+  if(scopeKind!=='COLLEGE')return true;
+  const start=((year-1)*termsPerYear)+1;
+  const end=Math.min(year*termsPerYear,duration);
+  return Array.from({length:end-start+1},(_,x)=>start+x).every(seq=>activeTermNos.has(seq));
+ });
+ const periodLabel=basis==='SPECIFIC_TERM'?termLabel:'Academic Year';
+ const basisLabel=(value:string)=>value==='ONE_TIME'?'One Time — one charge for the applicable scope':value==='PER_TERM'?`Every ${termLabel} — repeats by academic term; Fee Items may override the default amount per term`:value==='PER_ACADEMIC_YEAR'?'Every Academic Year — groups existing curriculum terms by academic year; Fee Items may override the default amount per year':value==='SPECIFIC_TERM'?`Specific ${termLabel} — only one existing academic term`:value==='SPECIFIC_ACADEMIC_YEAR'?'Specific Academic Year — only one year grouping':'Collection Basis';
+ return <Dialog><DialogTrigger asChild><Button size={structure?'icon':'sm'} variant={structure?'ghost':'outline'}>{structure?<Pencil/>:<Plus/>}{!structure&&'Add Fee Structure'}</Button></DialogTrigger><DialogContent className="sm:!max-w-2xl"><DialogHeader><DialogTitle>{structure?'Edit Fee Structure':'Add Fee Structure'}</DialogTitle><DialogDescription>{scopeKind==='COLLEGE'?'College Fee Structure is tied to one exact Program Offering. Academic terms come from its Program Template/Curriculum; the fee collection basis does not change that academic structure.':'University Fee Structure is tied to an Academic Session and may apply to all Programs or one Program Template.'}</DialogDescription></DialogHeader><Form action={action} method={structure?'patch':'post'}>{({processing,errors})=><><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Name</Label><Input name="name" defaultValue={structure?.name??''} placeholder="BA Academic Fee 2026"/></div><div className="space-y-2"><Label>Code</Label><Input name="code" defaultValue={structure?.code??''} placeholder="BA_ACAD_2026"/></div><div className="space-y-2"><Label>Purpose</Label><select name="purpose" defaultValue={structure?.purpose??'ADMISSION'} className={selectClass}>{purposes.map(x=><option key={x} value={x}>{x}</option>)}</select></div>{scopeKind==='UNIVERSITY'&&<div className="space-y-2"><Label>College Applicability</Label><select name="college_applicability" defaultValue={structure?.college_applicability??'OPTIONAL'} className={selectClass}><option value="OPTIONAL">Optional — College may adopt or use its own</option><option value="MANDATORY">Mandatory — applies automatically to matching Colleges</option></select></div>}<div className="space-y-2"><Label>Currency</Label><Input name="currency" defaultValue={structure?.currency??'INR'} maxLength={3}/></div><div className="space-y-2 sm:col-span-2"><Label>{scopeKind==='COLLEGE'?'Program Offering':'Academic Session'}</Label><select className={selectClass} name={scopeKind==='COLLEGE'?'college_program_offering_id':'academic_session_id'} defaultValue={currentScope??''} required onChange={scopeKind==='COLLEGE'?e=>setSelectedProgramKey(e.target.value):undefined}><option value="" disabled>Select</option>{scopeOptions.map(x=><option key={x.id} value={x.id}>{x.label}{x.status?` · ${x.status}`:''}</option>)}</select></div>{scopeKind==='UNIVERSITY'&&<div className="space-y-2 sm:col-span-2"><Label>Program Scope</Label><select className={selectClass} name="program_template_id" defaultValue={structure?.program_template?.id??''} onChange={e=>setSelectedProgramKey(e.target.value)}><option value="">All Programs</option>{programOptions?.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></div>}<div className="space-y-2 sm:col-span-2"><Label>Fee Collection Basis</Label><select name="charge_basis" value={basis} onChange={e=>setBasis(e.target.value as FeeStructure['charge_basis'])} className={selectClass}><option value="ONE_TIME">One Time</option><option value="PER_TERM">Every {termLabel}</option>{term!=='YEAR'&&<option value="PER_ACADEMIC_YEAR">Every Academic Year</option>}<option value="SPECIFIC_TERM">Specific {termLabel}</option>{term!=='YEAR'&&<option value="SPECIFIC_ACADEMIC_YEAR">Specific Academic Year</option>}</select><p className="text-xs text-muted-foreground">{basisLabel(basis)}. This controls fee collection only; it never changes the Program Template or Curriculum term structure.</p></div>{needsSpecific&&<div className="space-y-2 sm:col-span-2"><Label>Applicable {periodLabel}</Label>{periodMax>0?<select name="charge_period_no" defaultValue={structure?.charge_period_no??''} className={selectClass} required><option value="" disabled>Select {periodLabel}</option>{(basis==='SPECIFIC_TERM'&&curriculumTerms.length>0?curriculumTerms.map(t=>({n:t.sequence_no,label:t.name})):basis==='SPECIFIC_ACADEMIC_YEAR'&&scopeKind==='COLLEGE'?eligibleAcademicYears.map(n=>({n,label:`Academic Year ${n}`})):Array.from({length:periodMax},(_,i)=>({n:i+1,label:`${periodLabel} ${i+1}`}))).map(x=><option key={x.n} value={x.n}>{x.label}</option>)}</select>:<><input type="hidden" name="charge_period_no" value=""/><p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Select a specific Program/Program Offering first so the valid academic periods can be derived from its Program Template.</p></>}</div>}{!needsSpecific&&<input type="hidden" name="charge_period_no" value=""/>}<div className="space-y-2 sm:col-span-2"><Label>Notes</Label><Textarea name="notes" defaultValue={structure?.notes??''}/></div></div>{Object.keys(errors).length>0&&<p className="mt-3 text-xs text-destructive">{Object.values(errors)[0]}</p>}<DialogFooter className="mt-5"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button disabled={processing} type="submit">{processing&&<Spinner/>}Save Fee Structure</Button></DialogFooter></>}</Form></DialogContent></Dialog>;
+}
+
+type BillingPeriod={n:number|null;label:string;covered?:string};
+
+function billingPeriodOptions(structure:FeeStructure):BillingPeriod[]{
+ const program=structure.offering?.program_template??structure.program_template;
+ const term=(program?.term_structure??'TERM').toUpperCase();
+ const duration=Number(program?.duration_terms??0);
+ const termLabel=term==='SEMESTER'?'Semester':term==='TRIMESTER'?'Trimester':term==='YEAR'?'Year':'Term';
+ const activeTerms=(structure.offering?.curriculum?.terms??[]).filter(t=>t.status==='ACTIVE').sort((a,b)=>a.sequence_no-b.sequence_no);
+ const termMap=new Map(activeTerms.map(t=>[t.sequence_no,t]));
+ const perYear=term==='SEMESTER'?2:term==='TRIMESTER'?3:1;
+ const yearOption=(year:number):BillingPeriod|null=>{
+  const start=((year-1)*perYear)+1;
+  const end=Math.min(year*perYear,duration);
+  const seqs=Array.from({length:Math.max(0,end-start+1)},(_,x)=>start+x);
+  if(structure.offering&&seqs.some(seq=>!termMap.has(seq)))return null;
+  const covered=seqs.map(seq=>termMap.get(seq)?.name||`${termLabel} ${seq}`).join(' + ');
+  return {n:year,label:`Academic Year ${year}`,covered};
+ };
+ if(structure.charge_basis==='ONE_TIME')return [{n:null,label:structure.purpose==='ADMISSION'?'One-Time Admission Charge':'One-Time / Whole Applicable Scope'}];
+ if(!program)return [];
+ if(structure.charge_basis==='PER_TERM'){
+  if(structure.offering)return activeTerms.map(t=>({n:t.sequence_no,label:t.name||`${termLabel} ${t.sequence_no}`}));
+  return Array.from({length:duration},(_,i)=>({n:i+1,label:`${termLabel} ${i+1}`}));
+ }
+ if(structure.charge_basis==='PER_ACADEMIC_YEAR')return Array.from({length:Math.ceil(duration/perYear)},(_,i)=>yearOption(i+1)).filter((x):x is BillingPeriod=>Boolean(x));
+ if(structure.charge_basis==='SPECIFIC_TERM'){
+  const n=Number(structure.charge_period_no??0);
+  if(!n)return [];
+  const curriculumLabel=structure.offering?termMap.get(n)?.name:null;
+  return [{n,label:curriculumLabel||`${termLabel} ${n}`}];
+ }
+ if(structure.charge_basis==='SPECIFIC_ACADEMIC_YEAR'){
+  const n=Number(structure.charge_period_no??0);
+  const option=n?yearOption(n):null;
+  return option?[option]:[];
+ }
+ return [];
+}
+
+function periodAmount(item:FeeItem,period:BillingPeriod):number|null{
+ if(period.n===null)return Number(item.amount);
+ if((item.period_exclusions??[]).some(x=>x.period_no===period.n))return null;
+ const override=(item.period_amounts??[]).find(x=>x.period_no===period.n);
+ return Number(override?.amount??item.amount);
+}
+
+function PeriodItemDialog({basePath,structure,period,heads,item,canEdit}:{basePath:string;structure:FeeStructure;period:BillingPeriod;heads:FeeHead[];item?:FeeItem;canEdit:boolean}){
+ if(!canEdit||structure.status==='ACTIVE')return null;
+ const periodOptions=billingPeriodOptions(structure);
+ const [selectedHeadId,setSelectedHeadId]=useState<string>(String(item?.fee_head_id??''));
+ const matchedExisting=!item&&selectedHeadId?structure.items.find(x=>x.fee_head_id===Number(selectedHeadId)):undefined;
+ const target=item??matchedExisting;
+ const existingAmount=target?periodAmount(target,period):null;
+ const [amount,setAmount]=useState(existingAmount===null?'':String(existingAmount??''));
+ const action=target?`${basePath}/structures/${structure.id}/items/${target.id}`:`${basePath}/structures/${structure.id}/items`;
+ const method=target?'patch':'post';
+ const activeHeads=heads.filter(h=>h.status==='ACTIVE'||h.id===target?.fee_head_id);
+ const recurring=structure.charge_basis==='PER_TERM'||structure.charge_basis==='PER_ACADEMIC_YEAR';
+ const existingAmountMap=new Map((target?.period_amounts??[]).map(x=>[x.period_no,x.amount]));
+ const excluded=new Set((target?.period_exclusions??[]).map(x=>x.period_no));
+ const isAddingExisting=!item&&Boolean(matchedExisting);
+ return <Dialog><DialogTrigger asChild><Button size={item?'icon':'sm'} variant={item?'ghost':'outline'}>{item?<Pencil/>:<Plus/>}{!item&&'Add Fee Item'}</Button></DialogTrigger><DialogContent className="sm:!max-w-xl"><DialogHeader><DialogTitle>{item?'Edit Fee Item':`Add Fee Item · ${period.label}`}</DialogTitle><DialogDescription>{item?`Update this charge for ${period.label}.`:`Choose a Fee Head and amount for ${period.label}. A Fee Head can exist in one billing period and be absent from another.`}</DialogDescription></DialogHeader><Form key={`${target?.id??'new'}-${period.n??'one'}`} action={action} method={method}>{({processing,errors})=><><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2 sm:col-span-2"><Label>Billing Period</Label><div className="rounded-md border bg-muted/20 px-3 py-2 text-sm"><span className="font-medium">{period.label}</span>{period.covered&&<span className="ml-2 text-muted-foreground">Covers: {period.covered}</span>}</div></div><div className="space-y-2 sm:col-span-2"><Label>Fee Head</Label>{item?<><input type="hidden" name="fee_head_id" value={item.fee_head_id}/><div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">{item.head.name} ({item.head.code})</div></>:<select name="fee_head_id" value={selectedHeadId} onChange={e=>{setSelectedHeadId(e.target.value);const found=structure.items.find(x=>x.fee_head_id===Number(e.target.value));const value=found?periodAmount(found,period):null;setAmount(value===null?'':String(value??''));}} className={selectClass} required><option value="" disabled>Select active Fee Head</option>{activeHeads.map(h=><option key={h.id} value={h.id}>{h.name} ({h.code}) · {h.category?.name??'Uncategorized'}{h.owner_scope==='UNIVERSITY'?' · University':''}</option>)}</select>}{isAddingExisting&&<p className="text-xs text-muted-foreground">This Fee Head already exists in another billing period. Its shared settings will be reused; this billing period will become applicable with the amount entered here.</p>}</div><div className="space-y-2 sm:col-span-2"><Label>Amount for {period.label}</Label><Input type="number" step="0.01" min="0.01" value={amount} onChange={e=>setAmount(e.target.value)} required/><p className="text-xs text-muted-foreground">Because this Fee Item exists inside {period.label}, it is applicable to this billing period. If the charge does not apply to another period, simply do not add it there.</p></div>{target?<><input type="hidden" name="amount" value={recurring?target.amount:amount}/><input type="hidden" name="display_order" value={target.display_order}/><input type="hidden" name="status" value={target.status}/><input type="hidden" name="is_mandatory" value={target.is_mandatory?'1':'0'}/><input type="hidden" name="is_enrollment_clearance_required" value={target.is_enrollment_clearance_required?'1':'0'}/><input type="hidden" name="installment_allowed" value={target.installment_allowed?'1':'0'}/></>:<><input type="hidden" name="amount" value={amount}/><div className="space-y-2"><Label>Display Order</Label><Input name="display_order" type="number" min="0" defaultValue={0}/></div><div className="space-y-2"><Label>Status</Label><select name="status" defaultValue="ACTIVE" className={selectClass}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></div>{[['is_mandatory','Mandatory',true],['is_enrollment_clearance_required','Required for Enrollment Clearance',false],['installment_allowed','Installment Allowed',false]].map(([name,label,checked])=><label key={String(name)} className="flex items-center gap-2 rounded-md border p-3 text-sm"><input type="hidden" name={String(name)} value="0"/><input type="checkbox" name={String(name)} value="1" defaultChecked={Boolean(checked)}/>{String(label)}</label>)}</>}
+ {recurring&&periodOptions.map(p=>{
+  const selected=p.n===period.n;
+  const wasApplicable=target?!excluded.has(Number(p.n)):false;
+  const applicable=selected?true:wasApplicable;
+  const priorOverride=target&&p.n!==null?existingAmountMap.get(p.n):undefined;
+  return <span key={`period-hidden-${p.n}`} className="hidden"><input type="hidden" name={`period_applicable[${p.n}]`} value={applicable?'1':'0'}/>{selected?<input type="hidden" name={`period_amounts[${p.n}]`} value={amount}/>:priorOverride!==undefined?<input type="hidden" name={`period_amounts[${p.n}]`} value={priorOverride}/>:null}</span>;
+ })}</div>{Object.keys(errors).length>0&&<p className="mt-3 text-xs text-destructive">{Object.values(errors)[0]}</p>}<DialogFooter className="mt-5"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button disabled={processing||!amount} type="submit">{processing&&<Spinner/>}Save Fee Item</Button></DialogFooter></>}</Form></DialogContent></Dialog>;
+}
+
+function BillingPeriodsPanel({basePath,structure,heads,canEdit}:{basePath:string;structure:FeeStructure;heads:FeeHead[];canEdit:boolean}){
+ const periods=billingPeriodOptions(structure);
+ if(periods.length===0)return <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No eligible billing periods are available yet. {structure.offering?'Activate the required Curriculum terms for this Program Offering first.':'Select a Program Template with a valid term structure/duration first.'}</div>;
+ return <div className="mt-4 space-y-3">{periods.map(period=>{
+  const items=structure.items.map(item=>({item,amount:periodAmount(item,period)})).filter(x=>x.amount!==null);
+  const activeTotal=items.filter(x=>x.item.status==='ACTIVE').reduce((sum,x)=>sum+Number(x.amount),0);
+  return <div key={period.n??'one'} className="overflow-hidden rounded-lg border"><div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-4 py-3"><div><div className="flex items-center gap-2"><h4 className="font-semibold">{period.label}</h4><Badge variant="outline">{items.length} item{items.length===1?'':'s'}</Badge></div>{period.covered&&<p className="mt-1 text-xs text-muted-foreground">Covers: {period.covered}</p>}<p className="mt-1 text-xs text-muted-foreground">ACTIVE total: {structure.currency} {activeTotal.toFixed(2)}</p></div><PeriodItemDialog basePath={basePath} structure={structure} period={period} heads={heads} canEdit={canEdit}/></div><div className="divide-y">{items.length===0?<p className="p-4 text-sm text-muted-foreground">No Fee Items configured for this billing period.</p>:items.sort((a,b)=>a.item.display_order-b.item.display_order).map(({item,amount})=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 p-3"><div><p className="font-medium">{item.head.name} <span className="text-xs text-muted-foreground">({item.head.code})</span></p><p className="text-xs text-muted-foreground">{structure.currency} {Number(amount).toFixed(2)} · {item.head.category?.name??'Uncategorized'} · {item.is_mandatory?'Mandatory':'Optional'}{item.is_enrollment_clearance_required?' · Enrollment clearance required':''}{item.installment_allowed?' · Installment allowed':''}</p></div><div className="flex items-center gap-2"><Badge variant={item.status==='ACTIVE'?'default':'secondary'}>{item.status}</Badge><PeriodItemDialog basePath={basePath} structure={structure} period={period} heads={heads} item={item} canEdit={canEdit}/></div></div>)}</div></div>;
+ })}</div>;
+}
+
+export function FeeManager({basePath,scopeKind,categories,heads,structures,universityStructures=[],can,scopeOptions,programOptions}:{basePath:string;scopeKind:'UNIVERSITY'|'COLLEGE';categories:FeeCategory[];heads:FeeHead[];structures:FeeStructure[];universityStructures?:FeeStructure[];can:Can;scopeOptions:ScopeOption[];programOptions?:ScopeOption[]}){
+ const [open,setOpen]=useState<number[]>([]);
+ const [activeTab,setActiveTab]=useState<'categories'|'heads'|'structures'>('categories');
+ const [categoryQuery,setCategoryQuery]=useState('');
+ const [headQuery,setHeadQuery]=useState('');
+ const [structureQuery,setStructureQuery]=useState('');
+ const [categoryPage,setCategoryPage]=useState(1);
+ const [headPage,setHeadPage]=useState(1);
+ const [structurePage,setStructurePage]=useState(1);
+ const pageSize=10;
+ const toggle=(id:number)=>setOpen(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
+ const inheritedCategories=scopeKind==='COLLEGE'?categories.filter(c=>c.owner_scope==='UNIVERSITY'):[];
+ const inheritedHeads=scopeKind==='COLLEGE'?heads.filter(h=>h.owner_scope==='UNIVERSITY'):[];
+ const normalize=(value:string)=>value.trim().toLowerCase();
+ const categoryNeedle=normalize(categoryQuery);
+ const headNeedle=normalize(headQuery);
+ const structureNeedle=normalize(structureQuery);
+ const filteredCategories=categories.filter(c=>!categoryNeedle||[c.name,c.code,c.description??'',c.owner_scope??''].some(v=>v.toLowerCase().includes(categoryNeedle)));
+ const filteredHeads=heads.filter(h=>!headNeedle||[h.name,h.code,h.category?.name??'',h.category?.code??'',h.owner_scope??''].some(v=>v.toLowerCase().includes(headNeedle)));
+ const filteredStructures=structures.filter(st=>{
+  if(!structureNeedle)return true;
+  const context=scopeKind==='COLLEGE'?`${st.offering?.program_template?.name??''} ${st.offering?.program_template?.code??''} ${st.offering?.academic_session?.name??''}`:`${st.academic_session?.name??''} ${st.program_template?.name??''} ${st.program_template?.code??''}`;
+  return [st.name,st.code,st.purpose,st.charge_basis,context].some(v=>v.toLowerCase().includes(structureNeedle));
+ });
+ const categoryPages=Math.max(1,Math.ceil(filteredCategories.length/pageSize));
+ const headPages=Math.max(1,Math.ceil(filteredHeads.length/pageSize));
+ const structurePages=Math.max(1,Math.ceil(filteredStructures.length/pageSize));
+ const safeCategoryPage=Math.min(categoryPage,categoryPages);
+ const safeHeadPage=Math.min(headPage,headPages);
+ const safeStructurePage=Math.min(structurePage,structurePages);
+ const pageSlice=<T,>(items:T[],page:number)=>items.slice((page-1)*pageSize,page*pageSize);
+ const pagedCategories=pageSlice(filteredCategories,safeCategoryPage);
+ const pagedHeads=pageSlice(filteredHeads,safeHeadPage);
+ const pagedStructures=pageSlice(filteredStructures,safeStructurePage);
+ const Pager=({page,pages,onChange,total}:{page:number;pages:number;onChange:(page:number)=>void;total:number})=>pages>1?<div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2 text-xs text-muted-foreground"><span>{total} records · Page {page} of {pages}</span><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={page<=1} onClick={()=>onChange(page-1)}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={page>=pages} onClick={()=>onChange(page+1)}>Next</Button></div></div>:null;
+ const tabClass=(tab:typeof activeTab)=>`group flex min-w-[180px] flex-1 items-center gap-3 rounded-lg border px-4 py-3 text-left transition-all ${activeTab===tab?'border-primary/40 bg-background shadow-sm ring-1 ring-primary/10':'border-transparent bg-transparent text-muted-foreground hover:border-border hover:bg-background/70 hover:text-foreground'}`;
+ const tabIconClass=(tab:typeof activeTab)=>`flex size-9 shrink-0 items-center justify-center rounded-md ${activeTab===tab?'bg-primary/10 text-primary':'bg-muted text-muted-foreground group-hover:text-foreground'}`;
+ return <div className="space-y-4">
+  <div className="grid gap-2 rounded-xl border bg-muted/30 p-2 md:grid-cols-3">
+   <button type="button" className={tabClass('categories')} onClick={()=>setActiveTab('categories')}>
+    <span className={tabIconClass('categories')}><Tags className="size-4"/></span>
+    <span className="min-w-0"><span className="block text-sm font-semibold">Fee Categories</span><span className="mt-0.5 block text-xs text-muted-foreground">{categories.length} {categories.length===1?'category':'categories'}</span></span>
+   </button>
+   <button type="button" className={tabClass('heads')} onClick={()=>setActiveTab('heads')}>
+    <span className={tabIconClass('heads')}><ReceiptText className="size-4"/></span>
+    <span className="min-w-0"><span className="block text-sm font-semibold">Fee Heads</span><span className="mt-0.5 block text-xs text-muted-foreground">{heads.length} {heads.length===1?'charge':'charges'}</span></span>
+   </button>
+   <button type="button" className={tabClass('structures')} onClick={()=>setActiveTab('structures')}>
+    <span className={tabIconClass('structures')}><Layers3 className="size-4"/></span>
+    <span className="min-w-0"><span className="block text-sm font-semibold">Fee Structures</span><span className="mt-0.5 block text-xs text-muted-foreground">{structures.length} {structures.length===1?'structure':'structures'}</span></span>
+   </button>
+  </div>
+
+  {activeTab==='categories'&&<section className="space-y-3">
+   <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-semibold">Fee Categories</h2><p className="text-sm text-muted-foreground">Common classifications for Fee Heads. Categories are not degree-specific; Program-wise applicability and amounts belong in Fee Structures.</p></div><CategoryDialog basePath={basePath} canEdit={can.categoryCreate}/></div>
+   <div className="max-w-md"><Input value={categoryQuery} onChange={e=>{setCategoryQuery(e.target.value);setCategoryPage(1)}} placeholder="Search categories..."/></div>
+   <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="border-b bg-muted/30 text-left"><tr><th className="p-3">Category</th><th className="p-3">Owner</th><th className="p-3">Order</th><th className="p-3">Status</th><th className="p-3 text-right">Actions</th></tr></thead><tbody>
+    {pagedCategories.length===0?<tr><td colSpan={5} className="p-8 text-center text-muted-foreground">{categories.length===0?'No Fee Categories yet.':'No matching Fee Categories.'}</td></tr>:pagedCategories.map(c=>{const local=scopeKind==='UNIVERSITY'||c.owner_scope==='COLLEGE';return <tr key={c.id} className="border-b last:border-0"><td className="p-3"><div className="font-medium">{c.name}</div><div className="text-xs text-muted-foreground">{c.code}{c.description?` · ${c.description}`:''}</div></td><td className="p-3">{c.owner_scope==='UNIVERSITY'?'University':'College'}</td><td className="p-3">{c.display_order}</td><td className="p-3"><Badge variant={c.status==='ACTIVE'?'default':'secondary'}>{c.status}</Badge></td><td className="p-3"><div className="flex justify-end gap-2">{local&&<><CategoryDialog basePath={basePath} category={c} canEdit={can.categoryUpdate}/><StatusForm action={`${basePath}/categories/${c.id}/status`} current={c.status} canEnable={can.categoryEnable} canDisable={can.categoryDisable} label="Category"/></>}</div></td></tr>})}
+   </tbody></table></div><Pager page={safeCategoryPage} pages={categoryPages} onChange={setCategoryPage} total={filteredCategories.length}/></CardContent></Card>
+   {scopeKind==='COLLEGE'&&inheritedCategories.length>0&&<p className="text-xs text-muted-foreground">University categories are inherited and read-only here. This College can add local categories only when a University category does not already cover the requirement.</p>}
+  </section>}
+
+  {activeTab==='heads'&&<section className="space-y-3">
+   <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-semibold">Fee Heads</h2><p className="text-sm text-muted-foreground">{scopeKind==='COLLEGE'?'University Fee Heads are inherited and reusable read-only; create College Fee Heads only for genuinely local charges.':'Reusable University charge definitions that Colleges can inherit and use in their own Fee Structures.'}</p></div><HeadDialog basePath={basePath} categories={categories} canEdit={can.headCreate}/></div>
+   <div className="max-w-md"><Input value={headQuery} onChange={e=>{setHeadQuery(e.target.value);setHeadPage(1)}} placeholder="Search fee heads..."/></div>
+   <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="border-b bg-muted/30 text-left"><tr><th className="p-3">Fee Head</th><th className="p-3">Owner</th><th className="p-3">Category</th><th className="p-3">Refundable</th><th className="p-3">Status</th><th className="p-3 text-right">Actions</th></tr></thead><tbody>{pagedHeads.length===0?<tr><td colSpan={6} className="p-8 text-center text-muted-foreground">{heads.length===0?'No Fee Heads yet.':'No matching Fee Heads.'}</td></tr>:pagedHeads.map(h=>{const local=scopeKind==='UNIVERSITY'||h.owner_scope==='COLLEGE';return <tr key={h.id} className="border-b last:border-0"><td className="p-3"><div className="font-medium">{h.name}</div><div className="text-xs text-muted-foreground">{h.code}</div></td><td className="p-3"><Badge variant="outline">{h.owner_scope==='UNIVERSITY'?'University':'College'}</Badge></td><td className="p-3">{h.category?.name??'—'} <span className="text-xs text-muted-foreground">{h.category?.code?`(${h.category.code})`:''}</span></td><td className="p-3">{h.is_refundable?'Yes':'No'}</td><td className="p-3"><Badge variant={h.status==='ACTIVE'?'default':'secondary'}>{h.status}</Badge></td><td className="p-3"><div className="flex justify-end gap-2">{local&&<><HeadDialog basePath={basePath} head={h} categories={categories} canEdit={can.headUpdate}/><StatusForm action={`${basePath}/heads/${h.id}/status`} current={h.status} canEnable={can.headEnable} canDisable={can.headDisable} label=""/></>}</div></td></tr>})}</tbody></table></div><Pager page={safeHeadPage} pages={headPages} onChange={setHeadPage} total={filteredHeads.length}/></CardContent></Card>
+   {scopeKind==='COLLEGE'&&inheritedHeads.length>0&&<p className="text-xs text-muted-foreground">University Fee Heads are inherited read-only and can be selected directly inside this College's Fee Structures. Do not duplicate them as College Fee Heads.</p>}
+  </section>}
+
+  {activeTab==='structures'&&<section className="space-y-3">
+   <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-semibold">Fee Structures</h2><p className="text-sm text-muted-foreground">Create the structure first, then configure Fee Items inside each derived Billing Period. Billing Periods never change the Program Template or Curriculum.</p></div><StructureDialog basePath={basePath} canEdit={can.structureCreate} scopeKind={scopeKind} scopeOptions={scopeOptions} programOptions={programOptions}/></div>
+   <div className="max-w-md"><Input value={structureQuery} onChange={e=>{setStructureQuery(e.target.value);setStructurePage(1)}} placeholder="Search fee structures..."/></div>
+   {scopeKind==='COLLEGE'&&universityStructures.length>0&&<Card><CardContent className="p-4"><div className="mb-3"><h3 className="font-semibold">University Fee Structures applicable to this College</h3><p className="text-xs text-muted-foreground">Mandatory structures apply automatically. Optional structures can be adopted or ignored; the College may still maintain its own local Fee Structure.</p></div><div className="space-y-2">{universityStructures.map(us=><div key={us.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{us.name}</span><Badge variant="outline">{us.purpose}</Badge><Badge variant={us.college_applicability==='MANDATORY'?'default':'secondary'}>{us.college_applicability==='MANDATORY'?'Mandatory':'Optional'}</Badge>{us.effective_for_college&&<Badge variant="outline">Effective</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">{us.code} · {us.academic_session?.name??''} · {us.program_template?`${us.program_template.name} (${us.program_template.code})`:'All Programs'}</p></div><div>{us.college_applicability==='MANDATORY'?<span className="text-xs font-medium text-muted-foreground">Applies automatically</span>:can.structureAdopt?<Form action={`${basePath}/university-structures/${us.id}/adoption`} method="patch">{({processing,errors})=><div className="space-y-1"><input type="hidden" name="adopt" value={us.adoption_status==='ADOPTED'?'0':'1'}/><Button type="submit" size="sm" variant={us.adoption_status==='ADOPTED'?'outline':'default'} disabled={processing}>{processing&&<Spinner/>}{us.adoption_status==='ADOPTED'?'Stop Using':'Adopt University Structure'}</Button>{errors.adoption&&<p className="max-w-sm text-xs text-destructive">{errors.adoption}</p>}</div>}</Form>:<span className="text-xs text-muted-foreground">{us.adoption_status==='ADOPTED'?'Adopted':'Optional'}</span>}</div></div>)}</div></CardContent></Card>}
+   {pagedStructures.length===0?<Card><CardContent className="p-10 text-center text-muted-foreground">{structures.length===0?'No Fee Structures yet.':'No matching Fee Structures.'}</CardContent></Card>:pagedStructures.map(st=>{const expanded=open.includes(st.id);const periods=billingPeriodOptions(st);const effectiveEntries=periods.reduce((count,p)=>count+st.items.filter(i=>periodAmount(i,p)!==null).length,0);const configuredTotal=periods.reduce((total,p)=>total+st.items.filter(i=>i.status==='ACTIVE').reduce((sum,i)=>sum+Number(periodAmount(i,p)??0),0),0);const context=scopeKind==='COLLEGE'?`${st.offering?.program_template?.name??''} · ${st.offering?.academic_session?.name??''}`:`${st.academic_session?.name??''} · ${st.program_template?`${st.program_template.name} (${st.program_template.code})`:'All Programs'}`;const basisText=st.charge_basis==='ONE_TIME'?'One Time':st.charge_basis==='PER_TERM'?`Every ${st.program_template?.term_structure??st.offering?.program_template?.term_structure??'Term'}`:st.charge_basis==='PER_ACADEMIC_YEAR'?'Every Academic Year':st.charge_basis==='SPECIFIC_TERM'?`${st.program_template?.term_structure??st.offering?.program_template?.term_structure??'Term'} ${st.charge_period_no}`:`Academic Year ${st.charge_period_no}`;return <Card key={st.id}><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{st.name}</h3><Badge variant={st.status==='ACTIVE'?'default':'secondary'}>{st.status}</Badge><Badge variant="outline">{st.purpose}</Badge>{scopeKind==='UNIVERSITY'&&st.college_applicability&&<Badge variant={st.college_applicability==='MANDATORY'?'default':'secondary'}>{st.college_applicability==='MANDATORY'?'Mandatory for Colleges':'Optional for Colleges'}</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">{st.code} · {context} · {basisText}</p><p className="mt-2 text-sm font-semibold">Configured Total: {st.currency} {configuredTotal.toFixed(2)}</p><p className="text-[11px] text-muted-foreground">Sum of ACTIVE, applicable Fee Items across the configured Billing Periods. This is not a student outstanding balance.</p><button type="button" onClick={()=>toggle(st.id)} className="mt-3 flex w-full max-w-3xl items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5 text-left hover:bg-muted/40"><span className="flex items-center gap-2">{expanded?<ChevronDown className="size-4"/>:<ChevronRight className="size-4"/>}<span className="font-medium">Billing Periods</span></span><span className="text-xs text-muted-foreground">{periods.length} period{periods.length===1?'':'s'} · {effectiveEntries} configured charge{effectiveEntries===1?'':'s'}</span></button></div><div className="flex flex-wrap gap-2"><StructureDialog basePath={basePath} structure={st} canEdit={can.structureUpdate&&st.status==='INACTIVE'} scopeKind={scopeKind} scopeOptions={scopeOptions} programOptions={programOptions}/><StatusForm action={`${basePath}/structures/${st.id}/status`} current={st.status} canEnable={can.structureEnable} canDisable={can.structureDisable} label="Structure"/></div></div>{expanded&&<BillingPeriodsPanel basePath={basePath} structure={st} heads={heads} canEdit={can.structureUpdate}/>}</CardContent></Card>})}
+   {structurePages>1&&<Card><CardContent className="p-0"><Pager page={safeStructurePage} pages={structurePages} onChange={setStructurePage} total={filteredStructures.length}/></CardContent></Card>}
+  </section>}
+ </div>;
+}

@@ -48,6 +48,18 @@ class CollegeAdmissionSeatAllocationService
 
         $capacity = $this->capacitySnapshot($college, $rule);
 
+        $admissionStatusByAllocation = collect();
+        if (Schema::hasTable('admissions')
+            && Schema::hasColumn('admissions', 'college_admission_seat_allocation_id')
+            && Schema::hasColumn('admissions', 'status')) {
+            $allocationIds = $allocationByMerit->pluck('id')->filter()->values();
+            if ($allocationIds->isNotEmpty()) {
+                $admissionStatusByAllocation = DB::table('admissions')
+                    ->whereIn('college_admission_seat_allocation_id', $allocationIds)
+                    ->pluck('status', 'college_admission_seat_allocation_id');
+            }
+        }
+
         return [
             'summary' => [
                 'roster_count' => $meritRows->count(),
@@ -56,7 +68,7 @@ class CollegeAdmissionSeatAllocationService
                 'remaining_physical_seats' => max(0, $capacity['basis_capacity'] - $capacity['total_used']),
             ],
             'capacity' => $capacity,
-            'rows' => $meritRows->map(function (CollegeAdmissionMeritEntry $merit) use ($allocationByMerit) {
+            'rows' => $meritRows->map(function (CollegeAdmissionMeritEntry $merit) use ($allocationByMerit, $admissionStatusByAllocation) {
                 /** @var CollegeAdmissionSeatAllocation|null $allocation */
                 $allocation = $allocationByMerit->get($merit->id);
                 $preference = $merit->application?->academicPreference;
@@ -89,6 +101,7 @@ class CollegeAdmissionSeatAllocationService
                         'decision_note' => $allocation->decision_note,
                         'allocated_at' => optional($allocation->allocated_at)->toIso8601String(),
                         'cancellation_reason' => $allocation->cancellation_reason,
+                        'admission_status' => $admissionStatusByAllocation->get($allocation->id),
                         'horizontal_categories' => $allocation->horizontalCategories->map(fn ($row) => [
                             'id' => $row->reservation_category_id,
                             'code' => $row->category_code,
@@ -273,9 +286,12 @@ class CollegeAdmissionSeatAllocationService
 
             if (Schema::hasTable('admissions')
                 && Schema::hasColumn('admissions', 'college_admission_seat_allocation_id')
-                && DB::table('admissions')->where('college_admission_seat_allocation_id', $locked->id)->exists()) {
+                && DB::table('admissions')
+                    ->where('college_admission_seat_allocation_id', $locked->id)
+                    ->when(Schema::hasColumn('admissions', 'status'), fn ($query) => $query->where('status', 'CONFIRMED'))
+                    ->exists()) {
                 throw ValidationException::withMessages([
-                    'allocation' => 'This seat allocation is already consumed by Admission Confirmation and cannot be cancelled here.',
+                    'allocation' => 'Cannot cancel this seat allocation because the candidate already has a CONFIRMED admission. Revoke the admission first, then cancel the seat allocation.',
                 ]);
             }
 

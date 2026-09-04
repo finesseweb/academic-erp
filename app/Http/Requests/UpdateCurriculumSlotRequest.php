@@ -18,6 +18,7 @@ class UpdateCurriculumSlotRequest extends FormRequest
             'course_category_id' => ['required', 'integer', 'exists:course_categories,id'],
             'course_type_id' => ['required', 'integer', 'exists:course_types,id'],
             'credits' => ['required', 'numeric', 'min:0', 'max:99.99'],
+            'credit_counting' => ['required', Rule::in(['COUNTABLE', 'NON_COUNTABLE'])],
             'name' => ['required', 'string', 'max:120'],
             'display_order' => ['required', 'integer', 'min:1', 'max:65535'],
             'selection_mode' => ['required', Rule::in(['MANDATORY', 'CHOICE'])],

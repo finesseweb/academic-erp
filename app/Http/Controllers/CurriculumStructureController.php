@@ -220,6 +220,7 @@ class CurriculumStructureController extends Controller
                             ? ($courseTypeNames[$slot->course_type_id] ?? 'Unknown')
                             : 'Not set',
                         'credits' => $slot->credits,
+                        'credit_counting' => $slot->credit_counting ?? 'COUNTABLE',
                         'name' => $slot->name,
                         'display_order' => $slot->display_order,
                         'selection_mode' => $slot->selection_mode,
