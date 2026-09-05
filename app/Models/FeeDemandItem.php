@@ -1,0 +1,4 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo;
+class FeeDemandItem extends Model { protected $fillable=['fee_demand_id','fee_structure_id','fee_structure_item_id','fee_head_id','source_period_no','owner_type','structure_name','structure_code','fee_head_name','fee_head_code','purpose','charge_basis','amount','is_mandatory','is_enrollment_clearance_required','installment_allowed','is_refundable','display_order']; protected $casts=['amount'=>'decimal:2','is_mandatory'=>'boolean','is_enrollment_clearance_required'=>'boolean','installment_allowed'=>'boolean','is_refundable'=>'boolean','source_period_no'=>'integer','display_order'=>'integer']; public function demand():BelongsTo{return $this->belongsTo(FeeDemand::class,'fee_demand_id');} }

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Admission;
 use App\Models\College;
 use App\Models\CollegeAdmissionSeatAllocation;
+use App\Models\FeeDemand;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -219,6 +220,27 @@ class CollegeAdmissionConfirmationService
             if ($this->isConsumedByStudent($locked)) {
                 throw ValidationException::withMessages([
                     'admission' => 'This Admission Confirmation is already consumed by Student Enrollment and cannot be revoked here.',
+                ]);
+            }
+
+            $demands = FeeDemand::query()
+                ->where('admission_id', $locked->id)
+                ->where('status', '!=', 'CANCELLED')
+                ->lockForUpdate()
+                ->get();
+
+            if ($demands->contains(fn (FeeDemand $demand) => (float) $demand->paid_amount > 0 || (float) $demand->adjusted_amount > 0)) {
+                throw ValidationException::withMessages([
+                    'admission' => 'Admission has fee payment/adjustment activity. Reverse or settle that financial activity before revoking the Admission Confirmation.',
+                ]);
+            }
+
+            foreach ($demands as $demand) {
+                $demand->update([
+                    'status' => 'CANCELLED',
+                    'cancelled_at' => now(),
+                    'cancelled_by' => $actorId,
+                    'cancellation_reason' => 'Automatically cancelled because Admission Confirmation was revoked.',
                 ]);
             }
 

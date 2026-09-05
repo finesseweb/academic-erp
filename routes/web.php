@@ -48,6 +48,7 @@ use App\Http\Controllers\CourseController;
 use App\Http\Controllers\DegreeController;
 use App\Http\Controllers\DegreeLevelController;
 use App\Http\Controllers\FeeManagementController;
+use App\Http\Controllers\CollegeFeeDemandController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProgramTemplateController;
 use App\Http\Controllers\RoleController;
@@ -88,6 +89,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('admin/fee-management/structures/{structure}/status', [FeeManagementController::class, 'statusUniversityStructure'])->name('fee-management.university.structures.status');
     Route::post('admin/fee-management/structures/{structure}/items', [FeeManagementController::class, 'storeUniversityItem'])->name('fee-management.university.items.store');
     Route::patch('admin/fee-management/structures/{structure}/items/{item}', [FeeManagementController::class, 'updateUniversityItem'])->name('fee-management.university.items.update');
+    Route::delete('admin/fee-management/structures/{structure}/items/{item}', [FeeManagementController::class, 'destroyUniversityItem'])->name('fee-management.university.items.destroy');
     Route::get('admin/university', [UniversityController::class, 'show'])->name('university.show');
     Route::patch('admin/university/{university}', [UniversityController::class, 'update'])->name('university.update');
     Route::redirect('super-admin/university', '/admin/university');
@@ -299,6 +301,12 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('college/{college}/fee-management/university-structures/{structure}/adoption', [FeeManagementController::class, 'adoptUniversityStructure'])->name('fee-management.college.university-structures.adoption');
     Route::post('college/{college}/fee-management/structures/{structure}/items', [FeeManagementController::class, 'storeCollegeItem'])->name('fee-management.college.items.store');
     Route::patch('college/{college}/fee-management/structures/{structure}/items/{item}', [FeeManagementController::class, 'updateCollegeItem'])->name('fee-management.college.items.update');
+    Route::delete('college/{college}/fee-management/structures/{structure}/items/{item}', [FeeManagementController::class, 'destroyCollegeItem'])->name('fee-management.college.items.destroy');
+    Route::get('college/{college}/fee-demands', [CollegeFeeDemandController::class, 'index'])->name('college-fee-demands.index');
+    Route::post('college/{college}/fee-demands', [CollegeFeeDemandController::class, 'store'])->name('college-fee-demands.store');
+    Route::post('college/{college}/fee-demands/bulk', [CollegeFeeDemandController::class, 'bulkStore'])->name('college-fee-demands.bulk.store');
+    Route::post('college/{college}/fee-demands/individual', [CollegeFeeDemandController::class, 'individualStore'])->name('college-fee-demands.individual.store');
+    Route::patch('college/{college}/fee-demands/{demand}/cancel', [CollegeFeeDemandController::class, 'cancel'])->name('college-fee-demands.cancel');
     Route::get('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'index'])->name('college-admission-selection-rules.index');
     Route::post('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'store'])->name('college-admission-selection-rules.store');
     Route::patch('college/{college}/admission-selection-rules/{rule}', [CollegeAdmissionSelectionRuleController::class, 'update'])->name('college-admission-selection-rules.update');

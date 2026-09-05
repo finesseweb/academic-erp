@@ -798,6 +798,8 @@ class TestDataCleanupService
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
                 $this->collegeApplicationFeeRuleRows($universityId),
+            'fee_demands' =>
+                $this->feeDemandRows($universityId),
             'fee_structures' =>
                 $this->feeStructureRows($universityId),
             'fee_heads' =>
@@ -990,6 +992,10 @@ class TestDataCleanupService
                     $this->countCollegeScopedRowsForUniversity('college_admission_document_verifications', $universityId),
                 'college_admission_seat_allocations' =>
                     $this->countCollegeScopedRowsForUniversity('college_admission_seat_allocations', $universityId),
+                'fee_demand_items' =>
+                    $this->countFeeDemandItemsForUniversity($universityId),
+                'fee_demands' =>
+                    $this->countUniversityRows('fee_demands', $universityId),
                 'admissions' =>
                     $this->countCollegeScopedRowsForUniversity('admissions', $universityId),
                 'college_admission_scores' =>
@@ -1169,6 +1175,14 @@ class TestDataCleanupService
                 $seatAllocationIds = Schema::hasTable('college_admission_seat_allocations')
                     ? DB::table('college_admission_seat_allocations')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
                     : collect();
+                $admissionIds = Schema::hasTable('admissions')
+                    ? DB::table('admissions')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
+                    : collect();
+                $feeDemandIds = Schema::hasTable('fee_demands') && $admissionIds->isNotEmpty()
+                    ? DB::table('fee_demands')->whereIn('admission_id', $admissionIds)->pluck('id')
+                    : collect();
+                $this->deleteWhereIn('fee_demand_items', 'fee_demand_id', $feeDemandIds);
+                $this->deleteWhereIn('fee_demands', 'id', $feeDemandIds);
                 $this->deleteWhereIn('admissions', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_seat_allocation_horizontal_categories', 'college_admission_seat_allocation_id', $seatAllocationIds);
                 $this->deleteWhereIn('college_admission_seat_allocations', 'college_admission_application_id', $applicationIds);
@@ -1696,6 +1710,8 @@ class TestDataCleanupService
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>
                 $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
+            'fee_demands' =>
+                $this->cleanupFeeDemand($id, $universityId, $actorId),
             'fee_structures' =>
                 $this->cleanupFeeStructure($id, $universityId, $actorId),
             'fee_heads' =>
@@ -1875,6 +1891,134 @@ class TestDataCleanupService
         };
     }
 
+    private function countFeeDemandItemsForUniversity(int $universityId): int
+    {
+        if (! Schema::hasTable('fee_demand_items') || ! Schema::hasTable('fee_demands')) {
+            return 0;
+        }
+
+        return DB::table('fee_demand_items as fdi')
+            ->join('fee_demands as fd', 'fd.id', '=', 'fdi.fee_demand_id')
+            ->where('fd.university_id', $universityId)
+            ->count();
+    }
+
+    private function feeDemandRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_demands')) {
+            return [];
+        }
+
+        return DB::table('fee_demands as fd')
+            ->join('colleges as c', 'c.id', '=', 'fd.college_id')
+            ->join('admissions as ad', 'ad.id', '=', 'fd.admission_id')
+            ->leftJoin('college_admission_applications as a', 'a.id', '=', 'ad.college_admission_application_id')
+            ->where('fd.university_id', $universityId)
+            ->orderByDesc('fd.id')
+            ->get([
+                'fd.id', 'fd.demand_no', 'fd.status', 'fd.generation_mode', 'fd.billing_period_no',
+                'fd.total_amount', 'fd.paid_amount', 'fd.adjusted_amount', 'fd.outstanding_amount',
+                'c.name as college_name', 'ad.admission_no', 'a.candidate_name',
+            ])
+            ->map(function ($row) {
+                $items = $this->countIfExists('fee_demand_items', 'fee_demand_id', $row->id);
+                $financialRefs = [];
+                foreach ([
+                    ['fee_payments', 'fee_demand_id'],
+                    ['fee_payment_allocations', 'fee_demand_id'],
+                    ['fee_adjustments', 'fee_demand_id'],
+                    ['fee_waivers', 'fee_demand_id'],
+                    ['fee_scholarship_allocations', 'fee_demand_id'],
+                    ['fee_installment_schedules', 'fee_demand_id'],
+                    ['fee_refunds', 'fee_demand_id'],
+                ] as [$table, $column]) {
+                    $financialRefs = array_merge($financialRefs, $this->downstreamReferences($row->id, [[$table, $column]]));
+                }
+
+                $hasFinancialAmounts = ((float) $row->paid_amount > 0) || ((float) $row->adjusted_amount > 0);
+                if ($hasFinancialAmounts) {
+                    $financialRefs[] = [
+                        'table' => 'fee_demands',
+                        'column' => 'financial_activity',
+                        'count' => 1,
+                    ];
+                }
+
+                return [
+                    'id' => (int) $row->id,
+                    'code' => $row->demand_no,
+                    'name' => ($row->candidate_name ?: $row->admission_no).' · '.$row->college_name.' · Period '.$row->billing_period_no,
+                    'status' => $row->status,
+                    'kind' => 'FEE_DEMAND',
+                    'dependencies' => [
+                        'demand_items' => $items,
+                    ],
+                    'blocked' => count($financialRefs) > 0,
+                    'blocking_references' => $financialRefs,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupFeeDemand(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_demands')) {
+            abort(404);
+        }
+
+        $record = DB::table('fee_demands')
+            ->where('id', $id)
+            ->where('university_id', $universityId)
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $financialRefs = [];
+        foreach ([
+            ['fee_payments', 'fee_demand_id'],
+            ['fee_payment_allocations', 'fee_demand_id'],
+            ['fee_adjustments', 'fee_demand_id'],
+            ['fee_waivers', 'fee_demand_id'],
+            ['fee_scholarship_allocations', 'fee_demand_id'],
+            ['fee_installment_schedules', 'fee_demand_id'],
+            ['fee_refunds', 'fee_demand_id'],
+        ] as [$table, $column]) {
+            $financialRefs = array_merge($financialRefs, $this->downstreamReferences($record->id, [[$table, $column]]));
+        }
+
+        if (((float) $record->paid_amount > 0) || ((float) $record->adjusted_amount > 0)) {
+            $financialRefs[] = [
+                'table' => 'fee_demands',
+                'column' => 'financial_activity',
+                'count' => 1,
+            ];
+        }
+
+        if (count($financialRefs) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Fee Demand has payment/adjustment or downstream financial activity and cannot be removed by Test Data Cleanup. Reverse/clean the dependent financial test records first.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $itemCount = $this->countIfExists('fee_demand_items', 'fee_demand_id', $record->id);
+            if (Schema::hasTable('fee_demand_items')) {
+                DB::table('fee_demand_items')->where('fee_demand_id', $record->id)->delete();
+            }
+            DB::table('fee_demands')->where('id', $record->id)->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_demand_items' => $itemCount,
+            ];
+            $this->audit('TEST_FEE_DEMAND_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+            return $result;
+        });
+    }
+
     private function feeStructureRows(int $universityId): array
     {
         if (! Schema::hasTable('fee_structures')) {
@@ -1960,11 +2104,19 @@ class TestDataCleanupService
             $periodExclusionCount = Schema::hasTable('fee_structure_item_period_exclusions') && $itemIds->isNotEmpty()
                 ? DB::table('fee_structure_item_period_exclusions')->whereIn('fee_structure_item_id', $itemIds)->count()
                 : 0;
+            $periodSettingCount = Schema::hasTable('fee_structure_item_period_settings') && $itemIds->isNotEmpty()
+                ? DB::table('fee_structure_item_period_settings')->whereIn('fee_structure_item_id', $itemIds)->count()
+                : 0;
             $adoptionCount = $this->countIfExists('college_fee_structure_adoptions', 'university_fee_structure_id', $record->id);
 
             if (Schema::hasTable('college_fee_structure_adoptions')) {
                 DB::table('college_fee_structure_adoptions')
                     ->where('university_fee_structure_id', $record->id)
+                    ->delete();
+            }
+            if (Schema::hasTable('fee_structure_item_period_settings') && $itemIds->isNotEmpty()) {
+                DB::table('fee_structure_item_period_settings')
+                    ->whereIn('fee_structure_item_id', $itemIds)
                     ->delete();
             }
             if (Schema::hasTable('fee_structure_item_period_exclusions') && $itemIds->isNotEmpty()) {
@@ -1989,6 +2141,7 @@ class TestDataCleanupService
                 'deleted_fee_items' => $itemCount,
                 'deleted_period_amount_overrides' => $periodAmountCount,
                 'deleted_period_exclusions' => $periodExclusionCount,
+                'deleted_period_settings' => $periodSettingCount,
                 'deleted_college_adoptions' => $adoptionCount,
             ];
             $this->audit('TEST_FEE_STRUCTURE_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
@@ -2890,7 +3043,9 @@ class TestDataCleanupService
             abort(404);
         }
 
-        $downstream = [];
+        $downstream = $this->downstreamReferences($record->id, [
+            ['fee_demands', 'admission_id'],
+        ]);
         if (Schema::hasTable('students')) {
             if (Schema::hasColumn('students', 'admission_id')) {
                 $downstream = array_merge($downstream, $this->downstreamReferences($record->id, [['students', 'admission_id']]));
@@ -2902,7 +3057,7 @@ class TestDataCleanupService
 
         if (count($downstream) > 0) {
             throw ValidationException::withMessages([
-                'record' => 'This Admission Confirmation is already consumed by Student Enrollment. Clean the dependent Student test record first.',
+                'record' => 'This Admission Confirmation is already consumed by Fee Demand or Student Enrollment. Clean the dependent Fee Demand/Student test record first.',
             ]);
         }
 

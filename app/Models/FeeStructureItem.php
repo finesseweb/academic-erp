@@ -14,4 +14,5 @@ class FeeStructureItem extends Model
     public function head(): BelongsTo { return $this->belongsTo(FeeHead::class, 'fee_head_id'); }
     public function periodAmounts(): HasMany { return $this->hasMany(FeeStructureItemPeriodAmount::class)->orderBy('period_no'); }
     public function periodExclusions(): HasMany { return $this->hasMany(FeeStructureItemPeriodExclusion::class)->orderBy('period_no'); }
+    public function periodSettings(): HasMany { return $this->hasMany(FeeStructureItemPeriodSetting::class)->orderBy('period_no'); }
 }

@@ -9,6 +9,8 @@ use App\Models\College;
 use App\Models\CollegeAdmissionSeatAllocation;
 use App\Models\CollegeAdmissionSelectionRule;
 use App\Services\CollegeAdmissionConfirmationService;
+use App\Services\ApplicableFeeDemandService;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -68,7 +70,8 @@ class CollegeAdmissionConfirmationController extends Controller
         ConfirmCollegeAdmissionRequest $request,
         College $college,
         CollegeAdmissionSeatAllocation $allocation,
-        CollegeAdmissionConfirmationService $service
+        CollegeAdmissionConfirmationService $service,
+        ApplicableFeeDemandService $feeDemandService
     ): RedirectResponse {
         $this->authorizeCollege($request, $college, 'college_admission_confirmation.confirm');
         $admission = $service->confirm(
@@ -79,9 +82,20 @@ class CollegeAdmissionConfirmationController extends Controller
             $request->ip()
         );
 
+        $feeMessage = ' No initial fee demand was required because no applicable ACTIVE Period 1 / ONE_TIME fee items were found.';
+        try {
+            $demand = $feeDemandService->generateInitialForAdmission($college, $admission, $request->user()->id);
+            if ($demand) {
+                $feeMessage = ' Initial applicable fee demand '.$demand->demand_no.' is ready automatically.';
+            }
+        } catch (ValidationException $exception) {
+            $messages = collect($exception->errors())->flatten()->filter()->values();
+            $feeMessage = ' Admission is confirmed, but automatic fee demand generation needs attention: '.($messages->first() ?: 'Fee configuration could not be resolved.');
+        }
+
         return back()->with('toast', [
             'type' => 'success',
-            'message' => 'Admission confirmed as '.$admission->admission_no.'. The existing seat allocation is now the locked admission source.',
+            'message' => 'Admission confirmed as '.$admission->admission_no.'.'.$feeMessage,
         ]);
     }
 
