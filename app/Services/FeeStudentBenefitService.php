@@ -326,17 +326,11 @@ class FeeStudentBenefitService
         $categoryIds = [];
         $categoryLabels = [];
         if ($allocationId) {
-            $allocation = DB::table('college_admission_seat_allocations')->where('id', $allocationId)->first(['physical_reservation_category_id','physical_category_code','physical_category_name']);
-            if ($allocation?->physical_reservation_category_id) {
-                $categoryIds[] = (int) $allocation->physical_reservation_category_id;
-                $categoryLabels[] = trim(($allocation->physical_category_name ?: 'Category').' ('.($allocation->physical_category_code ?: '-').')');
-            }
-            $horizontal = DB::table('college_admission_seat_allocation_horizontal_categories')
-                ->where('college_admission_seat_allocation_id', $allocationId)
-                ->get(['reservation_category_id','category_name','category_code']);
-            foreach ($horizontal as $row) {
-                $categoryIds[] = (int) $row->reservation_category_id;
-                $categoryLabels[] = trim($row->category_name.' ('.$row->category_code.')');
+            $allocation = DB::table('college_admission_seat_allocations')->where('id', $allocationId)
+                ->first(['candidate_reservation_category_id','candidate_category_code','candidate_category_name']);
+            if ($allocation?->candidate_reservation_category_id) {
+                $categoryIds[] = (int) $allocation->candidate_reservation_category_id;
+                $categoryLabels[] = trim(($allocation->candidate_category_name ?: 'Category').' ('.($allocation->candidate_category_code ?: '-').')');
             }
         }
 

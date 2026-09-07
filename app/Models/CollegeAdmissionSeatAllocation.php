@@ -14,6 +14,7 @@ class CollegeAdmissionSeatAllocation extends Model
         'college_admission_application_id', 'college_admission_application_choice_id',
         'college_admission_document_verification_id', 'college_admission_score_id', 'college_admission_selection_rule_id',
         'merit_rank', 'final_weighted_score', 'physical_seat_type',
+        'candidate_reservation_category_id', 'candidate_category_source', 'candidate_category_code', 'candidate_category_name',
         'physical_reservation_category_id', 'physical_category_code', 'physical_category_name',
         'allocation_round', 'status', 'decision_note', 'allocated_at', 'allocated_by',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
@@ -72,6 +73,11 @@ class CollegeAdmissionSeatAllocation extends Model
         return $this->belongsTo(CollegeAdmissionSelectionRule::class, 'college_admission_selection_rule_id');
     }
 
+    public function candidateReservationCategory(): BelongsTo
+    {
+        return $this->belongsTo(ReservationCategory::class, 'candidate_reservation_category_id');
+    }
+
     public function physicalReservationCategory(): BelongsTo
     {
         return $this->belongsTo(ReservationCategory::class, 'physical_reservation_category_id');
@@ -80,10 +86,5 @@ class CollegeAdmissionSeatAllocation extends Model
     public function horizontalCategories(): HasMany
     {
         return $this->hasMany(CollegeAdmissionSeatAllocationHorizontalCategory::class, 'college_admission_seat_allocation_id');
-    }
-
-    public function admission(): \Illuminate\Database\Eloquent\Relations\HasOne
-    {
-        return $this->hasOne(Admission::class, 'college_admission_seat_allocation_id');
     }
 }

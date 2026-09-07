@@ -328,6 +328,7 @@ class CollegeAdmissionFormSetupController extends Controller
             'college_program_offering_id'=>['required','integer','exists:college_program_offerings,id'],
             'college_admission_cycle_id'=>['required','integer','exists:college_admission_cycles,id'],
             'seat_selection_required'=>['nullable','boolean'],
+            'reservation_category_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
         ]);
 
         $offering = $college->programOfferings()
@@ -345,6 +346,27 @@ class CollegeAdmissionFormSetupController extends Controller
             ->first();
         if (! $cycle) {
             throw ValidationException::withMessages(['college_admission_cycle_id'=>'Choose an Admission Cycle linked to the selected Program Offering.']);
+        }
+
+        $autoReservationFieldId = null;
+        if (! filled($data['reservation_category_field_id'] ?? null)) {
+            $autoReservationFieldId = CollegeAdmissionFormField::query()
+                ->where('system_purpose','CANDIDATE_RESERVATION_CATEGORY')
+                ->whereHas('step', fn ($q) => $q->whereIn('college_admission_form_template_id', array_values(array_filter([$template->id, $template->parent_template_id]))))
+                ->where('status','ACTIVE')
+                ->value('id');
+        }
+
+        if (filled($data['reservation_category_field_id'] ?? null)) {
+            $categoryField = CollegeAdmissionFormField::query()
+                ->whereKey($data['reservation_category_field_id'])
+                ->whereHas('step', fn ($q) => $q->whereIn('college_admission_form_template_id', array_values(array_filter([$template->id, $template->parent_template_id]))))
+                ->where('status', 'ACTIVE')
+                ->whereIn('field_type', ['SELECT','RADIO'])
+                ->first();
+            if (! $categoryField) {
+                throw ValidationException::withMessages(['reservation_category_field_id'=>'Map an ACTIVE SELECT/RADIO field from this exact Admission Form.']);
+            }
         }
 
         $program = $offering->programTemplate;
@@ -373,6 +395,7 @@ class CollegeAdmissionFormSetupController extends Controller
             ...$mappingScope,
             'status'=>'ACTIVE',
             'seat_selection_required'=>(bool) ($data['seat_selection_required'] ?? false),
+            'reservation_category_field_id'=>$data['reservation_category_field_id'] ?? $autoReservationFieldId,
         ]);
 
         $this->audit($request,$college,'COLLEGE_ADMISSION_FORM_MAPPING_CREATED','CollegeAdmissionFormMapping',$mapping->id,$mapping->toArray());

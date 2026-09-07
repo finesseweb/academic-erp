@@ -31,7 +31,7 @@ class CollegeAdmissionSeatAllocationService
             ->where('college_id', $college->id)
             ->where('college_admission_selection_rule_id', $rule->id)
             ->with([
-                'application:id,application_no,candidate_name,email,status',
+                'application:id,application_no,candidate_name,email,status,college_admission_cycle_id,college_admission_form_template_id',
                 'application.documentVerification:id,college_admission_application_id,status,finalized_at',
                 'choice:id,college_admission_application_id,preference_no,college_program_intake_id,college_program_reservation_plan_id,college_admission_selection_rule_id,bucket_type,bucket_key,basis_capacity,eligibility_status',
                 'application.academicPreference.discipline:id,name,code',
@@ -48,6 +48,10 @@ class CollegeAdmissionSeatAllocationService
 
         $capacity = $this->capacitySnapshot($college, $rule);
 
+        // Admission Confirmation consumes a seat allocation. Surface the linked
+        // admission lifecycle state to the UI so a CONFIRMED admission cannot
+        // expose an actionable Cancel Allocation control. The backend guard
+        // below remains authoritative against stale/tampered requests.
         $admissionStatusByAllocation = collect();
         if (Schema::hasTable('admissions')
             && Schema::hasColumn('admissions', 'college_admission_seat_allocation_id')
@@ -60,6 +64,8 @@ class CollegeAdmissionSeatAllocationService
             }
         }
 
+        $candidateCategoryOptions = DB::table('reservation_categories')->where('university_id',$college->university_id)->where('status','ACTIVE')->where('nature','VERTICAL')->whereRaw("LOWER(TRIM(code)) NOT IN ('general','gen','open','unreserved','ur')")->orderBy('display_order')->orderBy('name')->get(['id','name','code'])->map(fn($r)=>['id'=>(int)$r->id,'name'=>$r->name,'code'=>$r->code])->values()->all();
+
         return [
             'summary' => [
                 'roster_count' => $meritRows->count(),
@@ -68,10 +74,12 @@ class CollegeAdmissionSeatAllocationService
                 'remaining_physical_seats' => max(0, $capacity['basis_capacity'] - $capacity['total_used']),
             ],
             'capacity' => $capacity,
-            'rows' => $meritRows->map(function (CollegeAdmissionMeritEntry $merit) use ($allocationByMerit, $admissionStatusByAllocation) {
+            'candidate_category_options' => $candidateCategoryOptions,
+            'rows' => $meritRows->map(function (CollegeAdmissionMeritEntry $merit) use ($allocationByMerit, $college, $admissionStatusByAllocation) {
                 /** @var CollegeAdmissionSeatAllocation|null $allocation */
                 $allocation = $allocationByMerit->get($merit->id);
                 $preference = $merit->application?->academicPreference;
+                $mappedCandidateCategory = $merit->application ? $this->mappedCandidateReservationCategory($college, $merit->application) : null;
 
                 return [
                     'merit_entry_id' => $merit->id,
@@ -91,10 +99,12 @@ class CollegeAdmissionSeatAllocationService
                     'discipline_code' => $preference?->discipline?->code,
                     'specialization_name' => $preference?->specialization?->name,
                     'specialization_code' => $preference?->specialization?->code,
+                    'candidate_reservation_category' => $allocation?->candidate_category_source ? ['id'=>$allocation->candidate_reservation_category_id ? (int)$allocation->candidate_reservation_category_id : null,'code'=>$allocation->candidate_category_code,'name'=>$allocation->candidate_category_name,'source'=>$allocation->candidate_category_source] : $mappedCandidateCategory,
                     'allocation' => $allocation ? [
                         'id' => $allocation->id,
                         'status' => $allocation->status,
                         'physical_seat_type' => $allocation->physical_seat_type,
+                        'candidate_reservation_category_id' => $allocation->candidate_reservation_category_id,
                         'physical_category_code' => $allocation->physical_category_code,
                         'physical_category_name' => $allocation->physical_category_name,
                         'allocation_round' => (int) $allocation->allocation_round,
@@ -200,10 +210,43 @@ class CollegeAdmissionSeatAllocationService
             }
 
             $rule->loadMissing('reservationPlan.allocations.category');
+            $mappedCandidateCategory = $this->mappedCandidateReservationCategory($college, $lockedMerit->application);
+            $manualCandidateSelection = trim((string)($data['candidate_reservation_category_selection'] ?? ''));
+            $candidateCategory = $mappedCandidateCategory;
+            if (! $candidateCategory) {
+                if ($manualCandidateSelection === '') {
+                    throw ValidationException::withMessages(['candidate_reservation_category_selection'=>'Candidate Reservation Category is not mapped/resolved from the Admission Form. Confirm it manually before allocating the seat.']);
+                }
+                if (strtoupper($manualCandidateSelection) === 'GENERAL') {
+                    $candidateCategory = ['id'=>null,'name'=>'General / Unreserved','code'=>'GENERAL','source'=>'MANUAL'];
+                } else {
+                    $row = DB::table('reservation_categories')->where('id',(int)$manualCandidateSelection)->where('university_id',$college->university_id)->where('status','ACTIVE')->where('nature','VERTICAL')->first(['id','name','code']);
+                    if (! $row) throw ValidationException::withMessages(['candidate_reservation_category_selection'=>'Select General / Unreserved or an ACTIVE Reservation Category from this University.']);
+                    $candidateCategory = ['id'=>(int)$row->id,'name'=>$row->name,'code'=>$row->code,'source'=>'MANUAL'];
+                }
+            }
+
             $seatContext = $this->lockedSeatContext($college, $rule);
             $physicalCategoryId = isset($data['physical_reservation_category_id']) && $data['physical_reservation_category_id'] !== ''
                 ? (int) $data['physical_reservation_category_id']
                 : null;
+
+            // Candidate identity and physical seat bucket are intentionally separate,
+            // but an operator may never use that separation to cross-allocate a
+            // reserved seat. OPEN remains category-neutral; a reserved bucket is
+            // available only to a candidate of that exact verified/mapped category.
+            if ($physicalCategoryId !== null && (int) ($candidateCategory['id'] ?? 0) !== $physicalCategoryId) {
+                throw ValidationException::withMessages([
+                    'physical_reservation_category_id' => 'This reserved seat can be allocated only to a candidate of the same Reservation Category. Use Open / Unreserved when the candidate is entitled by merit.',
+                ]);
+            }
+
+            // Manual counselling must not bypass roster order. OPEN is common
+            // merit, therefore a lower-ranked candidate cannot consume an OPEN
+            // seat while a higher-ranked VERIFIED + eligible candidate in this
+            // exact roster is still waiting. Reserved seats apply the same rule
+            // within the candidate's own reservation category.
+            $this->assertMeritPriorityForSeat($college, $lockedMerit, $candidateCategory, $physicalCategoryId);
 
             $physical = $this->validatePhysicalSeat($seatContext, $physicalCategoryId, $existing?->id);
             $horizontalIds = collect($data['horizontal_category_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
@@ -225,6 +268,10 @@ class CollegeAdmissionSeatAllocationService
                 'college_admission_selection_rule_id' => $lockedMerit->college_admission_selection_rule_id,
                 'merit_rank' => $lockedMerit->rank,
                 'final_weighted_score' => $lockedMerit->final_weighted_score,
+                'candidate_reservation_category_id' => $candidateCategory['id'],
+                'candidate_category_source' => $candidateCategory['source'],
+                'candidate_category_code' => $candidateCategory['code'],
+                'candidate_category_name' => $candidateCategory['name'],
                 'physical_seat_type' => $physical['seat_type'],
                 'physical_reservation_category_id' => $physical['category_id'],
                 'physical_category_code' => $physical['category_code'],
@@ -286,9 +333,10 @@ class CollegeAdmissionSeatAllocationService
 
             if (Schema::hasTable('admissions')
                 && Schema::hasColumn('admissions', 'college_admission_seat_allocation_id')
+                && Schema::hasColumn('admissions', 'status')
                 && DB::table('admissions')
                     ->where('college_admission_seat_allocation_id', $locked->id)
-                    ->when(Schema::hasColumn('admissions', 'status'), fn ($query) => $query->where('status', 'CONFIRMED'))
+                    ->where('status', 'CONFIRMED')
                     ->exists()) {
                 throw ValidationException::withMessages([
                     'allocation' => 'Cannot cancel this seat allocation because the candidate already has a CONFIRMED admission. Revoke the admission first, then cancel the seat allocation.',
@@ -370,6 +418,55 @@ class CollegeAdmissionSeatAllocationService
             'vertical' => $vertical,
             'horizontal' => $horizontal,
         ];
+    }
+
+    private function assertMeritPriorityForSeat(
+        College $college,
+        CollegeAdmissionMeritEntry $currentMerit,
+        array $candidateCategory,
+        ?int $physicalCategoryId
+    ): void {
+        $higherRows = CollegeAdmissionMeritEntry::query()
+            ->where('college_id', $college->id)
+            ->where('college_admission_selection_rule_id', $currentMerit->college_admission_selection_rule_id)
+            ->where('rank', '<', $currentMerit->rank)
+            ->with([
+                'application:id,application_no,candidate_name,status,college_admission_cycle_id,college_admission_form_template_id',
+                'application.documentVerification:id,college_admission_application_id,status',
+                'choice:id,college_admission_application_id,eligibility_status',
+            ])
+            ->orderBy('rank')
+            ->get();
+
+        foreach ($higherRows as $higher) {
+            $application = $higher->application;
+            if (! $application || $application->status !== 'SUBMITTED'
+                || $higher->choice?->eligibility_status !== 'ELIGIBLE'
+                || $application->documentVerification?->status !== 'VERIFIED') {
+                continue;
+            }
+
+            $alreadyAllocated = CollegeAdmissionSeatAllocation::query()
+                ->where('college_admission_application_id', $application->id)
+                ->where('status', 'ALLOCATED')
+                ->exists();
+            if ($alreadyAllocated) {
+                continue;
+            }
+
+            if ($physicalCategoryId === null) {
+                throw ValidationException::withMessages([
+                    'physical_reservation_category_id' => 'OPEN merit order cannot be bypassed. Higher-ranked eligible candidate #'.$higher->rank.' '.$application->candidate_name.' ('.$application->application_no.') is still awaiting a seat decision.',
+                ]);
+            }
+
+            $higherCategory = $this->mappedCandidateReservationCategory($college, $application);
+            if ($higherCategory && (int) ($higherCategory['id'] ?? 0) === (int) ($candidateCategory['id'] ?? 0)) {
+                throw ValidationException::withMessages([
+                    'physical_reservation_category_id' => ($candidateCategory['name'] ?? 'Reserved').' merit order cannot be bypassed. Higher-ranked eligible candidate #'.$higher->rank.' '.$application->candidate_name.' ('.$application->application_no.') of the same category is still awaiting a seat decision.',
+                ]);
+            }
+        }
     }
 
     private function validatePhysicalSeat(array $context, ?int $categoryId, ?int $ignoreAllocationId): array
@@ -596,6 +693,74 @@ class CollegeAdmissionSeatAllocationService
     private function assertAllocationOwnedByCollege(College $college, CollegeAdmissionSeatAllocation $allocation): void
     {
         abort_unless((int) $allocation->college_id === (int) $college->id, 404);
+    }
+
+    private function mappedCandidateReservationCategory(College $college, $application): ?array
+    {
+        if (! $application?->id) return null;
+
+        /*
+         * ADR 136:
+         * The application answer itself is authoritative when it belongs to a
+         * system-mapped Candidate Reservation Category field. Resolve that
+         * before the older cycle-level mapping so a category selected by the
+         * applicant is automatically available during Seat Allocation.
+         */
+        $systemValue = DB::table('college_admission_application_field_values as fv')
+            ->join('college_admission_form_fields as f', 'f.id', '=', 'fv.college_admission_form_field_id')
+            ->where('fv.college_admission_application_id', $application->id)
+            ->where('f.status', 'ACTIVE')
+            ->where('f.system_purpose', 'CANDIDATE_RESERVATION_CATEGORY')
+            ->orderByDesc('fv.id')
+            ->value('fv.value_text');
+
+        $resolved = $this->resolveCandidateCategoryValue($college, $systemValue);
+        if ($resolved) return $resolved;
+
+        // Backward-compatible fallback for forms configured through the
+        // College Admission Form Mapping screen before system-purpose fields.
+        if (! $application->college_admission_cycle_id) return null;
+        $mapping = DB::table('college_admission_form_mappings')
+            ->where('college_id',$college->id)
+            ->where('college_admission_cycle_id',$application->college_admission_cycle_id)
+            ->where('status','ACTIVE')
+            ->whereNotNull('reservation_category_field_id')
+            ->orderByDesc('id')
+            ->first(['reservation_category_field_id']);
+
+        if (! $mapping) return null;
+
+        $mappedValue = DB::table('college_admission_application_field_values')
+            ->where('college_admission_application_id',$application->id)
+            ->where('college_admission_form_field_id',$mapping->reservation_category_field_id)
+            ->value('value_text');
+
+        return $this->resolveCandidateCategoryValue($college, $mappedValue);
+    }
+
+    private function resolveCandidateCategoryValue(College $college, mixed $value): ?array
+    {
+        $value = trim((string) $value);
+        if ($value === '') return null;
+
+        $normalized = mb_strtolower($value);
+        if (in_array($normalized, ['general','gen','general / unreserved','open','open / unreserved','unreserved','ur'], true)) {
+            return ['id'=>null,'name'=>'General / Unreserved','code'=>'GENERAL','source'=>'FORM_MAPPING'];
+        }
+
+        $category = DB::table('reservation_categories')
+            ->where('university_id',$college->university_id)
+            ->where('status','ACTIVE')
+            ->where('nature','VERTICAL')
+            ->where(function($q) use($normalized){
+                $q->whereRaw('LOWER(TRIM(code)) = ?',[$normalized])
+                    ->orWhereRaw('LOWER(TRIM(name)) = ?',[$normalized]);
+            })
+            ->first(['id','name','code']);
+
+        return $category
+            ? ['id'=>(int)$category->id,'name'=>$category->name,'code'=>$category->code,'source'=>'FORM_MAPPING']
+            : null;
     }
 
     private function audit(
