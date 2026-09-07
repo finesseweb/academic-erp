@@ -219,6 +219,13 @@ const platformItems: TreeNavItem[] = [
                 permission: 'fee_structure.view',
                 directNavigation: true,
             },
+            {
+                title: 'Scholarship / Benefits',
+                href: '/admin/fee-scholarships',
+                icon: TicketCheck,
+                permission: 'fee_scholarship.view',
+                directNavigation: true,
+            },
         ],
     },
     {
@@ -665,10 +672,24 @@ export function AppSidebar() {
                           directNavigation: true,
                       },
                       {
+                          title: 'Scholarship / Benefits',
+                          href: `/college/${collegeId}/fee-scholarships`,
+                          icon: TicketCheck,
+                          permission: 'college_fee_scholarship.view',
+                          directNavigation: true,
+                      },
+                      {
                           title: 'Fee Demands',
                           href: `/college/${collegeId}/fee-demands`,
                           icon: ScrollText,
                           permission: 'college_fee_demand.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Student Benefits',
+                          href: `/college/${collegeId}/fee-student-benefits`,
+                          icon: TicketCheck,
+                          permission: 'college_fee_student_benefit.view',
                           directNavigation: true,
                       },
                   ],

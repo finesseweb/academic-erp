@@ -118,7 +118,9 @@ type Props = {
         applicants: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
+        fee_student_benefits: Entity[];
         fee_demands: Entity[];
+        fee_scholarship_schemes: Entity[];
         fee_structures: Entity[];
         fee_heads: Entity[];
         fee_categories: Entity[];
@@ -157,7 +159,9 @@ type TabKey =
     | 'academic_policies'
     | 'college_admission_form_templates'
     | 'college_application_fee_rules'
+    | 'fee_student_benefits'
     | 'fee_demands'
+    | 'fee_scholarship_schemes'
     | 'fee_structures'
     | 'fee_heads'
     | 'fee_categories'
@@ -209,7 +213,9 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'applicants', label: 'Applicants' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
+    { key: 'fee_student_benefits', label: 'Student Benefits / Sanctions' },
     { key: 'fee_demands', label: 'Fee Demands' },
+    { key: 'fee_scholarship_schemes', label: 'Scholarship / Benefits' },
     { key: 'fee_structures', label: 'Fee Structures' },
     { key: 'fee_heads', label: 'Fee Heads' },
     { key: 'fee_categories', label: 'Fee Categories' },
@@ -273,7 +279,9 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
     {
         label: 'Fee Management',
         keys: [
+            'fee_student_benefits',
             'fee_demands',
+            'fee_scholarship_schemes',
             'fee_structures',
             'fee_heads',
             'fee_categories',

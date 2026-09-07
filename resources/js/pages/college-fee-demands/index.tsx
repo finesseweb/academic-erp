@@ -1,5 +1,5 @@
 import { Head, router } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +29,7 @@ type Offering = {
     program_code: string;
     session: string;
     curriculum_id: number | null;
-    confirmed_admissions: ConfirmedAdmission[];
+    confirmed_admissions?: ConfirmedAdmission[];
     academic_policy: null | {
         id: number;
         name: string;
@@ -94,6 +94,9 @@ export default function Page({
     const [contextKey, setContextKey] = useState('');
     const [generateMode, setGenerateMode] = useState<'BULK' | 'INDIVIDUAL'>('BULK');
     const [individualAdmissionId, setIndividualAdmissionId] = useState(0);
+    const [individualSearch, setIndividualSearch] = useState('');
+    const [individualOptions, setIndividualOptions] = useState<ConfirmedAdmission[]>([]);
+    const [individualSearchLoading, setIndividualSearchLoading] = useState(false);
     const [openAdmission, setOpenAdmission] = useState<string | null>(null);
     const [openDemand, setOpenDemand] = useState<number | null>(null);
     const [search, setSearch] = useState('');
@@ -119,6 +122,42 @@ export default function Page({
         const direct = filteredContexts.find((context) => context.key === contextKey);
         return direct ?? filteredContexts[0] ?? null;
     }, [contextKey, filteredContexts]);
+
+    useEffect(() => {
+        if (generateMode !== 'INDIVIDUAL' || !selectedContext?.ready || !offeringId) {
+            setIndividualOptions([]);
+            return;
+        }
+
+        const query = individualSearch.trim();
+        if (query.length < 2) {
+            setIndividualOptions([]);
+            return;
+        }
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            setIndividualSearchLoading(true);
+            try {
+                const response = await fetch(
+                    `/college/${college.id}/fee-demands/eligible-admissions?offering_id=${offeringId}&q=${encodeURIComponent(query)}`,
+                    { signal: controller.signal, headers: { Accept: 'application/json' } },
+                );
+                if (!response.ok) throw new Error('Search failed');
+                const data = await response.json();
+                setIndividualOptions(data.data ?? []);
+            } catch (error) {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) setIndividualOptions([]);
+            } finally {
+                if (!controller.signal.aborted) setIndividualSearchLoading(false);
+            }
+        }, 250);
+
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [college.id, generateMode, individualSearch, offeringId, selectedContext?.ready]);
 
     const demandGroups = useMemo(() => {
         const grouped = new Map<string, {
@@ -197,6 +236,8 @@ export default function Page({
         setPurpose(nextPurpose);
         setContextKey('');
         setIndividualAdmissionId(0);
+        setIndividualSearch('');
+        setIndividualOptions([]);
     };
 
     return (
@@ -358,16 +399,28 @@ export default function Page({
                                 {generateMode === 'INDIVIDUAL' && (
                                     <div>
                                         <label className="text-sm font-medium">Candidate / Student</label>
+                                        <Input
+                                            className="mt-1"
+                                            value={individualSearch}
+                                            onChange={(event) => {
+                                                setIndividualSearch(event.target.value);
+                                                setIndividualAdmissionId(0);
+                                            }}
+                                            placeholder="Search by student name, application no. or admission no."
+                                            disabled={!selectedContext.ready}
+                                        />
                                         <select
-                                            className="mt-1 h-10 w-full rounded-md border bg-background px-3"
+                                            className="mt-2 h-10 w-full rounded-md border bg-background px-3"
                                             value={individualAdmissionId}
                                             onChange={(event) => setIndividualAdmissionId(Number(event.target.value))}
-                                            disabled={!selectedContext.ready}
+                                            disabled={!selectedContext.ready || individualSearch.trim().length < 2 || individualSearchLoading}
                                         >
-                                            <option value="0">Select candidate / student</option>
-                                            {(selectedOffering?.confirmed_admissions ?? []).map((admission) => (
+                                            <option value="0">
+                                                {individualSearchLoading ? 'Searching…' : individualSearch.trim().length < 2 ? 'Type at least 2 characters to search' : individualOptions.length === 0 ? 'No matching eligible candidate / student' : 'Select candidate / student'}
+                                            </option>
+                                            {individualOptions.map((admission) => (
                                                 <option key={admission.id} value={admission.id}>
-                                                    {admission.admission_no} — {admission.candidate_name}
+                                                    {admission.admission_no} — {admission.application_no} — {admission.candidate_name}
                                                 </option>
                                             ))}
                                         </select>

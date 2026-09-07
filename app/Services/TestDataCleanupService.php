@@ -798,8 +798,12 @@ class TestDataCleanupService
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
                 $this->collegeApplicationFeeRuleRows($universityId),
+            'fee_student_benefits' =>
+                $this->feeStudentBenefitRows($universityId),
             'fee_demands' =>
                 $this->feeDemandRows($universityId),
+            'fee_scholarship_schemes' =>
+                $this->feeScholarshipSchemeRows($universityId),
             'fee_structures' =>
                 $this->feeStructureRows($universityId),
             'fee_heads' =>
@@ -996,6 +1000,12 @@ class TestDataCleanupService
                     $this->countFeeDemandItemsForUniversity($universityId),
                 'fee_demands' =>
                     $this->countUniversityRows('fee_demands', $universityId),
+                'fee_scholarship_scheme_heads' =>
+                    $this->countFeeScholarshipMappingsForUniversity('fee_scholarship_scheme_heads', $universityId),
+                'fee_scholarship_scheme_categories' =>
+                    $this->countFeeScholarshipMappingsForUniversity('fee_scholarship_scheme_categories', $universityId),
+                'fee_scholarship_schemes' =>
+                    $this->countUniversityRows('fee_scholarship_schemes', $universityId),
                 'admissions' =>
                     $this->countCollegeScopedRowsForUniversity('admissions', $universityId),
                 'college_admission_scores' =>
@@ -1154,6 +1164,25 @@ class TestDataCleanupService
                 $approvalRequestIds
             );
 
+            // Student financial-benefit transactions must be removed before their Scheme / Demand parents.
+            if (Schema::hasTable('fee_student_benefits')) {
+                $benefitIds = DB::table('fee_student_benefits')->where('university_id', $universityId)->pluck('id');
+                $this->deleteWhereIn('fee_student_benefit_items', 'fee_student_benefit_id', $benefitIds);
+                $this->deleteWhereIn('fee_student_benefits', 'id', $benefitIds);
+            }
+
+            // Scholarship / Concession / Waiver is fee setup test data.
+            // Remove mappings + schemes before Reservation Categories / Fee Heads can be cleaned later.
+            // This deliberately preserves the referenced Fee Heads and Reservation Categories themselves.
+            if (Schema::hasTable('fee_scholarship_schemes')) {
+                $scholarshipSchemeIds = DB::table('fee_scholarship_schemes')
+                    ->where('university_id', $universityId)
+                    ->pluck('id');
+                $this->deleteWhereIn('fee_scholarship_scheme_heads', 'fee_scholarship_scheme_id', $scholarshipSchemeIds);
+                $this->deleteWhereIn('fee_scholarship_scheme_categories', 'fee_scholarship_scheme_id', $scholarshipSchemeIds);
+                $this->deleteWhereIn('fee_scholarship_schemes', 'id', $scholarshipSchemeIds);
+            }
+
             // 2) Admission transactional/configuration rows before Selection Rules / Reservation / Intake.
             if ($collegeIds->isNotEmpty()) {
                 $collegeOfferingIdsForAdmission = Schema::hasTable('college_program_offerings')
@@ -1183,6 +1212,8 @@ class TestDataCleanupService
                     : collect();
                 $this->deleteWhereIn('fee_demand_items', 'fee_demand_id', $feeDemandIds);
                 $this->deleteWhereIn('fee_demands', 'id', $feeDemandIds);
+
+
                 $this->deleteWhereIn('admissions', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_seat_allocation_horizontal_categories', 'college_admission_seat_allocation_id', $seatAllocationIds);
                 $this->deleteWhereIn('college_admission_seat_allocations', 'college_admission_application_id', $applicationIds);
@@ -1710,8 +1741,12 @@ class TestDataCleanupService
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>
                 $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
+            'fee_student_benefits' =>
+                $this->cleanupFeeStudentBenefit($id, $universityId, $actorId),
             'fee_demands' =>
                 $this->cleanupFeeDemand($id, $universityId, $actorId),
+            'fee_scholarship_schemes' =>
+                $this->cleanupFeeScholarshipScheme($id, $universityId, $actorId),
             'fee_structures' =>
                 $this->cleanupFeeStructure($id, $universityId, $actorId),
             'fee_heads' =>
@@ -1903,6 +1938,54 @@ class TestDataCleanupService
             ->count();
     }
 
+    private function feeStudentBenefitRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_student_benefits')) return [];
+        return DB::table('fee_student_benefits as b')
+            ->join('fee_demands as d','d.id','=','b.fee_demand_id')
+            ->join('admissions as ad','ad.id','=','b.admission_id')
+            ->leftJoin('college_admission_applications as a','a.id','=','ad.college_admission_application_id')
+            ->join('colleges as c','c.id','=','b.college_id')
+            ->where('b.university_id',$universityId)
+            ->orderByDesc('b.id')
+            ->get(['b.id','b.scheme_name_snapshot','b.status','b.sanctioned_amount','d.demand_no','a.candidate_name','ad.admission_no','c.name as college_name'])
+            ->map(fn($r)=>[
+                'id'=>(int)$r->id,
+                'code'=>$r->demand_no,
+                'name'=>($r->candidate_name ?: $r->admission_no).' · '.$r->scheme_name_snapshot.' · '.$r->college_name,
+                'status'=>$r->status,
+                'kind'=>'FEE_STUDENT_BENEFIT',
+                'dependencies'=>['benefit_items'=>$this->countIfExists('fee_student_benefit_items','fee_student_benefit_id',(int)$r->id)],
+                'blocked'=>false,
+                'blocking_references'=>[],
+            ])->values()->all();
+    }
+
+    private function cleanupFeeStudentBenefit(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_student_benefits')) abort(404);
+        return DB::transaction(function () use ($id,$universityId,$actorId) {
+            $record = DB::table('fee_student_benefits')->where('id',$id)->where('university_id',$universityId)->lockForUpdate()->first();
+            if (! $record) abort(404);
+            if ($record->status === 'APPROVED') {
+                $demand = DB::table('fee_demands')->where('id',$record->fee_demand_id)->lockForUpdate()->first();
+                if (! $demand) abort(404);
+                if ((float)$demand->paid_amount > 0) {
+                    throw ValidationException::withMessages(['record'=>'Approved benefit cannot be test-cleaned after payment activity.']);
+                }
+                $sanctioned = (float)($record->sanctioned_amount ?? 0);
+                $adjusted = max(round((float)$demand->adjusted_amount - $sanctioned,2),0);
+                $outstanding = max(round((float)$demand->total_amount - (float)$demand->paid_amount - $adjusted,2),0);
+                $status = $outstanding <= 0 ? 'CLEARED' : (($adjusted + (float)$demand->paid_amount) > 0 ? 'PARTIALLY_CLEARED' : 'OPEN');
+                DB::table('fee_demands')->where('id',$demand->id)->update(['adjusted_amount'=>$adjusted,'outstanding_amount'=>$outstanding,'status'=>$status,'updated_at'=>now()]);
+            }
+            DB::table('fee_student_benefit_items')->where('fee_student_benefit_id',$record->id)->delete();
+            DB::table('fee_student_benefits')->where('id',$record->id)->delete();
+            $this->audit('TEST_FEE_STUDENT_BENEFIT_CLEANED','fee_student_benefit',$record->id,(array)$record,$actorId);
+            return ['benefit_id'=>(int)$record->id,'status'=>$record->status];
+        });
+    }
+
     private function feeDemandRows(int $universityId): array
     {
         if (! Schema::hasTable('fee_demands')) {
@@ -1929,6 +2012,7 @@ class TestDataCleanupService
                     ['fee_adjustments', 'fee_demand_id'],
                     ['fee_waivers', 'fee_demand_id'],
                     ['fee_scholarship_allocations', 'fee_demand_id'],
+                    ['fee_student_benefits', 'fee_demand_id'],
                     ['fee_installment_schedules', 'fee_demand_id'],
                     ['fee_refunds', 'fee_demand_id'],
                 ] as [$table, $column]) {
@@ -1983,6 +2067,7 @@ class TestDataCleanupService
             ['fee_adjustments', 'fee_demand_id'],
             ['fee_waivers', 'fee_demand_id'],
             ['fee_scholarship_allocations', 'fee_demand_id'],
+            ['fee_student_benefits', 'fee_demand_id'],
             ['fee_installment_schedules', 'fee_demand_id'],
             ['fee_refunds', 'fee_demand_id'],
         ] as [$table, $column]) {
@@ -2015,6 +2100,143 @@ class TestDataCleanupService
                 'deleted_demand_items' => $itemCount,
             ];
             $this->audit('TEST_FEE_DEMAND_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+            return $result;
+        });
+    }
+
+    private function countFeeScholarshipMappingsForUniversity(string $table, int $universityId): int
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasTable('fee_scholarship_schemes')) {
+            return 0;
+        }
+
+        return DB::table($table.' as mapping')
+            ->join('fee_scholarship_schemes as scheme', 'scheme.id', '=', 'mapping.fee_scholarship_scheme_id')
+            ->where('scheme.university_id', $universityId)
+            ->count();
+    }
+
+    private function feeScholarshipSchemeRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_scholarship_schemes')) {
+            return [];
+        }
+
+        return DB::table('fee_scholarship_schemes as fss')
+            ->leftJoin('colleges as c', 'c.id', '=', 'fss.college_id')
+            ->leftJoin('academic_sessions as s', 's.id', '=', 'fss.academic_session_id')
+            ->leftJoin('program_templates as pt', 'pt.id', '=', 'fss.program_template_id')
+            ->leftJoin('college_program_offerings as cpo', 'cpo.id', '=', 'fss.college_program_offering_id')
+            ->leftJoin('program_templates as cpt', 'cpt.id', '=', 'cpo.program_template_id')
+            ->where('fss.university_id', $universityId)
+            ->orderByRaw('CASE WHEN fss.college_id IS NULL THEN 0 ELSE 1 END')
+            ->orderBy('c.name')
+            ->orderBy('fss.name')
+            ->get([
+                'fss.id', 'fss.code', 'fss.name', 'fss.status', 'fss.benefit_type', 'fss.calculation_type',
+                'fss.benefit_value', 'fss.maximum_benefit_amount', 'fss.eligibility_mode', 'fss.approval_mode',
+                'c.name as college_name', 's.name as session_name', 'pt.name as university_program_name',
+                'cpt.name as college_program_name',
+            ])
+            ->map(function ($row) {
+                $headMappings = $this->countIfExists('fee_scholarship_scheme_heads', 'fee_scholarship_scheme_id', (int) $row->id);
+                $categoryMappings = $this->countIfExists('fee_scholarship_scheme_categories', 'fee_scholarship_scheme_id', (int) $row->id);
+
+                // Future operational scholarship/sanction/adjustment records must block setup cleanup.
+                // Missing future tables/columns are safely ignored by downstreamReferences().
+                $operationalRefs = $this->downstreamReferences((int) $row->id, [
+                    ['fee_scholarship_allocations', 'fee_scholarship_scheme_id'],
+                    ['fee_scholarship_allocations', 'scholarship_scheme_id'],
+                    ['fee_scholarship_applications', 'fee_scholarship_scheme_id'],
+                    ['fee_scholarship_sanctions', 'fee_scholarship_scheme_id'],
+                    ['student_fee_benefits', 'fee_scholarship_scheme_id'],
+                    ['fee_student_benefits', 'fee_scholarship_scheme_id'],
+                    ['fee_adjustments', 'fee_scholarship_scheme_id'],
+                ]);
+
+                $scope = $row->college_name
+                    ? 'College · '.$row->college_name.' · '.($row->college_program_name ?: 'Program Offering')
+                    : 'University · '.($row->university_program_name ?: 'All Programs');
+
+                return [
+                    'id' => (int) $row->id,
+                    'code' => $row->code,
+                    'name' => $scope.' · '.($row->session_name ?: 'Session').' · '.$row->name,
+                    'status' => $row->status,
+                    'kind' => 'FEE_SCHOLARSHIP_SCHEME',
+                    'dependencies' => [
+                        'fee_head_mappings' => $headMappings,
+                        'reservation_category_mappings' => $categoryMappings,
+                    ],
+                    'blocked' => count($operationalRefs) > 0,
+                    'blocking_references' => $operationalRefs,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupFeeScholarshipScheme(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_scholarship_schemes')) {
+            abort(404);
+        }
+
+        $record = DB::table('fee_scholarship_schemes')
+            ->where('id', $id)
+            ->where('university_id', $universityId)
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        $operationalRefs = $this->downstreamReferences($id, [
+            ['fee_scholarship_allocations', 'fee_scholarship_scheme_id'],
+            ['fee_scholarship_allocations', 'scholarship_scheme_id'],
+            ['fee_scholarship_applications', 'fee_scholarship_scheme_id'],
+            ['fee_scholarship_sanctions', 'fee_scholarship_scheme_id'],
+            ['student_fee_benefits', 'fee_scholarship_scheme_id'],
+            ['fee_student_benefits', 'fee_scholarship_scheme_id'],
+            ['fee_adjustments', 'fee_scholarship_scheme_id'],
+        ]);
+
+        if (count($operationalRefs) > 0) {
+            throw ValidationException::withMessages([
+                'record' => 'This Scholarship / Benefit Scheme is already used by student financial-benefit activity. Clean the downstream test transaction first.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $headMappings = $this->countIfExists('fee_scholarship_scheme_heads', 'fee_scholarship_scheme_id', (int) $record->id);
+            $categoryMappings = $this->countIfExists('fee_scholarship_scheme_categories', 'fee_scholarship_scheme_id', (int) $record->id);
+
+            if (Schema::hasTable('fee_scholarship_scheme_heads')) {
+                DB::table('fee_scholarship_scheme_heads')
+                    ->where('fee_scholarship_scheme_id', $record->id)
+                    ->delete();
+            }
+            if (Schema::hasTable('fee_scholarship_scheme_categories')) {
+                DB::table('fee_scholarship_scheme_categories')
+                    ->where('fee_scholarship_scheme_id', $record->id)
+                    ->delete();
+            }
+            DB::table('fee_scholarship_schemes')->where('id', $record->id)->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'deleted_fee_head_mappings' => $headMappings,
+                'deleted_reservation_category_mappings' => $categoryMappings,
+            ];
+
+            $this->audit(
+                'TEST_FEE_SCHOLARSHIP_SCHEME_CLEANED',
+                'test_data_cleanup',
+                (int) $record->id,
+                $result,
+                $actorId
+            );
+
             return $result;
         });
     }

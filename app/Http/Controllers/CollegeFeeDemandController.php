@@ -8,6 +8,7 @@ use App\Models\CollegeProgramOffering;
 use App\Models\FeeDemand;
 use App\Services\AcademicPolicyResolverService;
 use App\Services\ApplicableFeeDemandService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -51,20 +52,6 @@ class CollegeFeeDemandController extends Controller
                     'program_code' => $offering->programTemplate?->code,
                     'session' => $offering->academicSession?->name,
                     'curriculum_id' => $offering->curriculum_id,
-                    'confirmed_admissions' => Admission::query()
-                        ->with('application:id,candidate_name,application_no')
-                        ->where('college_id', $college->id)
-                        ->where('status', 'CONFIRMED')
-                        ->whereHas('intake', fn ($q) => $q->where('college_program_offering_id', $offering->id))
-                        ->orderBy('id')
-                        ->get()
-                        ->map(fn (Admission $admission) => [
-                            'id' => $admission->id,
-                            'admission_no' => $admission->admission_no,
-                            'candidate_name' => $admission->application?->candidate_name,
-                            'application_no' => $admission->application?->application_no,
-                        ])
-                        ->values(),
                     'academic_policy' => $policy ? [
                         'id' => $policy->id,
                         'name' => $policy->name,
@@ -117,6 +104,48 @@ class CollegeFeeDemandController extends Controller
                 'cancel' => $request->user()->hasCollegePermission('college_fee_demand.cancel', $college->id),
             ],
         ]);
+    }
+
+    public function eligibleAdmissions(Request $request, College $college): JsonResponse
+    {
+        $this->auth($request, $college, 'college_fee_demand.view');
+
+        $validated = $request->validate([
+            'offering_id' => ['required', 'integer'],
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+        ]);
+
+        $offering = CollegeProgramOffering::query()
+            ->where('college_id', $college->id)
+            ->where('status', 'ACTIVE')
+            ->findOrFail((int) $validated['offering_id']);
+
+        $search = trim($validated['q']);
+
+        $admissions = Admission::query()
+            ->with('application:id,candidate_name,application_no')
+            ->where('college_id', $college->id)
+            ->where('status', 'CONFIRMED')
+            ->whereHas('intake', fn ($q) => $q->where('college_program_offering_id', $offering->id))
+            ->where(function ($query) use ($search) {
+                $query->where('admission_no', 'like', '%'.$search.'%')
+                    ->orWhereHas('application', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('candidate_name', 'like', '%'.$search.'%')
+                            ->orWhere('application_no', 'like', '%'.$search.'%');
+                    });
+            })
+            ->orderBy('admission_no')
+            ->limit(30)
+            ->get()
+            ->map(fn (Admission $admission) => [
+                'id' => $admission->id,
+                'admission_no' => $admission->admission_no,
+                'application_no' => $admission->application?->application_no,
+                'candidate_name' => $admission->application?->candidate_name,
+            ])
+            ->values();
+
+        return response()->json(['data' => $admissions]);
     }
 
     public function store(Request $request, College $college, ApplicableFeeDemandService $service): RedirectResponse
@@ -194,16 +223,23 @@ class CollegeFeeDemandController extends Controller
             $policy
         );
 
-        $message = $result['label'].': '.$result['created'].' demand(s) generated';
-        if ($result['skipped']) {
-            $message .= ', '.$result['skipped'].' skipped because no new applicable charge remained';
-        }
-        if ($result['errors']) {
-            $message .= '. '.count($result['errors']).' candidate(s) could not be generated.';
+        if ($result['created'] === 0 && $result['skipped'] > 0 && ! $result['errors']) {
+            $message = $result['label'].': no new demands generated. '
+                .$result['skipped'].' eligible candidate(s) skipped because all applicable fee items are already covered by active demand(s).';
+            $type = 'info';
+        } else {
+            $message = $result['label'].': '.$result['created'].' demand(s) generated';
+            if ($result['skipped']) {
+                $message .= ', '.$result['skipped'].' skipped because all applicable fee items are already covered by active demand(s)';
+            }
+            if ($result['errors']) {
+                $message .= '. '.count($result['errors']).' candidate(s) could not be generated.';
+            }
+            $type = $result['errors'] ? 'warning' : 'success';
         }
 
         return back()->with('toast', [
-            'type' => $result['errors'] ? 'warning' : 'success',
+            'type' => $type,
             'message' => $message,
         ]);
     }
@@ -243,7 +279,7 @@ class CollegeFeeDemandController extends Controller
             ->firstOrFail();
 
         $admission = Admission::query()
-            ->with(['intake.offering'])
+            ->with(['intake.offering', 'application'])
             ->whereKey($validated['admission_id'])
             ->where('college_id', $college->id)
             ->where('status', 'CONFIRMED')
@@ -264,16 +300,31 @@ class CollegeFeeDemandController extends Controller
             }
         }
 
-        $demand = $service->generateIndividual(
-            $college,
-            $offering,
-            $admission,
-            $validated['purpose'],
-            $validated['basis_group'],
-            (int) $validated['period_no'],
-            $request->user()->id,
-            $policy
-        );
+        try {
+            $demand = $service->generateIndividual(
+                $college,
+                $offering,
+                $admission,
+                $validated['purpose'],
+                $validated['basis_group'],
+                (int) $validated['period_no'],
+                $request->user()->id,
+                $policy
+            );
+        } catch (ValidationException $e) {
+            $message = (string) collect($e->errors())->flatten()->first();
+
+            if (str_contains($message, 'No new applicable fee item remains')) {
+                $candidate = $admission->application?->candidate_name ?: $admission->admission_no;
+
+                return back()->with('toast', [
+                    'type' => 'info',
+                    'message' => 'No new demand created for '.$candidate.'. All applicable fee items in the selected billing period are already covered by active demand(s).',
+                ]);
+            }
+
+            throw $e;
+        }
 
         return back()->with('toast', [
             'type' => 'success',
