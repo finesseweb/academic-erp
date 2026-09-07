@@ -30,6 +30,7 @@ class CurriculumCreditSummaryService
                     'id',
                     'name',
                     'credits',
+                    'credit_counting',
                     'selection_mode',
                     'min_selection',
                     'max_selection',
@@ -50,17 +51,19 @@ class CurriculumCreditSummaryService
                 }
 
                 $creditValue = $credits ?? 0.0;
+                $isCountable = strtoupper((string) ($slot->credit_counting ?? 'COUNTABLE')) === 'COUNTABLE';
+                $countableCreditValue = $isCountable ? $creditValue : 0.0;
                 $selectionMode = strtoupper((string) $slot->selection_mode);
 
                 if ($selectionMode === 'CHOICE') {
                     $min = (int) ($slot->min_selection ?? 0);
                     $max = (int) ($slot->max_selection ?? 0);
 
-                    $slotRequiredCredits = $creditValue * $min;
-                    $slotMaximumCredits = $creditValue * $max;
+                    $slotRequiredCredits = $countableCreditValue * $min;
+                    $slotMaximumCredits = $countableCreditValue * $max;
                 } else {
-                    $slotRequiredCredits = $creditValue;
-                    $slotMaximumCredits = $creditValue;
+                    $slotRequiredCredits = $countableCreditValue;
+                    $slotMaximumCredits = $countableCreditValue;
                 }
 
                 $requiredCredits += $slotRequiredCredits;
@@ -70,6 +73,7 @@ class CurriculumCreditSummaryService
                     'id' => (int) $slot->id,
                     'name' => $slot->name,
                     'credits' => $credits,
+                    'credit_counting' => $slot->credit_counting ?? 'COUNTABLE',
                     'selection_mode' => $slot->selection_mode,
                     'min_selection' => $slot->min_selection,
                     'max_selection' => $slot->max_selection,

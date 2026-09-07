@@ -223,6 +223,7 @@ class CurriculumCloneService
             'course_category_id' => $sourceSlot->course_category_id,
             'course_type_id' => $sourceSlot->course_type_id,
             'credits' => $sourceSlot->credits,
+            'credit_counting' => $sourceSlot->credit_counting,
             'name' => $overrides['name'] ?? $sourceSlot->name,
             'display_order' => $overrides['display_order']
                 ?? $sourceSlot->display_order,

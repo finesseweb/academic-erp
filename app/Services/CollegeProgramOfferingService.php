@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\College;
 use App\Models\CollegeProgramOffering;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class CollegeProgramOfferingService
@@ -54,6 +55,20 @@ class CollegeProgramOfferingService
         $this->validateAcademicReferences($college, $data);
         $this->assertUnique($college, $data, $offering->id);
 
+        if (
+            Schema::hasTable('batches')
+            && DB::table('batches')->where('college_program_offering_id', $offering->id)->exists()
+            && (
+                (int) $offering->program_template_id !== (int) $data['program_template_id']
+                || (int) $offering->curriculum_id !== (int) $data['curriculum_id']
+                || (int) $offering->academic_session_id !== (int) $data['academic_session_id']
+            )
+        ) {
+            throw ValidationException::withMessages([
+                'program_template_id' => 'This Program Offering already has Batch records. Its Program, Curriculum and Academic Session are now operationally locked.',
+            ]);
+        }
+
         return DB::transaction(function () use ($offering, $college, $data, $actorId, $ip) {
             $before = $offering->toArray();
             $offering->update([...$data, 'updated_by' => $actorId]);
@@ -87,6 +102,19 @@ class CollegeProgramOfferingService
                 'program_template_id' => $offering->program_template_id,
                 'curriculum_id' => $offering->curriculum_id,
                 'academic_session_id' => $offering->academic_session_id,
+            ]);
+        }
+
+        if (
+            $status === 'INACTIVE'
+            && Schema::hasTable('batches')
+            && DB::table('batches')
+                ->where('college_program_offering_id', $offering->id)
+                ->where('status', 'ACTIVE')
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'status' => 'Cannot deactivate this Program Offering because an ACTIVE Batch depends on it. Deactivate the Batch first.',
             ]);
         }
 

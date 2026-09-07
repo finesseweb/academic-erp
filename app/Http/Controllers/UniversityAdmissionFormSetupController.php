@@ -11,6 +11,7 @@ use App\Models\Curriculum;
 use App\Models\Degree;
 use App\Models\DegreeLevel;
 use App\Models\ProgramTemplate;
+use App\Models\ReservationCategory;
 use App\Models\University;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -173,6 +174,7 @@ class UniversityAdmissionFormSetupController extends Controller
             'college_admission_form_panel_id'=>['nullable','integer','exists:college_admission_form_panels,id'],
             'label'=>['required','string','max:180'],'field_key'=>['required','string','max:100','regex:/^[a-z][a-z0-9_]*$/'],
             'field_type'=>['required',Rule::in(['TEXT','NUMBER','DATE','EMAIL','PHONE','TEXTAREA','SELECT','RADIO','CHECKBOX','MULTISELECT','FILE','IMAGE','YES_NO'])],
+            'system_purpose'=>['nullable',Rule::in(['CANDIDATE_RESERVATION_CATEGORY','CANDIDATE_PROFILE_PHOTO'])],
             'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999'],
             'options'=>['nullable','string','max:5000'],'max_kb'=>['nullable','integer','min:1','max:51200'],'extensions'=>['nullable','string','max:500'],
             'condition_source_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
@@ -182,21 +184,40 @@ class UniversityAdmissionFormSetupController extends Controller
             'program_template_id'=>['nullable','integer','exists:program_templates,id'],'curriculum_id'=>['nullable','integer','exists:curricula,id'],
         ]);
         if ($step->fields()->where('field_key',$data['field_key'])->exists()) throw ValidationException::withMessages(['field_key'=>'This field key already exists in the step.']);
-        if (in_array($data['field_type'],['SELECT','RADIO','CHECKBOX','MULTISELECT'],true) && blank($data['options']??null)) throw ValidationException::withMessages(['options'=>'Add at least one option for this field type.']);
+        if (($data['system_purpose'] ?? null) === 'CANDIDATE_RESERVATION_CATEGORY') {
+            if ($data['field_type'] !== 'SELECT') throw ValidationException::withMessages(['field_type'=>'Candidate Reservation Category must use Dropdown input.']);
+        } elseif (($data['system_purpose'] ?? null) === 'CANDIDATE_PROFILE_PHOTO') {
+            if ($data['field_type'] !== 'IMAGE') throw ValidationException::withMessages(['field_type'=>'Candidate Profile Photo must use Image input.']);
+        } elseif (in_array($data['field_type'],['SELECT','RADIO','CHECKBOX','MULTISELECT'],true) && blank($data['options']??null)) {
+            throw ValidationException::withMessages(['options'=>'Add at least one option for this field type.']);
+        }
+        if (filled($data['system_purpose'] ?? null) && CollegeAdmissionFormField::query()->where('system_purpose',$data['system_purpose'])->whereHas('step',fn($q)=>$q->where('college_admission_form_template_id',$template->id))->exists()) throw ValidationException::withMessages(['system_purpose'=>'This system field is already configured in this University template.']);
         $this->assertUniversityFieldScope($template, $data);
         if (filled($data['college_admission_form_panel_id'] ?? null) && ! CollegeAdmissionFormPanel::query()->whereKey($data['college_admission_form_panel_id'])->where('college_admission_form_step_id',$step->id)->exists()) throw ValidationException::withMessages(['college_admission_form_panel_id'=>'Selected panel is outside this step.']);
         $sourceField = $this->conditionSource($template, $data['condition_source_field_id'] ?? null);
         if ($sourceField && in_array($sourceField->field_type, ['FILE','IMAGE'], true)) throw ValidationException::withMessages(['condition_source_field_id'=>'File/Image fields cannot be used as a condition source.']);
         if ($sourceField && ! in_array($data['condition_operator'] ?? 'EQUALS', ['IS_EMPTY','IS_NOT_EMPTY'], true) && blank($data['condition_values'] ?? null)) throw ValidationException::withMessages(['condition_values'=>'Enter the value that should make this field appear.']);
         $fieldRuleService->assertConfiguration($template, $step, $data['field_type'], $data);
-        $field=DB::transaction(function()use($fieldRuleService,$step,$data,$sourceField){
+        $field=DB::transaction(function()use($fieldRuleService,$step,$template,$data,$sourceField){
             $field=$step->fields()->create([
                 'college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,
-                'field_key'=>$data['field_key'],'label'=>trim($data['label']),'field_type'=>$data['field_type'],'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,
+                'field_key'=>$data['field_key'],'label'=>trim($data['label']),'field_type'=>$data['field_type'],'system_purpose'=>$data['system_purpose']??null,'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,
                 'is_required'=>(bool)($data['is_required']??false),'is_locked'=>true,'display_order'=>$data['display_order']??(($step->fields()->max('display_order')??0)+10),
                 'validation_rules'=>$fieldRuleService->intrinsicRules($data, $data['field_type']),'status'=>'ACTIVE',
             ]);
-            $options = app(CollegeAdmissionFormOptionService::class)->build($data['field_type'], $data['options'] ?? null);
+            $options = ($data['system_purpose'] ?? null) === 'CANDIDATE_RESERVATION_CATEGORY'
+                ? collect([['General / Unreserved','GENERAL']])->concat(
+                    ReservationCategory::query()
+                        ->where('university_id',$template->university_id)
+                        ->where('status','ACTIVE')
+                        ->where('nature','VERTICAL')
+                        ->whereRaw("LOWER(TRIM(code)) NOT IN ('general','gen','open','unreserved','ur')")
+                        ->orderBy('display_order')
+                        ->orderBy('name')
+                        ->get()
+                        ->map(fn($c)=>[$c->name,$c->code])
+                )->values()->all()
+                : app(CollegeAdmissionFormOptionService::class)->build($data['field_type'], $data['options'] ?? null);
             foreach ($options as $i => [$label, $value]) {
                 $field->options()->create(['label'=>$label,'value'=>$value,'display_order'=>($i+1)*10,'is_active'=>true]);
             }
@@ -283,17 +304,21 @@ class UniversityAdmissionFormSetupController extends Controller
         $fieldRuleService = app(CollegeAdmissionFieldRuleService::class); $data=$request->validate([
             ...$fieldRuleService->requestRules(),
             'college_admission_form_panel_id'=>['nullable','integer','exists:college_admission_form_panels,id'],
-            'label'=>['required','string','max:180'],'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999'],
+            'label'=>['required','string','max:180'],'system_purpose'=>['nullable',Rule::in(['CANDIDATE_RESERVATION_CATEGORY','CANDIDATE_PROFILE_PHOTO'])],'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999'],
             'condition_source_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
             'condition_operator'=>['nullable',Rule::in(['EQUALS','NOT_EQUALS','IN','NOT_IN','CONTAINS','IS_EMPTY','IS_NOT_EMPTY'])],
             'condition_values'=>['nullable','string','max:5000'],
         ]);
         if(filled($data['college_admission_form_panel_id']??null) && ! $step->panels()->whereKey($data['college_admission_form_panel_id'])->exists()) throw ValidationException::withMessages(['college_admission_form_panel_id'=>'Selected panel is outside this step.']);
+        $purpose = $data['system_purpose'] ?? null;
+        if ($purpose === 'CANDIDATE_RESERVATION_CATEGORY' && $field->field_type !== 'SELECT') throw ValidationException::withMessages(['system_purpose'=>'Candidate Reservation Category can only be assigned to a Dropdown field.']);
+        if ($purpose === 'CANDIDATE_PROFILE_PHOTO' && $field->field_type !== 'IMAGE') throw ValidationException::withMessages(['system_purpose'=>'Candidate Profile Photo can only be assigned to an Image field.']);
+        if (filled($purpose) && CollegeAdmissionFormField::query()->where('system_purpose',$purpose)->whereKeyNot($field->id)->whereHas('step',fn($q)=>$q->where('college_admission_form_template_id',$template->id))->exists()) throw ValidationException::withMessages(['system_purpose'=>'This system field is already configured in this University template.']);
         $sourceField = $this->conditionSource($template, $data['condition_source_field_id'] ?? null);
         $this->assertConditionConfiguration($field, $sourceField, $data);
         $fieldRuleService->assertConfiguration($template, $step, $field->field_type, $data, $field);
         DB::transaction(function () use ($field, $fieldRuleService, $data, $sourceField) {
-            $field->update(['college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,'label'=>trim($data['label']),'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??$field->display_order,'validation_rules'=>$fieldRuleService->intrinsicRules($data, $field->field_type, $field->validation_rules??[])]);
+            $field->update(['college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,'label'=>trim($data['label']),'system_purpose'=>$data['system_purpose']??null,'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??$field->display_order,'validation_rules'=>$fieldRuleService->intrinsicRules($data, $field->field_type, $field->validation_rules??[])]);
             $fieldRuleService->sync($field,$data);
             $this->syncCondition($field, $sourceField, $data);
         });

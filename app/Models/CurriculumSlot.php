@@ -13,6 +13,7 @@ class CurriculumSlot extends Model
         'course_category_id',
         'course_type_id',
         'credits',
+        'credit_counting',
         'name',
         'display_order',
         'selection_mode',

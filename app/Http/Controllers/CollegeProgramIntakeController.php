@@ -48,6 +48,23 @@ class CollegeProgramIntakeController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $activeBatchCounts = DB::table('batches')
+            ->selectRaw('college_program_offering_id, COUNT(*) as total')
+            ->where('status', 'ACTIVE')
+            ->whereIn(
+                'college_program_offering_id',
+                $intakes->pluck('college_program_offering_id')->filter()->values()
+            )
+            ->groupBy('college_program_offering_id')
+            ->pluck('total', 'college_program_offering_id');
+
+        $intakes->each(function ($intake) use ($activeBatchCounts) {
+            $intake->setAttribute(
+                'active_batch_count',
+                (int) ($activeBatchCounts[$intake->college_program_offering_id] ?? 0)
+            );
+        });
+
         $offeringIdsWithIntake = $intakes
             ->pluck('college_program_offering_id');
 

@@ -8,6 +8,7 @@ use App\Models\CollegeAdmissionFormMapping;
 use App\Models\CollegeAdmissionFormTemplate;
 use App\Models\CollegeApplicationFeeRule;
 use App\Models\ProgramTemplate;
+use App\Models\ReservationCategory;
 
 class CollegeAdmissionFormResolver
 {
@@ -132,7 +133,7 @@ class CollegeAdmissionFormResolver
                 'source' => $template->owner_scope_type,
                 'panels' => $step->panels->where('status','ACTIVE')->map(fn($panel)=>['id'=>$panel->id,'title'=>$panel->title,'code'=>$panel->code,'description'=>$panel->description,'display_order'=>$panel->display_order])->values(),
                 'fields' => $fields->map(fn ($field) => [
-                    'id' => $field->id, 'field_key' => $field->field_key, 'label' => $field->label, 'field_type' => $field->field_type,
+                    'id' => $field->id, 'field_key' => $field->field_key, 'label' => $field->label, 'field_type' => $field->field_type, 'system_purpose' => $field->system_purpose,
                     'placeholder' => $field->placeholder, 'help_text' => $field->help_text, 'is_required' => $field->is_required, 'college_admission_form_panel_id'=>$field->college_admission_form_panel_id,
                     'validation_rules' => $field->validation_rules, 'condition_match_mode' => $field->condition_match_mode ?? 'ALL',
                     'conditions' => $field->conditions->where('is_active', true)->map(fn ($condition) => [
@@ -157,7 +158,19 @@ class CollegeAdmissionFormResolver
                         'trigger_values' => array_values($field->copyRule->trigger_values ?? []),
                         'read_only' => (bool) $field->copyRule->read_only,
                     ] : null,
-                    'options' => $field->options->where('is_active', true)->map(fn ($o) => ['value' => $o->value, 'label' => $o->label])->values(),
+                    'options' => $field->system_purpose === 'CANDIDATE_RESERVATION_CATEGORY'
+                        ? collect([['value'=>'GENERAL','label'=>'General / Unreserved']])->concat(
+                            ReservationCategory::query()
+                                ->where('university_id',$template->university_id)
+                                ->where('status','ACTIVE')
+                                ->where('nature','VERTICAL')
+                                ->whereRaw("LOWER(TRIM(code)) NOT IN ('general','gen','open','unreserved','ur')")
+                                ->orderBy('display_order')
+                                ->orderBy('name')
+                                ->get(['code','name'])
+                                ->map(fn($c)=>['value'=>$c->code,'label'=>$c->name.' · '.$c->code])
+                        )->values()
+                        : $field->options->where('is_active', true)->map(fn ($o) => ['value' => $o->value, 'label' => $o->label])->values(),
                 ])->values(),
             ];
         })->filter(fn ($step) => count($step['fields']) > 0)->values();

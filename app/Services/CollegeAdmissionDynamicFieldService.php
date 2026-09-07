@@ -6,6 +6,7 @@ use App\Models\CollegeAdmissionApplication;
 use App\Models\CollegeAdmissionCycle;
 use App\Models\CollegeAdmissionFormField;
 use App\Models\CollegeAdmissionFormTemplate;
+use App\Models\ReservationCategory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -59,7 +60,16 @@ class CollegeAdmissionDynamicFieldService
                 continue;
             }
 
-            $allowed = $field->options->where('is_active', true)->pluck('value')->all();
+            $allowed = $field->system_purpose === 'CANDIDATE_RESERVATION_CATEGORY'
+                ? collect(['GENERAL'])->concat(
+                    ReservationCategory::query()
+                        ->where('university_id',$template->university_id)
+                        ->where('status','ACTIVE')
+                        ->where('nature','VERTICAL')
+                        ->whereRaw("LOWER(TRIM(code)) NOT IN ('general','gen','open','unreserved','ur')")
+                        ->pluck('code')
+                )->values()->all()
+                : $field->options->where('is_active', true)->pluck('value')->all();
             if (in_array($field->field_type, ['SELECT','RADIO','YES_NO'], true) && $allowed && ! in_array((string) $value, $allowed, true)) {
                 $errors["custom_fields.{$field->id}"] = "Invalid option selected for {$field->label}.";
                 continue;

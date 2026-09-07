@@ -200,8 +200,9 @@ export default function CurriculumCourseMappings({
                 form.setData({
                     discipline_id: '',
                     specialization_id: '',
+                    source_discipline_id: '',
                     course_id: '',
-                });
+                        });
                 setEditing(null);
                 setOpen(false);
             },

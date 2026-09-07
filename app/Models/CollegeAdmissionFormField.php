@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CollegeAdmissionFormField extends Model
 {
-    protected $fillable = ['college_admission_form_step_id','college_admission_form_panel_id','field_key','label','field_type','placeholder','help_text','is_required','is_locked','display_order','validation_rules','visibility_rules','condition_match_mode','status'];
+    protected $fillable = ['college_admission_form_step_id','college_admission_form_panel_id','field_key','label','field_type','system_purpose','placeholder','help_text','is_required','is_locked','display_order','validation_rules','visibility_rules','condition_match_mode','status'];
     protected $casts = ['is_required'=>'boolean','is_locked'=>'boolean','validation_rules'=>'array','visibility_rules'=>'array'];
     public function panel(): BelongsTo { return $this->belongsTo(CollegeAdmissionFormPanel::class, 'college_admission_form_panel_id'); }
     public function step(): BelongsTo { return $this->belongsTo(CollegeAdmissionFormStep::class, 'college_admission_form_step_id'); }

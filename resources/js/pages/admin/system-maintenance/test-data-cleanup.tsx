@@ -118,8 +118,15 @@ type Props = {
         applicants: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
+        fee_student_benefits: Entity[];
+        fee_demands: Entity[];
+        fee_scholarship_schemes: Entity[];
+        fee_structures: Entity[];
+        fee_heads: Entity[];
+        fee_categories: Entity[];
         college_admission_document_verifications: Entity[];
         college_admission_seat_allocations: Entity[];
+        admissions: Entity[];
         college_admission_scores: Entity[];
         college_admission_merit_rosters: Entity[];
         college_admission_applications: Entity[];
@@ -127,6 +134,9 @@ type Props = {
         college_program_reservation_plans: Entity[];
         reservation_categories: Entity[];
         college_program_intakes: Entity[];
+        sections: Entity[];
+        college_academic_calendars: Entity[];
+        batches: Entity[];
         college_program_offerings: Entity[];
         academic_calendars: Entity[];
         approval_workflows: Entity[];
@@ -149,8 +159,15 @@ type TabKey =
     | 'academic_policies'
     | 'college_admission_form_templates'
     | 'college_application_fee_rules'
+    | 'fee_student_benefits'
+    | 'fee_demands'
+    | 'fee_scholarship_schemes'
+    | 'fee_structures'
+    | 'fee_heads'
+    | 'fee_categories'
     | 'college_admission_document_verifications'
     | 'college_admission_seat_allocations'
+    | 'admissions'
     | 'college_admission_scores'
     | 'college_admission_merit_rosters'
     | 'college_admission_applications'
@@ -158,6 +175,9 @@ type TabKey =
     | 'college_program_reservation_plans'
     | 'reservation_categories'
     | 'college_program_intakes'
+    | 'sections'
+    | 'college_academic_calendars'
+    | 'batches'
     | 'college_program_offerings'
     | 'academic_calendars'
     | 'approval_workflows'
@@ -193,8 +213,15 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'applicants', label: 'Applicants' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
+    { key: 'fee_student_benefits', label: 'Student Benefits / Sanctions' },
+    { key: 'fee_demands', label: 'Fee Demands' },
+    { key: 'fee_scholarship_schemes', label: 'Scholarship / Benefits' },
+    { key: 'fee_structures', label: 'Fee Structures' },
+    { key: 'fee_heads', label: 'Fee Heads' },
+    { key: 'fee_categories', label: 'Fee Categories' },
     { key: 'college_admission_document_verifications', label: 'Document Verification' },
     { key: 'college_admission_seat_allocations', label: 'Seat Allocation / Consumption' },
+    { key: 'admissions', label: 'Admission Confirmation / Approval' },
     { key: 'college_admission_scores', label: 'Score Capture / Normalization' },
     { key: 'college_admission_merit_rosters', label: 'Generated Merit / Roster' },
     { key: 'college_admission_applications', label: 'Admission Applications' },
@@ -202,6 +229,9 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'college_program_reservation_plans', label: 'Reservation / Seat Distribution' },
     { key: 'college_program_intakes', label: 'Intake / Seat Capacity' },
     { key: 'reservation_categories', label: 'Reservation Categories' },
+    { key: 'sections', label: 'Sections' },
+    { key: 'college_academic_calendars', label: 'College Academic Calendars' },
+    { key: 'batches', label: 'Batches' },
     { key: 'college_program_offerings', label: 'Program Offerings' },
     { key: 'academic_calendars', label: 'Academic Calendars' },
     { key: 'academic_policies', label: 'Academic Policies' },
@@ -232,6 +262,7 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
             'college_admission_selection_rules',
             'college_admission_document_verifications',
             'college_admission_seat_allocations',
+            'admissions',
         ],
     },
     {
@@ -243,6 +274,17 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
             'college_program_intakes',
             'reservation_categories',
             'college_program_reservation_plans',
+        ],
+    },
+    {
+        label: 'Fee Management',
+        keys: [
+            'fee_student_benefits',
+            'fee_demands',
+            'fee_scholarship_schemes',
+            'fee_structures',
+            'fee_heads',
+            'fee_categories',
         ],
     },
     {
@@ -260,6 +302,9 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
             'curriculum',
             'academic_policies',
             'academic_calendars',
+            'college_academic_calendars',
+            'batches',
+            'sections',
         ],
     },
 ];

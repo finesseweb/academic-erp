@@ -93,6 +93,7 @@ class CollegeAdmissionSeatAllocationController extends Controller
         $this->authorizeCollege($request, $college, 'college_admission_seat_allocation.allocate');
 
         $data = $request->validate([
+            'candidate_reservation_category_selection' => ['nullable', 'string', 'max:80'],
             'physical_reservation_category_id' => ['nullable', 'integer'],
             'horizontal_category_ids' => ['nullable', 'array'],
             'horizontal_category_ids.*' => ['integer'],

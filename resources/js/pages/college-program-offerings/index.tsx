@@ -35,6 +35,7 @@ type Offering = {
     curriculum_id: number;
     academic_session_id: number;
     status: 'ACTIVE' | 'INACTIVE';
+    active_batch_count: number;
     program_template: Option;
     curriculum: Option & { version: string };
     academic_session: Session & { starts_on: string; ends_on: string };
@@ -316,6 +317,25 @@ export default function CollegeProgramOfferings({
 
 function StatusDialog({ collegeId, offering }: { collegeId: number; offering: Offering }) {
     const activating = offering.status !== 'ACTIVE';
+    const blockedByActiveBatch = !activating && offering.active_batch_count > 0;
+    const blockedReason = blockedByActiveBatch
+        ? `Cannot deactivate this Program Offering because ${offering.active_batch_count} ACTIVE Batch${offering.active_batch_count === 1 ? '' : 'es'} depend${offering.active_batch_count === 1 ? 's' : ''} on it. Deactivate the Batch first.`
+        : null;
+
+    if (blockedByActiveBatch) {
+        return (
+            <span title={blockedReason ?? undefined}>
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Deactivate offering unavailable"
+                    disabled
+                >
+                    <Power />
+                </Button>
+            </span>
+        );
+    }
 
     return (
         <Dialog>
@@ -332,18 +352,26 @@ function StatusDialog({ collegeId, offering }: { collegeId: number; offering: Of
                         : 'The offering remains in history but will not be available for new downstream setup while inactive.'}
                 </DialogDescription>
                 <Form action={`/college/${collegeId}/program-offerings/${offering.id}/status`} method="patch">
-                    {({ processing }) => (
-                        <DialogFooter>
+                    {({ processing, errors }) => (
+                        <div className="space-y-4">
                             <input type="hidden" name="status" value={activating ? 'ACTIVE' : 'INACTIVE'} />
-                            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                            <Button type="submit" disabled={processing}>
-                                {processing && <Spinner />}
-                                {processing ? 'Working...' : activating ? 'Activate' : 'Deactivate'}
-                            </Button>
-                        </DialogFooter>
+                            {errors.status && (
+                                <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                                    {errors.status}
+                                </p>
+                            )}
+                            <DialogFooter>
+                                <DialogClose asChild><Button type="button" variant="outline" disabled={processing}>Cancel</Button></DialogClose>
+                                <Button type="submit" disabled={processing}>
+                                    {processing && <Spinner />}
+                                    {processing ? 'Working...' : activating ? 'Activate' : 'Deactivate'}
+                                </Button>
+                            </DialogFooter>
+                        </div>
                     )}
                 </Form>
             </DialogContent>
         </Dialog>
     );
 }
+

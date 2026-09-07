@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CollegeProgramOffering extends Model
@@ -36,6 +37,11 @@ class CollegeProgramOffering extends Model
     public function academicSession(): BelongsTo
     {
         return $this->belongsTo(AcademicSession::class);
+    }
+
+    public function batches(): HasMany
+    {
+        return $this->hasMany(Batch::class, 'college_program_offering_id');
     }
 
     public function intake(): HasOne

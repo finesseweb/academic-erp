@@ -37,6 +37,7 @@ type Slot = {
     course_type_id: number | null;
     course_type_name: string;
     credits: string | number | null;
+    credit_counting: 'COUNTABLE' | 'NON_COUNTABLE';
     name: string;
     display_order: number;
     selection_mode: 'MANDATORY' | 'CHOICE';
@@ -121,6 +122,7 @@ export default function CurriculumSlots({
         course_category_id: '',
         course_type_id: '',
         credits: '',
+        credit_counting: 'COUNTABLE' as 'COUNTABLE' | 'NON_COUNTABLE',
         name: '',
         display_order: '',
         selection_mode: 'MANDATORY',
@@ -190,6 +192,7 @@ export default function CurriculumSlots({
             course_category_id: '',
             course_type_id: '',
             credits: '',
+            credit_counting: 'COUNTABLE',
             name: '',
             display_order: String(nextOrder),
             selection_mode: 'MANDATORY',
@@ -211,6 +214,7 @@ export default function CurriculumSlots({
                 slot.credits !== null
                     ? String(slot.credits)
                     : '',
+            credit_counting: slot.credit_counting ?? 'COUNTABLE',
             name: slot.name,
             display_order: String(slot.display_order),
             selection_mode: slot.selection_mode,
@@ -384,6 +388,9 @@ export default function CurriculumSlots({
                                             Credits
                                         </th>
                                         <th className="px-4 py-3">
+                                            Credit Treatment
+                                        </th>
+                                        <th className="px-4 py-3">
                                             Selection
                                         </th>
                                         <th className="px-4 py-3">Status</th>
@@ -414,6 +421,11 @@ export default function CurriculumSlots({
                                                 {slot.credits !== null
                                                     ? Number(slot.credits).toFixed(2)
                                                     : '—'}
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                {slot.credit_counting === 'NON_COUNTABLE'
+                                                    ? 'Non-countable'
+                                                    : 'Countable'}
                                             </td>
                                             <td className="px-4 py-4">
                                                 <div className="font-medium">
@@ -848,9 +860,35 @@ export default function CurriculumSlots({
                                     </p>
                                 )}
                                 <p className="text-xs text-muted-foreground">
-                                    Curriculum-specific credit value for this
-                                    Slot. Credit Summary is implemented in the
-                                    next milestone.
+                                    Curriculum-specific academic credit value for this Slot.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label htmlFor="credit_counting" className="text-sm font-medium">
+                                    Credit Treatment *
+                                </label>
+                                <Select
+                                    value={form.data.credit_counting}
+                                    onValueChange={(value: 'COUNTABLE' | 'NON_COUNTABLE') =>
+                                        form.setData('credit_counting', value)
+                                    }
+                                >
+                                    <SelectTrigger id="credit_counting" className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="COUNTABLE">Countable</SelectItem>
+                                        <SelectItem value="NON_COUNTABLE">Non-countable</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.credit_counting && (
+                                    <p className="text-xs text-destructive">
+                                        {form.errors.credit_counting}
+                                    </p>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    Non-countable keeps the Slot credit value visible, but excludes it from required / degree-credit totals.
                                 </p>
                             </div>
 

@@ -7,6 +7,7 @@ use App\Models\CollegeProgramIntake;
 use App\Models\CollegeProgramIntakeAllocation;
 use App\Models\CollegeProgramOffering;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class CollegeProgramIntakeService
@@ -318,6 +319,19 @@ class CollegeProgramIntakeService
     ): void {
         $this->assertOwned($intake, $college);
         $this->assertCollegeActive($college);
+
+        if (
+            $status === 'INACTIVE'
+            && Schema::hasTable('batches')
+            && DB::table('batches')
+                ->where('college_program_offering_id', $intake->college_program_offering_id)
+                ->where('status', 'ACTIVE')
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'intake' => 'Cannot deactivate this Intake / Seat Capacity because an ACTIVE Batch depends on it. Deactivate the Batch first.',
+            ]);
+        }
 
         if (
             $status === 'INACTIVE' &&
