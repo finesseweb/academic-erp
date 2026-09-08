@@ -4,6 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 type BulkContext = {
     key: string;
@@ -27,6 +30,8 @@ type Offering = {
     id: number;
     program: string;
     program_code: string;
+    degree: string | null;
+    degree_level: string | null;
     session: string;
     curriculum_id: number | null;
     confirmed_admissions?: ConfirmedAdmission[];
@@ -54,6 +59,18 @@ type DemandItem = {
     is_enrollment_clearance_required: boolean;
     installment_allowed: boolean;
     is_refundable: boolean;
+    benefit_adjustment_amount: string;
+    net_payable_amount: string;
+    installment_schedules: { id: number; installment_no: number; amount: string; due_date: string; status: string }[];
+};
+
+type BenefitAdjustment = {
+    id: number;
+    scheme_name: string;
+    scheme_code: string;
+    benefit_type: 'SCHOLARSHIP' | 'CONCESSION' | 'WAIVER';
+    sanctioned_amount: string;
+    decided_at: string | null;
 };
 
 type Demand = {
@@ -71,12 +88,65 @@ type Demand = {
     total_amount: string;
     mandatory_amount: string;
     enrollment_clearance_amount: string;
+    paid_amount: string;
+    adjusted_amount: string;
     outstanding_amount: string;
     status: string;
     generation_mode: string;
     generated_at: string;
+    benefit_adjustments: BenefitAdjustment[];
     items: DemandItem[];
 };
+
+
+const installmentMoney = (value: string | number, currency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(Number(value || 0));
+
+function InstallmentDialog({ collegeId, demand, item, canManage }: { collegeId: number; demand: Demand; item: DemandItem; canManage: boolean }) {
+    const existing = item.installment_schedules ?? [];
+    const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState<{ amount: string; due_date: string }[]>(existing.length ? existing.map(x => ({ amount: x.amount, due_date: x.due_date })) : [{ amount: '', due_date: '' }, { amount: '', due_date: '' }]);
+    const [processing, setProcessing] = useState(false);
+    const net = Number(item.net_payable_amount ?? item.amount);
+    const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const balanced = Math.abs(total - net) < 0.009;
+    const reset = () => setRows(existing.length ? existing.map(x => ({ amount: x.amount, due_date: x.due_date })) : [{ amount: '', due_date: '' }, { amount: '', due_date: '' }]);
+    const save = () => {
+        setProcessing(true);
+        router.post(`/college/${collegeId}/fee-demands/${demand.id}/items/${item.id}/installments`, { installments: rows }, {
+            preserveScroll: true,
+            onSuccess: () => setOpen(false),
+            onFinish: () => setProcessing(false),
+        });
+    };
+    return <Dialog open={open} onOpenChange={value => { setOpen(value); if (value) reset(); }}>
+        <DialogTrigger asChild><Button type="button" size="sm" variant="outline">{existing.length ? 'Manage Installments' : 'Set Installments'}</Button></DialogTrigger>
+        <DialogContent className="sm:!max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Installment Schedule · {item.fee_head_name}</DialogTitle><DialogDescription>{demand.candidate_name} · {demand.demand_no}. Schedule applies only to this installment-enabled Fee Head; gross demand is never split or rewritten.</DialogDescription></DialogHeader>
+            <div className="rounded-md border bg-muted/20 p-3 text-sm"><div className="flex flex-wrap justify-between gap-2"><span>Gross Item: <strong>{installmentMoney(item.amount, demand.currency)}</strong></span><span>Benefit: <strong>−{installmentMoney(item.benefit_adjustment_amount, demand.currency)}</strong></span><span>Net to schedule: <strong>{installmentMoney(item.net_payable_amount, demand.currency)}</strong></span></div></div>
+            <div className="space-y-3">{rows.map((row, index) => <div key={index} className="grid gap-3 rounded-md border p-3 sm:grid-cols-[90px_1fr_1fr_auto] sm:items-end"><div><Label>Installment</Label><div className="mt-2 text-sm font-medium">#{index + 1}</div></div><div className="space-y-2"><Label>Amount</Label><Input type="number" min="0.01" step="0.01" value={row.amount} onChange={e => setRows(old => old.map((x,i)=>i===index?{...x,amount:e.target.value}:x))}/></div><div className="space-y-2"><Label>Due Date</Label><DatePicker id={`installment-${item.id}-${index}`} name={`due_date_${index}`} value={row.due_date} onValueChange={value => setRows(old => old.map((x,i)=>i===index?{...x,due_date:value}:x))}/></div><Button type="button" variant="ghost" disabled={rows.length <= 2} onClick={()=>setRows(old=>old.filter((_,i)=>i!==index))}>Remove</Button></div>)}</div>
+            <Button type="button" variant="outline" disabled={rows.length >= 24} onClick={()=>setRows(old=>[...old,{amount:'',due_date:''}])}>Add Installment</Button>
+            <div className={`rounded-md border p-3 text-sm ${balanced ? '' : 'text-destructive'}`}>Scheduled total: <strong>{installmentMoney(total, demand.currency)}</strong> / {installmentMoney(net, demand.currency)}{!balanced && ' · Total must exactly match the current net payable amount.'}</div>
+            <DialogFooter><Button type="button" variant="outline" onClick={()=>setOpen(false)}>Cancel</Button><Button type="button" disabled={!canManage || processing || !balanced || rows.some(r=>!r.amount||!r.due_date)} onClick={save}>{processing?'Saving…':existing.length?'Replace Schedule':'Save Schedule'}</Button></DialogFooter>
+        </DialogContent>
+    </Dialog>;
+}
+
+type BulkInstallmentCandidate = { item_id:number; demand_no:string; admission_no:string; candidate_name:string; discipline:string; fee_head_code:string; fee_head_name:string; net_payable_amount:string; has_existing_schedule:boolean; eligible:boolean; reason:string|null };
+function BulkInstallmentPanel({collegeId,offering,context,canManage}:{collegeId:number;offering:Offering|undefined;context:BulkContext|null;canManage:boolean}){
+ const [data,setData]=useState<BulkInstallmentCandidate[]>([]),[head,setHead]=useState(''),[selected,setSelected]=useState<number[]>([]),[rows,setRows]=useState([{percentage:'50',due_date:''},{percentage:'50',due_date:''}]),[loading,setLoading]=useState(false),[applying,setApplying]=useState(false),[error,setError]=useState(''),[expandedDisciplines,setExpandedDisciplines]=useState<string[]>([]);
+ useEffect(()=>{setData([]);setHead('');setSelected([]);setError('');setExpandedDisciplines([])},[offering?.id,context?.key]);
+ const load=async()=>{if(!offering||!context)return;setLoading(true);setError('');try{const q=new URLSearchParams({offering_id:String(offering.id),purpose:context.purpose,basis_group:context.basis_group,period_no:String(context.period_no)}),r=await fetch(`/college/${collegeId}/fee-installments/bulk-preview?${q}`,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Could not load eligible Fee Demands.');const j=await r.json(),a=j.data??[],h=a[0]?.fee_head_code??'';setData(a);setHead(h);setSelected(a.filter((x:BulkInstallmentCandidate)=>x.eligible&&x.fee_head_code===h).map((x:BulkInstallmentCandidate)=>x.item_id));setExpandedDisciplines([])}catch(e){setError(e instanceof Error?e.message:'Preview failed.')}finally{setLoading(false)}};
+ const heads=Array.from(new Map(data.map(x=>[x.fee_head_code,x.fee_head_name])).entries()),visible=data.filter(x=>x.fee_head_code===head),eligible=visible.filter(x=>x.eligible),disciplines=Array.from(new Set(visible.map(x=>x.discipline))),pct=rows.reduce((a,r)=>a+Number(r.percentage||0),0),balanced=Math.abs(pct-100)<.009;
+ const chooseHead=(h:string)=>{setHead(h);setSelected(data.filter(x=>x.fee_head_code===h&&x.eligible).map(x=>x.item_id));setExpandedDisciplines([])};
+ const toggleDiscipline=(d:string)=>setExpandedDisciplines(old=>old.includes(d)?old.filter(x=>x!==d):[...old,d]);
+ const apply=()=>{if(!offering||!context)return;setApplying(true);router.post(`/college/${collegeId}/fee-installments/bulk`,{offering_id:offering.id,purpose:context.purpose,basis_group:context.basis_group,period_no:context.period_no,fee_head_code:head,selected_item_ids:selected,installments:rows},{preserveScroll:true,onSuccess:load,onFinish:()=>setApplying(false)})};
+ return <Card><CardHeader><CardTitle>Bulk Installment Schedule</CardTitle><p className="text-sm text-muted-foreground">Common schedule for all applicable students; individual schedule remains available for exceptions.</p></CardHeader><CardContent className="space-y-4"><div className="rounded-md border p-3 text-sm"><strong>Hierarchy:</strong> {offering?`${offering.degree_level??'—'} → ${offering.degree??'—'} → ${offering.program} → ${context?.label??'—'}`:'Select Program Offering above.'}</div><Button type="button" variant="outline" disabled={!canManage||!offering||!context||loading} onClick={load}>{loading?'Loading…':'Load Eligible Students'}</Button>{error&&<p className="text-sm text-destructive">{error}</p>}
+ {data.length>0&&<><div><Label>Installment-enabled Fee Head</Label><select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={head} onChange={e=>chooseHead(e.target.value)}>{heads.map(([c,n])=><option key={c} value={c}>{n} ({c})</option>)}</select></div><div className="flex flex-wrap gap-2"><Badge variant="outline">Scanned {visible.length}</Badge><Badge>Eligible {eligible.length}</Badge><Badge variant="outline">Selected {selected.length}</Badge><Badge variant="secondary">Existing {visible.filter(x=>x.has_existing_schedule).length}</Badge></div>
+ <div className="space-y-2 rounded-md border p-3"><Label>Common Schedule — percentage of each student's net payable</Label><p className="text-xs text-muted-foreground">Define the common installment schedule first. Student groups stay collapsed below so large cohorts do not push the schedule out of view.</p>{rows.map((r,i)=><div key={i} className="grid gap-2 sm:grid-cols-[70px_1fr_1fr_auto] sm:items-end"><span>#{i+1}</span><div><Label>Percentage</Label><Input type="number" min="0.01" max="100" step="0.01" value={r.percentage} onChange={e=>setRows(old=>old.map((x,j)=>j===i?{...x,percentage:e.target.value}:x))}/></div><div><Label>Due Date</Label><DatePicker id={`bulk-inst-${i}`} name={`bulk_due_${i}`} value={r.due_date} onValueChange={v=>setRows(old=>old.map((x,j)=>j===i?{...x,due_date:v}:x))}/></div><Button type="button" variant="ghost" disabled={rows.length<=2} onClick={()=>setRows(old=>old.filter((_,j)=>j!==i))}>Remove</Button></div>)}<Button type="button" variant="outline" onClick={()=>setRows(old=>[...old,{percentage:'',due_date:''}])} disabled={rows.length>=24}>Add Installment</Button><p className={balanced?'text-sm':'text-sm text-destructive'}>Total {pct.toFixed(2)}% / 100%</p></div>
+ <div className="space-y-2"><Label>Students by Discipline</Label>{disciplines.map(d=>{const group=visible.filter(x=>x.discipline===d),ids=group.filter(x=>x.eligible).map(x=>x.item_id),all=ids.length>0&&ids.every(id=>selected.includes(id)),expanded=expandedDisciplines.includes(d);return <div key={d} className="rounded-md border"><div className="flex items-center justify-between gap-3 bg-muted/20 p-2 text-sm font-medium"><label className="flex items-center gap-2"><input type="checkbox" checked={all} onChange={e=>setSelected(old=>e.target.checked?Array.from(new Set([...old,...ids])):old.filter(id=>!ids.includes(id)))}/>{d} ({ids.length} eligible)</label><Button type="button" size="sm" variant="ghost" onClick={()=>toggleDiscipline(d)}>{expanded?'Collapse':'Expand'} {expanded?'▲':'▼'}</Button></div>{expanded&&group.map(x=><label key={x.item_id} className={`flex flex-wrap items-center justify-between gap-2 border-t p-2 text-sm ${x.eligible?'':'opacity-60'}`}><span className="flex items-center gap-2"><input type="checkbox" disabled={!x.eligible} checked={selected.includes(x.item_id)} onChange={e=>setSelected(old=>e.target.checked?Array.from(new Set([...old,x.item_id])):old.filter(id=>id!==x.item_id))}/>{x.candidate_name} · {x.admission_no} · {x.demand_no}{x.has_existing_schedule&&<Badge variant="secondary">Existing schedule</Badge>}</span><span>{x.eligible?installmentMoney(x.net_payable_amount):x.reason}</span></label>)}</div>})}</div>
+ <div className="flex justify-end"><Button disabled={!canManage||applying||!selected.length||!balanced||rows.some(r=>!r.percentage||!r.due_date)} onClick={apply}>{applying?'Applying…':`Apply to ${selected.length} Student${selected.length===1?'':'s'}`}</Button></div></>}
+ </CardContent></Card>
+}
 
 export default function Page({
     college,
@@ -87,7 +157,7 @@ export default function Page({
     college: { id: number; name: string; code: string };
     offerings: Offering[];
     demands: Demand[];
-    can: { generate: boolean; cancel: boolean };
+    can: { generate: boolean; cancel: boolean; manage_installments: boolean };
 }) {
     const [offeringId, setOfferingId] = useState(offerings[0]?.id ?? 0);
     const [purpose, setPurpose] = useState(offerings[0]?.bulk_contexts.find((row) => row.purpose === 'ACADEMIC')?.purpose ?? offerings[0]?.bulk_contexts[0]?.purpose ?? 'ACADEMIC');
@@ -479,7 +549,7 @@ export default function Page({
                     </CardContent>
                 </Card>
 
-
+                <BulkInstallmentPanel collegeId={college.id} offering={selectedOffering} context={selectedContext} canManage={can.manage_installments} />
 
                 <Card>
                     <CardHeader className="pb-3">
@@ -577,9 +647,9 @@ export default function Page({
                                                             <div className="space-y-3 border-t p-3">
                                                                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                                                                     {[
-                                                                        ['Total', demand.total_amount],
-                                                                        ['Mandatory', demand.mandatory_amount],
-                                                                        ['Enrollment Clearance', demand.enrollment_clearance_amount],
+                                                                        ['Gross Demand', demand.total_amount],
+                                                                        ['Paid', demand.paid_amount],
+                                                                        ['Scholarship / Concession / Waiver', demand.adjusted_amount],
                                                                         ['Outstanding', demand.outstanding_amount],
                                                                     ].map(([label, value]) => (
                                                                         <div key={label}>
@@ -588,6 +658,29 @@ export default function Page({
                                                                         </div>
                                                                     ))}
                                                                 </div>
+
+                                                                {demand.benefit_adjustments.length > 0 && (
+                                                                    <div className="rounded-md border bg-background p-3">
+                                                                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                                                            <div>
+                                                                                <p className="font-medium">Approved Student Benefits</p>
+                                                                                <p className="text-xs text-muted-foreground">Auditable adjustments reducing this demand; gross demand remains unchanged.</p>
+                                                                            </div>
+                                                                            <Badge variant="outline">−{money(demand.adjusted_amount, demand.currency)}</Badge>
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            {demand.benefit_adjustments.map((benefit) => (
+                                                                                <div key={benefit.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 p-2">
+                                                                                    <div>
+                                                                                        <p className="text-sm font-medium">{benefit.scheme_name} <span className="text-xs text-muted-foreground">({benefit.scheme_code})</span></p>
+                                                                                        <p className="text-xs text-muted-foreground">{benefit.benefit_type.replaceAll('_', ' ')}{benefit.decided_at ? ` · Approved ${benefit.decided_at}` : ''}</p>
+                                                                                    </div>
+                                                                                    <span className="text-sm font-semibold">−{money(benefit.sanctioned_amount, demand.currency)}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
 
                                                                 {demand.items.map((item) => (
                                                                     <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background p-3">
@@ -601,9 +694,11 @@ export default function Page({
                                                                         </div>
                                                                         <div className="flex flex-wrap gap-2">
                                                                             <Badge variant="outline">{money(item.amount, demand.currency)}</Badge>
+                                                                            {Number(item.benefit_adjustment_amount) > 0 && <Badge variant="secondary">Benefit −{money(item.benefit_adjustment_amount, demand.currency)}</Badge>}
                                                                             {item.is_mandatory && <Badge>Mandatory</Badge>}
                                                                             {item.is_enrollment_clearance_required && <Badge variant="destructive">Enrollment Clearance</Badge>}
                                                                             <Badge variant="outline">Installment {item.installment_allowed ? 'Allowed' : 'No'}</Badge>
+                                                                            {item.installment_allowed && demand.status !== 'CANCELLED' && <InstallmentDialog collegeId={college.id} demand={demand} item={item} canManage={can.manage_installments} />}
                                                                             <Badge variant="outline">{item.is_refundable ? 'Refundable' : 'Non-refundable'}</Badge>
                                                                         </div>
                                                                     </div>

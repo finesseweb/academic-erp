@@ -71,6 +71,8 @@ type Entity = {
     name: string;
     status?: string | null;
     kind?: string | null;
+    can_deactivate_for_testing?: boolean;
+    status_normalized?: string | null;
     dependencies: Record<string, number>;
     blocked: boolean;
     blocking_references: Ref[];
@@ -118,6 +120,7 @@ type Props = {
         applicants: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
+        fee_installment_schedules: Entity[];
         fee_student_benefits: Entity[];
         fee_demands: Entity[];
         fee_scholarship_schemes: Entity[];
@@ -159,6 +162,7 @@ type TabKey =
     | 'academic_policies'
     | 'college_admission_form_templates'
     | 'college_application_fee_rules'
+    | 'fee_installment_schedules'
     | 'fee_student_benefits'
     | 'fee_demands'
     | 'fee_scholarship_schemes'
@@ -213,6 +217,7 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'applicants', label: 'Applicants' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
+    { key: 'fee_installment_schedules', label: 'Installment Schedules' },
     { key: 'fee_student_benefits', label: 'Student Benefits / Sanctions' },
     { key: 'fee_demands', label: 'Fee Demands' },
     { key: 'fee_scholarship_schemes', label: 'Scholarship / Benefits' },
@@ -279,6 +284,7 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
     {
         label: 'Fee Management',
         keys: [
+            'fee_installment_schedules',
             'fee_student_benefits',
             'fee_demands',
             'fee_scholarship_schemes',
@@ -1030,6 +1036,10 @@ export default function TestDataCleanup({
                                                             {item.kind
                                                                 ? ` · ${item.kind}`
                                                                 : ''}
+                                                            {tab === 'college_admission_form_templates' &&
+                                                                (item.status_normalized ?? item.status)
+                                                                ? ` · ${(item.status_normalized ?? item.status ?? '').toUpperCase()}`
+                                                                : ''}
                                                         </div>
                                                         {tab === 'applicants' && (
                                                             <div className="mt-1 space-y-1 text-xs text-muted-foreground">
@@ -1092,13 +1102,29 @@ export default function TestDataCleanup({
 
                                                     <td className="px-4 py-4">
                                                         <div className="flex flex-wrap justify-end gap-2">
-                                                            {tab === 'college_admission_form_templates' &&
-                                                                item.status === 'ACTIVE' && (
+                                                            {tab === 'college_admission_form_templates' && (() => {
+                                                                const normalizedStatus = (
+                                                                    item.status_normalized ??
+                                                                    item.status ??
+                                                                    ''
+                                                                )
+                                                                    .trim()
+                                                                    .toUpperCase();
+                                                                const canDeactivate =
+                                                                    item.can_deactivate_for_testing === true ||
+                                                                    normalizedStatus === 'ACTIVE';
+
+                                                                return (
                                                                     <Button
                                                                         type="button"
                                                                         size="sm"
                                                                         variant="outline"
-                                                                        disabled={!enabled}
+                                                                        disabled={!enabled || !canDeactivate}
+                                                                        title={
+                                                                            canDeactivate
+                                                                                ? 'Return this ACTIVE template to DRAFT for testing corrections. Cleanup dependencies do not block this action.'
+                                                                                : `Deactivate for Testing is available only for ACTIVE templates. Current status: ${normalizedStatus || 'Unknown'}.`
+                                                                        }
                                                                         onClick={() =>
                                                                             openAction({
                                                                                 mode: 'deactivate_admission_form_template',
@@ -1111,7 +1137,8 @@ export default function TestDataCleanup({
                                                                         <RotateCcw className="size-4" />
                                                                         Deactivate for Testing
                                                                     </Button>
-                                                                )}
+                                                                );
+                                                            })()}
                                                             <Button
                                                                 type="button"
                                                                 size="sm"

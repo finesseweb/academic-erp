@@ -50,6 +50,8 @@ class CollegeFeeDemandController extends Controller
                     'id' => $offering->id,
                     'program' => $offering->programTemplate?->name,
                     'program_code' => $offering->programTemplate?->code,
+                    'degree' => $offering->programTemplate?->degree?->name,
+                    'degree_level' => $offering->programTemplate?->degree?->degreeLevel?->name,
                     'session' => $offering->academicSession?->name,
                     'curriculum_id' => $offering->curriculum_id,
                     'academic_policy' => $policy ? [
@@ -66,7 +68,13 @@ class CollegeFeeDemandController extends Controller
             ->values();
 
         $demands = FeeDemand::query()
-            ->with(['admission.application:id,candidate_name,application_no', 'items'])
+            ->with([
+                'admission.application:id,candidate_name,application_no',
+                'items.installmentSchedules' => fn ($query) => $query->where('status', 'ACTIVE'),
+                'studentBenefits' => fn ($query) => $query
+                    ->where('status', 'APPROVED')
+                    ->with('items:id,fee_student_benefit_id,fee_demand_item_id,sanctioned_amount'),
+            ])
             ->where('college_id', $college->id)
             ->orderByDesc('id')
             ->get()
@@ -85,14 +93,38 @@ class CollegeFeeDemandController extends Controller
                 'total_amount' => $demand->total_amount,
                 'mandatory_amount' => $demand->mandatory_amount,
                 'enrollment_clearance_amount' => $demand->enrollment_clearance_amount,
+                'paid_amount' => $demand->paid_amount,
+                'adjusted_amount' => $demand->adjusted_amount,
                 'outstanding_amount' => $demand->outstanding_amount,
                 'status' => $demand->status,
                 'generation_mode' => $demand->generation_mode ?? 'MANUAL_RECOVERY',
                 'generated_at' => $demand->generated_at?->format('Y-m-d H:i'),
-                'items' => $demand->items->map(fn ($item) => $item->only([
-                    'id', 'owner_type', 'structure_name', 'fee_head_name', 'fee_head_code', 'purpose', 'charge_basis', 'amount',
-                    'is_mandatory', 'is_enrollment_clearance_required', 'installment_allowed', 'is_refundable',
-                ])),
+                'benefit_adjustments' => $demand->studentBenefits->map(fn ($benefit) => [
+                    'id' => $benefit->id,
+                    'scheme_name' => $benefit->scheme_name_snapshot,
+                    'scheme_code' => $benefit->scheme_code_snapshot,
+                    'benefit_type' => $benefit->benefit_type_snapshot,
+                    'sanctioned_amount' => $benefit->sanctioned_amount,
+                    'decided_at' => $benefit->decided_at?->format('Y-m-d H:i'),
+                ])->values(),
+                'items' => $demand->items->map(function ($item) use ($demand) {
+                    $benefitAdjustment = $demand->studentBenefits
+                        ->flatMap->items
+                        ->where('fee_demand_item_id', $item->id)
+                        ->sum(fn ($benefitItem) => (float) ($benefitItem->sanctioned_amount ?? 0));
+
+                    return array_merge($item->only([
+                        'id', 'owner_type', 'structure_name', 'fee_head_name', 'fee_head_code', 'purpose', 'charge_basis', 'amount',
+                        'is_mandatory', 'is_enrollment_clearance_required', 'installment_allowed', 'is_refundable',
+                    ]), [
+                        'benefit_adjustment_amount' => number_format($benefitAdjustment, 2, '.', ''),
+                        'net_payable_amount' => number_format(max(0, (float) $item->amount - $benefitAdjustment), 2, '.', ''),
+                        'installment_schedules' => $item->installmentSchedules->map(fn ($row) => [
+                            'id' => $row->id, 'installment_no' => $row->installment_no, 'amount' => $row->amount,
+                            'due_date' => $row->due_date?->format('Y-m-d'), 'status' => $row->status,
+                        ])->values(),
+                    ]);
+                }),
             ]);
 
         return Inertia::render('college-fee-demands/index', [
@@ -102,6 +134,7 @@ class CollegeFeeDemandController extends Controller
             'can' => [
                 'generate' => $request->user()->hasCollegePermission('college_fee_demand.generate', $college->id),
                 'cancel' => $request->user()->hasCollegePermission('college_fee_demand.cancel', $college->id),
+                'manage_installments' => $request->user()->hasCollegePermission('college_fee_installment.manage', $college->id),
             ],
         ]);
     }

@@ -13,7 +13,7 @@ class FeeStudentBenefit extends Model
         'application_mode','status','eligible_base_amount','calculated_benefit_amount','sanctioned_amount',
         'eligibility_snapshot','scheme_name_snapshot','scheme_code_snapshot','benefit_type_snapshot',
         'calculation_type_snapshot','benefit_value_snapshot','maximum_benefit_amount_snapshot',
-        'application_note','decision_note','applied_at','applied_by','decided_at','decided_by',
+        'application_note','decision_note','installment_adjustment_mode','installment_adjustment_snapshot','applied_at','applied_by','decided_at','decided_by',
         'cancelled_at','cancelled_by','cancellation_reason',
     ];
 
@@ -24,6 +24,7 @@ class FeeStudentBenefit extends Model
         'benefit_value_snapshot' => 'decimal:2',
         'maximum_benefit_amount_snapshot' => 'decimal:2',
         'eligibility_snapshot' => 'array',
+        'installment_adjustment_snapshot' => 'array',
         'applied_at' => 'datetime',
         'decided_at' => 'datetime',
         'cancelled_at' => 'datetime',

@@ -798,6 +798,8 @@ class TestDataCleanupService
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
                 $this->collegeApplicationFeeRuleRows($universityId),
+            'fee_installment_schedules' =>
+                $this->feeInstallmentScheduleRows($universityId),
             'fee_student_benefits' =>
                 $this->feeStudentBenefitRows($universityId),
             'fee_demands' =>
@@ -1649,7 +1651,7 @@ class TestDataCleanupService
                 abort(404);
             }
 
-            if ((string) $record->status !== 'ACTIVE') {
+            if (strtoupper(trim((string) $record->status)) !== 'ACTIVE') {
                 throw ValidationException::withMessages([
                     'record' =>
                         'Only an ACTIVE Admission Form Template can be returned to DRAFT through Test Data Cleanup.',
@@ -1741,6 +1743,8 @@ class TestDataCleanupService
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>
                 $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
+            'fee_installment_schedules' =>
+                $this->cleanupFeeInstallmentSchedule($id, $universityId, $actorId),
             'fee_student_benefits' =>
                 $this->cleanupFeeStudentBenefit($id, $universityId, $actorId),
             'fee_demands' =>
@@ -1936,6 +1940,37 @@ class TestDataCleanupService
             ->join('fee_demands as fd', 'fd.id', '=', 'fdi.fee_demand_id')
             ->where('fd.university_id', $universityId)
             ->count();
+    }
+
+    private function feeInstallmentScheduleRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_installment_schedules')) return [];
+        return DB::table('fee_installment_schedules as s')
+            ->join('fee_demands as d','d.id','=','s.fee_demand_id')
+            ->join('fee_demand_items as i','i.id','=','s.fee_demand_item_id')
+            ->join('colleges as c','c.id','=','d.college_id')
+            ->where('d.university_id',$universityId)->where('s.status','ACTIVE')
+            ->groupBy('i.id','d.demand_no','i.fee_head_name','c.name')
+            ->orderByDesc('i.id')
+            ->get(['i.id','d.demand_no','i.fee_head_name','c.name as college_name',DB::raw('COUNT(s.id) as schedule_count'),DB::raw('SUM(s.amount) as schedule_total')])
+            ->map(fn($r)=>[
+                'id'=>(int)$r->id,'code'=>$r->demand_no,'name'=>$r->fee_head_name.' · '.$r->college_name,
+                'status'=>'ACTIVE','kind'=>'FEE_INSTALLMENT_SCHEDULE','dependencies'=>['installments'=>(int)$r->schedule_count,'scheduled_total'=>(float)$r->schedule_total],
+                'blocked'=>false,'blocking_references'=>[],
+            ])->values()->all();
+    }
+
+    private function cleanupFeeInstallmentSchedule(int $demandItemId, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_installment_schedules')) abort(404);
+        return DB::transaction(function() use($demandItemId,$universityId,$actorId){
+            $valid=DB::table('fee_demand_items as i')->join('fee_demands as d','d.id','=','i.fee_demand_id')->where('i.id',$demandItemId)->where('d.university_id',$universityId)->exists();
+            if(!$valid) abort(404);
+            $rows=DB::table('fee_installment_schedules')->where('fee_demand_item_id',$demandItemId)->get();
+            DB::table('fee_installment_schedules')->where('fee_demand_item_id',$demandItemId)->delete();
+            $this->audit('TEST_FEE_INSTALLMENT_SCHEDULE_CLEANED','fee_demand_item',$demandItemId,['schedules'=>$rows->toArray()],$actorId);
+            return ['fee_demand_item_id'=>$demandItemId,'schedules_deleted'=>$rows->count()];
+        });
     }
 
     private function feeStudentBenefitRows(int $universityId): array
@@ -2851,8 +2886,11 @@ class TestDataCleanupService
                     'id' => $row->id,
                     'code' => $row->code,
                     'name' => $row->name.($row->college_name ? ' · '.$row->college_name : ' · University'),
-                    'status' => $row->status,
+                    'status' => strtoupper(trim((string) $row->status)),
+                    'status_normalized' => strtoupper(trim((string) $row->status)),
                     'kind' => 'ADMISSION_FORM_TEMPLATE',
+                    // Lifecycle deactivation is independent of destructive-cleanup dependencies.
+                    'can_deactivate_for_testing' => strtoupper(trim((string) $row->status)) === 'ACTIVE',
                     'dependencies' => [],
                     'blocked' => count($dependencies) > 0,
                     'blocking_references' => $dependencies,

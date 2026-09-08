@@ -17,12 +17,12 @@ use Inertia\Response;
 
 class CollegeFeeStudentBenefitController extends Controller
 {
-    public function index(Request $request, College $college): Response
+    public function index(Request $request, College $college, FeeStudentBenefitService $service): Response
     {
         $this->auth($request, $college, 'college_fee_student_benefit.view');
 
         $benefits = FeeStudentBenefit::query()
-            ->with(['items'])
+            ->with(['items.demandItem.installmentSchedules'])
             ->where('college_id', $college->id)
             ->orderByDesc('id')
             ->limit(250)
@@ -41,7 +41,8 @@ class CollegeFeeStudentBenefitController extends Controller
 
         return Inertia::render('college-fee-benefits/index', [
             'college' => $college->only(['id','name','code']),
-            'benefits' => $benefits->map(function (FeeStudentBenefit $benefit) use ($demandContext) {
+            'bulk_schemes' => $service->bulkSchemes($college),
+            'benefits' => $benefits->map(function (FeeStudentBenefit $benefit) use ($demandContext, $service) {
                 $d = $demandContext[$benefit->fee_demand_id] ?? null;
                 return [
                     'id' => $benefit->id,
@@ -68,6 +69,9 @@ class CollegeFeeStudentBenefitController extends Controller
                     'demand_adjusted_amount' => $d?->adjusted_amount,
                     'demand_outstanding_amount' => $d?->outstanding_amount,
                     'eligibility_snapshot' => $benefit->eligibility_snapshot,
+                    'installment_context' => $benefit->status === 'PENDING' ? $service->installmentContext($benefit) : null,
+                    'installment_adjustment_mode' => $benefit->installment_adjustment_mode,
+                    'installment_adjustment_snapshot' => $benefit->installment_adjustment_snapshot,
                 ];
             })->values(),
             'can' => [
@@ -112,6 +116,53 @@ class CollegeFeeStudentBenefitController extends Controller
         return response()->json(['data' => $service->applicableSchemes($college, $demand)]);
     }
 
+    public function bulkSchemes(Request $request, College $college, FeeStudentBenefitService $service): JsonResponse
+    {
+        $this->auth($request, $college, 'college_fee_student_benefit.view');
+        return response()->json(['data' => $service->bulkSchemes($college)]);
+    }
+
+    public function bulkCandidates(Request $request, College $college, FeeStudentBenefitService $service): JsonResponse
+    {
+        $this->auth($request, $college, 'college_fee_student_benefit.view');
+        $validated = $request->validate([
+            'scheme_id' => ['required','integer','exists:fee_scholarship_schemes,id'],
+        ]);
+        $scheme = FeeScholarshipScheme::findOrFail((int) $validated['scheme_id']);
+        return response()->json(['data' => $service->bulkCandidates($college, $scheme)]);
+    }
+
+    public function bulkStore(Request $request, College $college, FeeStudentBenefitService $service): RedirectResponse
+    {
+        $this->auth($request, $college, 'college_fee_student_benefit.assign');
+        $validated = $request->validate([
+            'scheme_id' => ['required','integer','exists:fee_scholarship_schemes,id'],
+            'fee_demand_ids' => ['required','array','min:1','max:500'],
+            'fee_demand_ids.*' => ['required','integer', Rule::exists('fee_demands','id')->where(fn ($q) => $q->where('college_id', $college->id))],
+            'application_note' => ['nullable','string','max:2000'],
+        ]);
+
+        $scheme = FeeScholarshipScheme::findOrFail((int) $validated['scheme_id']);
+        $result = $service->bulkAssign(
+            $college,
+            $scheme,
+            $validated['fee_demand_ids'],
+            $request->user()->id,
+            $validated['application_note'] ?? null,
+        );
+
+        $message = $result['applied'].' student benefit(s) assigned';
+        if ($result['approved']) $message .= '; '.$result['approved'].' automatically sanctioned';
+        if ($result['pending']) $message .= '; '.$result['pending'].' pending approval';
+        if (count($result['skipped'])) $message .= '; '.count($result['skipped']).' skipped after final eligibility re-check';
+        $message .= '.';
+
+        return back()->with('toast', [
+            'type' => $result['applied'] > 0 ? 'success' : 'info',
+            'message' => $message,
+        ]);
+    }
+
     public function store(Request $request, College $college, FeeStudentBenefitService $service): RedirectResponse
     {
         $this->auth($request, $college, 'college_fee_student_benefit.assign');
@@ -144,8 +195,21 @@ class CollegeFeeStudentBenefitController extends Controller
         $validated = $request->validate([
             'sanctioned_amount' => ['required','numeric','gt:0','max:999999999.99'],
             'decision_note' => ['nullable','string','max:2000'],
+            'installment_adjustment_mode' => ['nullable', Rule::in(['PROPORTIONAL','NEXT_UNPAID_FIRST','CUSTOM'])],
+            'custom_installments' => ['nullable','array'],
+            'custom_installments.*' => ['array'],
+            'custom_installments.*.*' => ['numeric','min:0','max:999999999.99'],
         ]);
-        $approved = $service->approve($college, $benefit, (float) $validated['sanctioned_amount'], $request->user()->id, $validated['decision_note'] ?? null);
+        $approved = $service->approve(
+            $college,
+            $benefit,
+            (float) $validated['sanctioned_amount'],
+            $request->user()->id,
+            $validated['decision_note'] ?? null,
+            $validated['installment_adjustment_mode'] ?? 'PROPORTIONAL',
+            $validated['custom_installments'] ?? [],
+            $request->ip(),
+        );
         return back()->with('toast', [
             'type' => 'success',
             'message' => $approved->scheme_name_snapshot.' approved for ₹'.number_format((float) $approved->sanctioned_amount, 2).'. Fee Demand outstanding updated.',
@@ -164,8 +228,13 @@ class CollegeFeeStudentBenefitController extends Controller
     {
         $this->auth($request, $college, 'college_fee_student_benefit.cancel');
         $validated = $request->validate(['reason' => ['required','string','max:2000']]);
-        $service->cancel($college, $benefit, $request->user()->id, $validated['reason']);
-        return back()->with('toast', ['type'=>'success','message'=>'Student benefit record cancelled.']);
+        $reversed = $service->cancel($college, $benefit, $request->user()->id, $validated['reason']);
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => $reversed
+                ? 'Student benefit removed. The approved Fee Demand adjustment was reversed and outstanding recalculated.'
+                : 'Student benefit removed before sanction. No Fee Demand adjustment was posted.',
+        ]);
     }
 
     private function auth(Request $request, College $college, string $permission): void

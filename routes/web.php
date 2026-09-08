@@ -49,6 +49,7 @@ use App\Http\Controllers\DegreeController;
 use App\Http\Controllers\DegreeLevelController;
 use App\Http\Controllers\FeeManagementController;
 use App\Http\Controllers\CollegeFeeDemandController;
+use App\Http\Controllers\CollegeFeeInstallmentController;
 use App\Http\Controllers\CollegeFeeStudentBenefitController;
 use App\Http\Controllers\FeeScholarshipController;
 use App\Http\Controllers\PermissionController;
@@ -315,6 +316,9 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('college/{college}/fee-student-benefits', [CollegeFeeStudentBenefitController::class, 'index'])->name('college-fee-student-benefits.index');
     Route::get('college/{college}/fee-student-benefits/search-demands', [CollegeFeeStudentBenefitController::class, 'searchDemands'])->name('college-fee-student-benefits.search-demands');
     Route::get('college/{college}/fee-student-benefits/demands/{demand}/schemes', [CollegeFeeStudentBenefitController::class, 'schemes'])->name('college-fee-student-benefits.schemes');
+    Route::get('college/{college}/fee-student-benefits/bulk-schemes', [CollegeFeeStudentBenefitController::class, 'bulkSchemes'])->name('college-fee-student-benefits.bulk-schemes');
+    Route::get('college/{college}/fee-student-benefits/bulk-candidates', [CollegeFeeStudentBenefitController::class, 'bulkCandidates'])->name('college-fee-student-benefits.bulk-candidates');
+    Route::post('college/{college}/fee-student-benefits/bulk', [CollegeFeeStudentBenefitController::class, 'bulkStore'])->name('college-fee-student-benefits.bulk.store');
     Route::post('college/{college}/fee-student-benefits', [CollegeFeeStudentBenefitController::class, 'store'])->name('college-fee-student-benefits.store');
     Route::patch('college/{college}/fee-student-benefits/{benefit}/approve', [CollegeFeeStudentBenefitController::class, 'approve'])->name('college-fee-student-benefits.approve');
     Route::patch('college/{college}/fee-student-benefits/{benefit}/reject', [CollegeFeeStudentBenefitController::class, 'reject'])->name('college-fee-student-benefits.reject');
@@ -325,6 +329,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('college/{college}/fee-demands/bulk', [CollegeFeeDemandController::class, 'bulkStore'])->name('college-fee-demands.bulk.store');
     Route::post('college/{college}/fee-demands/individual', [CollegeFeeDemandController::class, 'individualStore'])->name('college-fee-demands.individual.store');
     Route::patch('college/{college}/fee-demands/{demand}/cancel', [CollegeFeeDemandController::class, 'cancel'])->name('college-fee-demands.cancel');
+    Route::post('college/{college}/fee-demands/{demand}/items/{item}/installments', [CollegeFeeInstallmentController::class, 'store'])->name('college-fee-installments.store');
     Route::get('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'index'])->name('college-admission-selection-rules.index');
     Route::post('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'store'])->name('college-admission-selection-rules.store');
     Route::patch('college/{college}/admission-selection-rules/{rule}', [CollegeAdmissionSelectionRuleController::class, 'update'])->name('college-admission-selection-rules.update');
