@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\College;
 use App\Models\CollegeAdmissionMeritEntry;
+use App\Models\CollegeAdmissionApplicationChoice;
 use App\Models\CollegeAdmissionSeatAllocation;
 use App\Models\CollegeAdmissionSelectionRule;
 use App\Services\CollegeAdmissionSeatAllocationService;
@@ -77,6 +78,7 @@ class CollegeAdmissionSeatAllocationController extends Controller
             'rules' => $rules,
             'selectedRuleId' => $selectedRule?->id,
             'screen' => $selectedRule ? $service->screen($college, $selectedRule) : null,
+            'directScreen' => $service->directScreen($college),
             'can' => [
                 'allocate' => $request->user()->hasCollegePermission('college_admission_seat_allocation.allocate', $college->id),
                 'cancel' => $request->user()->hasCollegePermission('college_admission_seat_allocation.cancel', $college->id),
@@ -113,6 +115,35 @@ class CollegeAdmissionSeatAllocationController extends Controller
             ->with('toast', [
                 'type' => 'success',
                 'message' => 'Seat allocated to Merit Rank #'.$allocation->merit_rank.'. Physical seat consumption is now recorded and protected for Admission Confirmation.',
+            ]);
+    }
+
+    public function allocateDirect(
+        Request $request,
+        College $college,
+        CollegeAdmissionApplicationChoice $choice,
+        CollegeAdmissionSeatAllocationService $service
+    ): RedirectResponse {
+        $this->authorizeCollege($request, $college, 'college_admission_seat_allocation.allocate');
+
+        $data = $request->validate([
+            'candidate_reservation_category_selection' => ['nullable', 'string', 'max:80'],
+            'physical_reservation_category_id' => ['nullable', 'integer'],
+            'horizontal_category_ids' => ['nullable', 'array'],
+            'horizontal_category_ids.*' => ['integer'],
+            'horizontal_target_category_ids' => ['nullable', 'array'],
+            'horizontal_target_category_ids.*' => ['integer'],
+            'allocation_round' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'decision_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $service->allocateDirect($college, $choice, $data, $request->user()->id, $request->ip());
+
+        return redirect()
+            ->route('college-admission-seat-allocations.index', ['college' => $college->id])
+            ->with('toast', [
+                'type' => 'success',
+                'message' => 'Seat allocated for Direct Admission. Document Verification, capacity and reservation controls were enforced; Merit / Selection Rule processing remained bypassed.',
             ]);
     }
 

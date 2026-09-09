@@ -29,6 +29,11 @@ class CurriculumTerm extends Model
         return $this->belongsTo(Curriculum::class);
     }
 
+    public function calendarPeriods(): HasMany
+    {
+        return $this->hasMany(AcademicCalendarTermPeriod::class);
+    }
+
     public function slots(): HasMany
     {
         return $this->hasMany(CurriculumSlot::class, 'curriculum_term_id');

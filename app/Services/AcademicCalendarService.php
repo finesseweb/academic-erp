@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\AcademicCalendar;
 use App\Models\AcademicCalendarEvent;
+use App\Models\AcademicCalendarTermPeriod;
+use App\Models\CurriculumTerm;
 use App\Models\AcademicSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -86,6 +88,7 @@ class AcademicCalendarService
     {
         $this->assertCalendarActive($calendar);
         $this->assertEventDatesInsideSession($calendar, $data['start_date'], $data['end_date']);
+        $this->assertEventInsideTermPeriod($calendar, $data['academic_calendar_term_period_id'] ?? null, $data['start_date'], $data['end_date']);
 
         return DB::transaction(function () use ($calendar, $data, $actorId, $ip) {
             $event = $calendar->events()->create([
@@ -106,6 +109,7 @@ class AcademicCalendarService
         $this->assertCalendarActive($calendar);
         $this->assertEventOwned($calendar, $event);
         $this->assertEventDatesInsideSession($calendar, $data['start_date'], $data['end_date']);
+        $this->assertEventInsideTermPeriod($calendar, $data['academic_calendar_term_period_id'] ?? null, $data['start_date'], $data['end_date']);
         if (! (bool) ($data['allow_college_override'] ?? false) && Schema::hasTable('college_calendar_overrides')
             && DB::table('college_calendar_overrides')->where('academic_calendar_event_id', $event->id)->where('status', 'ACTIVE')->exists()) {
             throw ValidationException::withMessages([
@@ -156,6 +160,101 @@ class AcademicCalendarService
         });
     }
 
+
+
+    public function upsertTermPeriod(AcademicCalendar $calendar, ?AcademicCalendarTermPeriod $period, array $data, int $actorId, ?string $ip): AcademicCalendarTermPeriod
+    {
+        $this->assertCalendarActive($calendar);
+        $this->assertEventDatesInsideSession($calendar, $data['start_date'], $data['end_date']);
+        if ($period) abort_unless((int)$period->academic_calendar_id === (int)$calendar->id, 404);
+        $termId=(int)($period?->curriculum_term_id ?? $data['curriculum_term_id']);
+        $term=CurriculumTerm::query()->with(['curriculum.academicSession'])->findOrFail($termId);
+        $curriculum=$term->curriculum;
+        if ((int)$curriculum->university_id !== (int)$calendar->university_id || (int)$curriculum->academic_session_id !== (int)$calendar->academic_session_id || $term->status !== 'ACTIVE' || ! $curriculum->isCurrentApprovedVersion()) {
+            throw ValidationException::withMessages(['curriculum_term_id'=>'Select an ACTIVE term from the current APPROVED Curriculum for this University Academic Session.']);
+        }
+        $this->assertTermPeriodInsideCurriculumEffectiveWindow($calendar, $curriculum, $data['start_date'], $data['end_date']);
+        $this->assertTermPeriodDoesNotOverlapCurriculumPeriod($calendar, $curriculum, $period, $data['start_date'], $data['end_date']);
+        if (!$period && AcademicCalendarTermPeriod::where('academic_calendar_id',$calendar->id)->where('curriculum_term_id',$termId)->exists()) {
+            throw ValidationException::withMessages(['curriculum_term_id'=>'This Curriculum Term already has an Academic Period in this calendar.']);
+        }
+        return DB::transaction(function() use($calendar,$period,$data,$termId,$actorId,$ip){
+            $before=$period?->toArray();
+            $values=['academic_calendar_id'=>$calendar->id,'curriculum_term_id'=>$termId,'start_date'=>$data['start_date'],'end_date'=>$data['end_date'],'allow_college_override'=>(bool)$data['allow_college_override'],'status'=>'ACTIVE','updated_by'=>$actorId];
+            if($period)$period->update($values); else $period=AcademicCalendarTermPeriod::create($values+['created_by'=>$actorId]);
+            $this->audit($before?'ACADEMIC_CALENDAR_TERM_PERIOD_UPDATED':'ACADEMIC_CALENDAR_TERM_PERIOD_CREATED','AcademicCalendarTermPeriod',$period->id,$actorId,$ip,$before,$period->fresh()->toArray());
+            return $period;
+        });
+    }
+
+
+    private function assertTermPeriodInsideCurriculumEffectiveWindow(AcademicCalendar $calendar, \App\Models\Curriculum $curriculum, string $startDate, string $endDate): void
+    {
+        $session = $calendar->academicSession()->firstOrFail();
+        $start = date('Y-m-d', strtotime($startDate));
+        $end = date('Y-m-d', strtotime($endDate));
+        $sessionStart = $session->starts_on->format('Y-m-d');
+        $sessionEnd = $session->ends_on->format('Y-m-d');
+        $effectiveStart = $curriculum->effective_from?->format('Y-m-d') ?: $sessionStart;
+        $effectiveEnd = $curriculum->effective_to?->format('Y-m-d') ?: $sessionEnd;
+        $allowedStart = max($sessionStart, $effectiveStart);
+        $allowedEnd = min($sessionEnd, $effectiveEnd);
+
+        if ($allowedStart > $allowedEnd) {
+            throw ValidationException::withMessages([
+                'start_date' => 'The Curriculum Effective From/To window does not overlap its Academic Session. Correct the Curriculum validity before assigning Academic Period dates.',
+            ]);
+        }
+
+        if ($start < $allowedStart || $end > $allowedEnd) {
+            throw ValidationException::withMessages([
+                'start_date' => "Academic Period dates must remain inside the Curriculum effective window ({$allowedStart} to {$allowedEnd}).",
+            ]);
+        }
+    }
+
+    private function assertTermPeriodDoesNotOverlapCurriculumPeriod(
+        AcademicCalendar $calendar,
+        \App\Models\Curriculum $curriculum,
+        ?AcademicCalendarTermPeriod $editingPeriod,
+        string $startDate,
+        string $endDate
+    ): void {
+        $start = date('Y-m-d', strtotime($startDate));
+        $end = date('Y-m-d', strtotime($endDate));
+
+        $overlap = AcademicCalendarTermPeriod::query()
+            ->with('curriculumTerm')
+            ->where('academic_calendar_id', $calendar->id)
+            ->where('status', 'ACTIVE')
+            ->when($editingPeriod, fn ($query) => $query->where('id', '!=', $editingPeriod->id))
+            ->whereHas('curriculumTerm', fn ($query) => $query->where('curriculum_id', $curriculum->id))
+            ->whereDate('start_date', '<=', $end)
+            ->whereDate('end_date', '>=', $start)
+            ->first();
+
+        if ($overlap) {
+            $name = $overlap->curriculumTerm?->name ?: 'another Academic Period';
+            $occupiedStart = $overlap->start_date->format('Y-m-d');
+            $occupiedEnd = $overlap->end_date->format('Y-m-d');
+
+            throw ValidationException::withMessages([
+                'start_date' => "Selected dates overlap {$name} ({$occupiedStart} to {$occupiedEnd}) in the same Curriculum. Academic Periods of one Curriculum cannot share dates.",
+            ]);
+        }
+    }
+
+
+    private function assertEventInsideTermPeriod(AcademicCalendar $calendar, ?int $periodId, string $startDate, string $endDate): void
+    {
+        if (!$periodId) return; // University-wide holidays/events may remain unscoped.
+        $period=AcademicCalendarTermPeriod::query()->whereKey($periodId)->where('academic_calendar_id',$calendar->id)->where('status','ACTIVE')->first();
+        if(!$period) throw ValidationException::withMessages(['academic_calendar_term_period_id'=>'Select an ACTIVE Academic Period from this calendar.']);
+        $start=date('Y-m-d',strtotime($startDate)); $end=date('Y-m-d',strtotime($endDate));
+        if($start<$period->start_date->format('Y-m-d') || $end>$period->end_date->format('Y-m-d')) {
+            throw ValidationException::withMessages(['start_date'=>'The event dates must remain inside the selected Curriculum Term Academic Period.']);
+        }
+    }
 
     private function assertCalendarActive(AcademicCalendar $calendar): void
     {

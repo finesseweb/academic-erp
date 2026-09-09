@@ -8,6 +8,7 @@ use App\Models\CollegeAdmissionApplicationFieldValue;
 use App\Models\CollegeAdmissionMeritEntry;
 use App\Models\CollegeAdmissionSelectionRule;
 use App\Services\CollegeAdmissionDocumentVerificationService;
+use App\Services\CollegeAdmissionApplicationService;
 use App\Services\CollegeReservationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -64,7 +65,12 @@ class CollegeAdmissionDocumentVerificationController extends Controller
             })
             ->values();
 
-        $selectedRuleId = (int) $request->query('rule_id', $rules->first()['id'] ?? 0);
+        $directScreen = $service->directScreen($college);
+        $context = strtolower((string) $request->query('context', ''));
+        $defaultToDirect = $context === '' && $directScreen['summary']['total'] > 0;
+        $directSelected = $context === 'direct' || $defaultToDirect;
+
+        $selectedRuleId = $directSelected ? 0 : (int) $request->query('rule_id', $rules->first()['id'] ?? 0);
         $selectedRule = $selectedRuleId > 0
             ? CollegeAdmissionSelectionRule::query()->find($selectedRuleId)
             : null;
@@ -77,6 +83,8 @@ class CollegeAdmissionDocumentVerificationController extends Controller
             'college' => $college->only(['id', 'name', 'code', 'status']),
             'rules' => $rules,
             'selectedRuleId' => $selectedRule?->id,
+            'directSelected' => $directSelected,
+            'directScreen' => $directScreen,
             'screen' => $selectedRule ? $service->screen($college, $selectedRule) : null,
             'can' => [
                 'review' => $request->user()->hasCollegePermission('college_admission_document_verification.review', $college->id),
@@ -109,13 +117,21 @@ class CollegeAdmissionDocumentVerificationController extends Controller
         Request $request,
         College $college,
         CollegeAdmissionApplication $application,
-        CollegeAdmissionDocumentVerificationService $service
+        CollegeAdmissionDocumentVerificationService $service,
+        CollegeAdmissionApplicationService $applicationService
     ): RedirectResponse {
         $this->authorizeCollege($request, $college, 'college_admission_document_verification.finalize');
         $data = $request->validate([
             'status' => ['required', 'in:VERIFIED,DEFICIENT'],
             'notes' => ['nullable', 'string', 'max:4000'],
         ]);
+
+        if ($data['status'] === 'VERIFIED' && strtoupper((string) $application->admission_mode) === 'DIRECT') {
+            // Lock/repair the Direct Intake + seat-bucket context before the final
+            // VERIFIED state is committed, so a verified Direct candidate can
+            // always continue to Seat Allocation without a Merit/Rule row.
+            $applicationService->ensureDirectProcessingChoice($application, $college, $request->user()->id, $request->ip());
+        }
 
         $verification = $service->finalize($college, $application, $data['status'], $data['notes'] ?? null, $request->user()->id, $request->ip());
 

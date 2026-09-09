@@ -28,7 +28,8 @@ class CollegeAcademicCalendarController extends Controller
             ->with([
                 'universityCalendar:id,university_id,academic_session_id,name,code,status,notes',
                 'universityCalendar.academicSession:id,name,code,starts_on,ends_on,status,is_current',
-                'universityCalendar.events',
+                'universityCalendar.events.termPeriod.curriculumTerm.curriculum',
+                'universityCalendar.termPeriods.curriculumTerm.curriculum',
                 'overrides',
             ])
             ->where('college_id', $college->id)
@@ -42,7 +43,7 @@ class CollegeAcademicCalendarController extends Controller
             ->unique();
 
         $available = AcademicCalendar::query()
-            ->with(['academicSession:id,name,code,starts_on,ends_on,status,is_current', 'events'])
+            ->with(['academicSession:id,name,code,starts_on,ends_on,status,is_current', 'events.termPeriod.curriculumTerm.curriculum', 'termPeriods.curriculumTerm.curriculum'])
             ->where('university_id', $college->university_id)
             ->whereIn('academic_session_id', $collegeSessionIds)
             ->where('status', 'ACTIVE')

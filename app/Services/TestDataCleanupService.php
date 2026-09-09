@@ -77,11 +77,12 @@ class TestDataCleanupService
                         ->whereIn('approval_request_id', $approvalRequestIds)
                         ->count()
                     : 0,
-            'downstream_references' =>
-                $this->downstreamReferences(
-                    $curriculum->id,
-                    self::CURRICULUM_DOWNSTREAM_REFERENCES
-                ),
+            'downstream_references' => array_merge(
+                $this->downstreamReferences($curriculum->id, self::CURRICULUM_DOWNSTREAM_REFERENCES),
+                (Schema::hasTable('academic_calendar_term_periods') && DB::table('academic_calendar_term_periods')->whereIn('curriculum_term_id', $termIds)->exists())
+                    ? [['table' => 'academic_calendar_term_periods', 'count' => DB::table('academic_calendar_term_periods')->whereIn('curriculum_term_id', $termIds)->count()]]
+                    : []
+            ),
         ];
     }
 
@@ -798,6 +799,8 @@ class TestDataCleanupService
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
                 $this->collegeApplicationFeeRuleRows($universityId),
+            'fee_late_fine_charges' =>
+                $this->feeLateFineChargeRows($universityId),
             'fee_installment_schedules' =>
                 $this->feeInstallmentScheduleRows($universityId),
             'fee_student_benefits' =>
@@ -1173,6 +1176,16 @@ class TestDataCleanupService
                 $this->deleteWhereIn('fee_student_benefits', 'id', $benefitIds);
             }
 
+            // Late Fine Rules are fee-policy test configuration. Full Academic Reset removes them;
+            // ordinary Late Fine Charge cleanup preserves the Rule master by default.
+            if (Schema::hasTable('fee_late_fine_rules')) {
+                $lateFineRuleIds = DB::table('fee_late_fine_rules')->where('university_id', $universityId)->pluck('id');
+                if (Schema::hasTable('fee_late_fine_charges')) {
+                    $this->deleteWhereIn('fee_late_fine_charges', 'fee_late_fine_rule_id', $lateFineRuleIds);
+                }
+                $this->deleteWhereIn('fee_late_fine_rules', 'id', $lateFineRuleIds);
+            }
+
             // Scholarship / Concession / Waiver is fee setup test data.
             // Remove mappings + schemes before Reservation Categories / Fee Heads can be cleaned later.
             // This deliberately preserves the referenced Fee Heads and Reservation Categories themselves.
@@ -1476,7 +1489,7 @@ class TestDataCleanupService
                     ->delete();
             }
 
-            // 5) Curriculum structure before Curriculum headers.
+            // 5) Curriculum structure before Curriculum headers. Calendar-term mappings are test/config dependencies and must be removed first in full reset.
             $termIds = Schema::hasTable('curriculum_terms')
                 ? DB::table('curriculum_terms')
                     ->whereIn('curriculum_id', $curriculumIds)
@@ -1489,6 +1502,7 @@ class TestDataCleanupService
                     ->pluck('id')
                 : collect();
 
+            $this->deleteWhereIn('academic_calendar_term_periods', 'curriculum_term_id', $termIds);
             $this->deleteWhereIn(
                 'curriculum_course_mappings',
                 'curriculum_slot_id',
@@ -1743,6 +1757,8 @@ class TestDataCleanupService
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>
                 $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
+            'fee_late_fine_charges' =>
+                $this->cleanupFeeLateFineCharge($id, $universityId, $actorId),
             'fee_installment_schedules' =>
                 $this->cleanupFeeInstallmentSchedule($id, $universityId, $actorId),
             'fee_student_benefits' =>
@@ -1942,6 +1958,47 @@ class TestDataCleanupService
             ->count();
     }
 
+    private function feeLateFineChargeRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_late_fine_charges')) return [];
+        return DB::table('fee_late_fine_charges as f')
+            ->join('fee_demands as d','d.id','=','f.fee_demand_id')
+            ->join('fee_demand_items as i','i.id','=','f.fee_demand_item_id')
+            ->join('colleges as c','c.id','=','f.college_id')
+            ->where('f.university_id',$universityId)
+            ->where('f.status','ACTIVE')
+            ->orderByDesc('f.id')
+            ->get(['f.id','f.status','f.fine_amount','f.overdue_days','d.demand_no','i.fee_head_name','c.name as college_name'])
+            ->map(fn($r)=>[
+                'id'=>(int)$r->id,'code'=>$r->demand_no,
+                'name'=>$r->fee_head_name.' · '.$r->college_name.' · Fine '.number_format((float)$r->fine_amount,2),
+                'status'=>$r->status,'kind'=>'FEE_LATE_FINE_CHARGE',
+                'dependencies'=>['overdue_days'=>(int)$r->overdue_days,'fine_amount'=>(float)$r->fine_amount],
+                'blocked'=>false,'blocking_references'=>[],
+            ])->values()->all();
+    }
+
+    private function cleanupFeeLateFineCharge(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('fee_late_fine_charges')) abort(404);
+        return DB::transaction(function() use($id,$universityId,$actorId){
+            $record=DB::table('fee_late_fine_charges')->where('id',$id)->where('university_id',$universityId)->first();
+            if(!$record) abort(404);
+            $history=DB::table('fee_late_fine_charges')
+                ->where('university_id',$universityId)
+                ->where('fee_late_fine_rule_id',$record->fee_late_fine_rule_id)
+                ->where('fee_installment_schedule_id',$record->fee_installment_schedule_id)
+                ->get();
+            DB::table('fee_late_fine_charges')
+                ->where('university_id',$universityId)
+                ->where('fee_late_fine_rule_id',$record->fee_late_fine_rule_id)
+                ->where('fee_installment_schedule_id',$record->fee_installment_schedule_id)
+                ->delete();
+            $this->audit('TEST_FEE_LATE_FINE_CHARGE_CLEANED','fee_late_fine_charge',$id,['history'=>$history->toArray()],$actorId);
+            return ['late_fine_charge_id'=>$id,'history_deleted'=>$history->count()];
+        });
+    }
+
     private function feeInstallmentScheduleRows(int $universityId): array
     {
         if (! Schema::hasTable('fee_installment_schedules')) return [];
@@ -2048,6 +2105,7 @@ class TestDataCleanupService
                     ['fee_waivers', 'fee_demand_id'],
                     ['fee_scholarship_allocations', 'fee_demand_id'],
                     ['fee_student_benefits', 'fee_demand_id'],
+                    ['fee_late_fine_charges', 'fee_demand_id'],
                     ['fee_installment_schedules', 'fee_demand_id'],
                     ['fee_refunds', 'fee_demand_id'],
                 ] as [$table, $column]) {
@@ -2103,6 +2161,7 @@ class TestDataCleanupService
             ['fee_waivers', 'fee_demand_id'],
             ['fee_scholarship_allocations', 'fee_demand_id'],
             ['fee_student_benefits', 'fee_demand_id'],
+            ['fee_late_fine_charges', 'fee_demand_id'],
             ['fee_installment_schedules', 'fee_demand_id'],
             ['fee_refunds', 'fee_demand_id'],
         ] as [$table, $column]) {
@@ -2424,6 +2483,7 @@ class TestDataCleanupService
                 $downstream = $this->downstreamReferences($row->id, [
                     ['fee_structure_items', 'fee_head_id'],
                     ['fee_demand_items', 'fee_head_id'],
+                    ['fee_late_fine_rules', 'fee_head_id'],
                     ['student_fee_demand_items', 'fee_head_id'],
                 ]);
 
@@ -2460,6 +2520,7 @@ class TestDataCleanupService
         $downstream = $this->downstreamReferences($id, [
             ['fee_structure_items', 'fee_head_id'],
             ['fee_demand_items', 'fee_head_id'],
+            ['fee_late_fine_rules', 'fee_head_id'],
             ['student_fee_demand_items', 'fee_head_id'],
         ]);
 
@@ -3153,7 +3214,7 @@ class TestDataCleanupService
             ->orderByDesc('sa.id')
             ->get([
                 'sa.id', 'sa.status', 'sa.physical_seat_type', 'sa.physical_category_code',
-                'sa.merit_rank', 'a.application_no', 'a.candidate_name', 'c.name as college_name',
+                'sa.merit_rank', 'a.application_no', 'a.candidate_name', 'a.admission_mode', 'c.name as college_name',
             ])
             ->map(function ($row) {
                 $downstream = $this->downstreamReferences(
@@ -3163,7 +3224,7 @@ class TestDataCleanupService
 
                 return [
                     'id' => (int) $row->id,
-                    'code' => $row->application_no.' · Rank #'.$row->merit_rank,
+                    'code' => $row->application_no.' · '.(strtoupper((string) ($row->admission_mode ?? 'REGULAR')) === 'DIRECT' ? 'Direct Admission' : 'Rank #'.$row->merit_rank),
                     'name' => $row->candidate_name.' · '.$row->college_name,
                     'status' => $row->status,
                     'kind' => $row->physical_seat_type.($row->physical_category_code ? ' · '.$row->physical_category_code : ''),
@@ -4498,6 +4559,7 @@ class TestDataCleanupService
                 ['college_program_reservations', 'college_program_offering_id'],
                 ['batches', 'college_program_offering_id'],
                 ['sections', 'college_program_offering_id'],
+                ['fee_late_fine_rules', 'college_program_offering_id'],
                 ['student_enrollments', 'college_program_offering_id'],
                 ['admission_applications', 'college_program_offering_id'],
             ]
@@ -5149,6 +5211,7 @@ class TestDataCleanupService
                         ],
                         ['batches', 'college_program_offering_id'],
                         ['sections', 'college_program_offering_id'],
+                        ['fee_late_fine_rules', 'college_program_offering_id'],
                         [
                             'student_enrollments',
                             'college_program_offering_id',

@@ -50,6 +50,7 @@ use App\Http\Controllers\DegreeLevelController;
 use App\Http\Controllers\FeeManagementController;
 use App\Http\Controllers\CollegeFeeDemandController;
 use App\Http\Controllers\CollegeFeeInstallmentController;
+use App\Http\Controllers\CollegeFeeLateFineController;
 use App\Http\Controllers\CollegeFeeStudentBenefitController;
 use App\Http\Controllers\FeeScholarshipController;
 use App\Http\Controllers\PermissionController;
@@ -161,6 +162,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::delete('admin/system-maintenance/test-data-cleanup/academic-policies/{academicPolicy}', [TestDataCleanupController::class, 'destroyAcademicPolicy'])->name('test-data-cleanup.academic-policies.destroy');
     Route::post('admin/system-maintenance/test-data-cleanup/admission-form-templates/{template}/deactivate', [TestDataCleanupController::class, 'deactivateAdmissionFormTemplate'])->name('test-data-cleanup.admission-form-templates.deactivate');
     Route::post('admin/system-maintenance/test-data-cleanup/academic-policies/{academicPolicy}/reset-approval', [TestDataCleanupController::class, 'resetAcademicPolicyApproval'])->name('test-data-cleanup.academic-policies.reset-approval');
+    Route::post('admin/system-maintenance/test-data-cleanup/bulk-clean', [TestDataCleanupController::class, 'bulkCleanup'])->name('test-data-cleanup.bulk-clean');
     Route::delete('admin/system-maintenance/test-data-cleanup/{type}/{id}', [TestDataCleanupController::class, 'destroyMaster'])->name('test-data-cleanup.master.destroy');
 
     Route::get('admin/academic-sessions', [AcademicSessionController::class, 'index'])->name('academic-sessions.index');
@@ -172,6 +174,8 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('admin/academic-calendars', [AcademicCalendarController::class, 'store'])->name('academic-calendars.store');
     Route::patch('admin/academic-calendars/{academicCalendar}', [AcademicCalendarController::class, 'update'])->name('academic-calendars.update');
     Route::patch('admin/academic-calendars/{academicCalendar}/status', [AcademicCalendarController::class, 'status'])->name('academic-calendars.status');
+    Route::post('admin/academic-calendars/{academicCalendar}/term-periods', [AcademicCalendarController::class, 'storeTermPeriod'])->name('academic-calendars.term-periods.store');
+    Route::patch('admin/academic-calendars/{academicCalendar}/term-periods/{period}', [AcademicCalendarController::class, 'updateTermPeriod'])->name('academic-calendars.term-periods.update');
     Route::post('admin/academic-calendars/{academicCalendar}/events', [AcademicCalendarController::class, 'storeEvent'])->name('academic-calendars.events.store');
     Route::patch('admin/academic-calendars/{academicCalendar}/events/{event}', [AcademicCalendarController::class, 'updateEvent'])->name('academic-calendars.events.update');
     Route::patch('admin/academic-calendars/{academicCalendar}/events/{event}/status', [AcademicCalendarController::class, 'eventStatus'])->name('academic-calendars.events.status');
@@ -330,6 +334,13 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('college/{college}/fee-demands/individual', [CollegeFeeDemandController::class, 'individualStore'])->name('college-fee-demands.individual.store');
     Route::patch('college/{college}/fee-demands/{demand}/cancel', [CollegeFeeDemandController::class, 'cancel'])->name('college-fee-demands.cancel');
     Route::post('college/{college}/fee-demands/{demand}/items/{item}/installments', [CollegeFeeInstallmentController::class, 'store'])->name('college-fee-installments.store');
+    Route::get('college/{college}/fee-installments/bulk-preview', [CollegeFeeInstallmentController::class, 'bulkPreview'])->name('college-fee-installments.bulk-preview');
+    Route::post('college/{college}/fee-installments/bulk', [CollegeFeeInstallmentController::class, 'bulkStore'])->name('college-fee-installments.bulk-store');
+    Route::get('college/{college}/fee-late-fines', [CollegeFeeLateFineController::class, 'index'])->name('college-fee-late-fines.index');
+    Route::post('college/{college}/fee-late-fines/rules', [CollegeFeeLateFineController::class, 'store'])->name('college-fee-late-fines.rules.store');
+    Route::patch('college/{college}/fee-late-fines/rules/{rule}', [CollegeFeeLateFineController::class, 'update'])->name('college-fee-late-fines.rules.update');
+    Route::patch('college/{college}/fee-late-fines/rules/{rule}/status', [CollegeFeeLateFineController::class, 'status'])->name('college-fee-late-fines.rules.status');
+    Route::post('college/{college}/fee-late-fines/recalculate', [CollegeFeeLateFineController::class, 'recalculate'])->name('college-fee-late-fines.recalculate');
     Route::get('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'index'])->name('college-admission-selection-rules.index');
     Route::post('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'store'])->name('college-admission-selection-rules.store');
     Route::patch('college/{college}/admission-selection-rules/{rule}', [CollegeAdmissionSelectionRuleController::class, 'update'])->name('college-admission-selection-rules.update');

@@ -19,6 +19,11 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
+type DisabledRange = {
+    start: string;
+    end: string;
+};
+
 type Props = {
     id: string;
     name: string;
@@ -29,6 +34,7 @@ type Props = {
     min?: string;
     max?: string;
     invalid?: boolean;
+    disabledRanges?: DisabledRange[];
 };
 
 const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -62,6 +68,7 @@ export function DatePicker({
     min = '1800-01-01',
     max,
     invalid,
+    disabledRanges = [],
 }: Props) {
     const controlled = controlledValue !== undefined;
     const initial = toDateOnly(controlled ? controlledValue : defaultValue);
@@ -69,8 +76,53 @@ export function DatePicker({
     const [internalValue, setInternalValue] = useState(initial);
     const value = controlled ? toDateOnly(controlledValue) : internalValue;
 
+    const minDate = parseDate(toDateOnly(min));
+    const maxDate = max ? parseDate(toDateOnly(max)) : null;
+
+    const normalizedDisabledRanges = useMemo(
+        () =>
+            disabledRanges
+                .map((range) => ({
+                    start: parseDate(toDateOnly(range.start)),
+                    end: parseDate(toDateOnly(range.end)),
+                }))
+                .filter(
+                    (range) =>
+                        !Number.isNaN(range.start.getTime()) &&
+                        !Number.isNaN(range.end.getTime()),
+                ),
+        [disabledRanges],
+    );
+
+    const isDisabledByRange = (date: Date) =>
+        normalizedDisabledRanges.some(
+            (range) => date >= range.start && date <= range.end,
+        );
+
+    const clampViewToAllowedMonth = (date: Date) => {
+        const month = new Date(date.getFullYear(), date.getMonth(), 1);
+        const minMonth = new Date(
+            minDate.getFullYear(),
+            minDate.getMonth(),
+            1,
+        );
+        const maxMonth = maxDate
+            ? new Date(maxDate.getFullYear(), maxDate.getMonth(), 1)
+            : null;
+
+        if (month < minMonth) {
+            return minMonth;
+        }
+
+        if (maxMonth && month > maxMonth) {
+            return maxMonth;
+        }
+
+        return month;
+    };
+
     const [view, setView] = useState(() =>
-        initial ? parseDate(initial) : new Date(),
+        clampViewToAllowedMonth(initial ? parseDate(initial) : new Date()),
     );
 
     useEffect(() => {
@@ -81,13 +133,18 @@ export function DatePicker({
         const next = toDateOnly(controlledValue);
 
         if (next) {
-            setView(parseDate(next));
+            setView(clampViewToAllowedMonth(parseDate(next)));
         }
     }, [controlled, controlledValue]);
 
+    useEffect(() => {
+        // min/max can change after a parent selection (for example, after
+        // choosing a Curriculum). Keep the visible month inside the new
+        // allowed range so the Year Select always has a matching option.
+        setView((current) => clampViewToAllowedMonth(current));
+    }, [min, max]);
+
     const selected = value ? parseDate(value) : null;
-    const minDate = parseDate(min);
-    const maxDate = max ? parseDate(max) : null;
     const firstYear = minDate.getFullYear();
     const lastYear = maxDate?.getFullYear() ?? new Date().getFullYear() + 20;
 
@@ -228,7 +285,9 @@ export function DatePicker({
                                     className="h-9 w-28"
                                     aria-label="Select year"
                                 >
-                                    <SelectValue />
+                                    <span className="truncate">
+                                        {view.getFullYear()}
+                                    </span>
                                 </SelectTrigger>
                                 <SelectContent className="max-h-72">
                                     {years.map((year) => (
@@ -287,7 +346,8 @@ export function DatePicker({
                                             type="button"
                                             disabled={Boolean(
                                                 date < minDate ||
-                                                    (maxDate && date > maxDate),
+                                                    (maxDate && date > maxDate) ||
+                                                    isDisabledByRange(date),
                                             )}
                                             onClick={() =>
                                                 setDateValue(formatValue(date))

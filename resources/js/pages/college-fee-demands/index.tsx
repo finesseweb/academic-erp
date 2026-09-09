@@ -1,5 +1,5 @@
 import { Head, router } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +19,18 @@ type BulkContext = {
     cohort_count: number;
 };
 
+type InstallmentContext = {
+    key: string;
+    purpose: 'ADMISSION_INITIAL' | 'ACADEMIC' | 'EXAMINATION' | 'OTHER';
+    basis_group: 'MIXED' | 'TERM' | 'ACADEMIC_YEAR' | 'ONE_TIME';
+    period_no: number;
+    label: string;
+    ready: boolean;
+    reason: string | null;
+    cohort_count: number;
+    item_count?: number;
+};
+
 type ConfirmedAdmission = {
     id: number;
     admission_no: string;
@@ -33,6 +45,7 @@ type Offering = {
     degree: string | null;
     degree_level: string | null;
     session: string;
+    academic_session_id: number;
     curriculum_id: number | null;
     confirmed_admissions?: ConfirmedAdmission[];
     academic_policy: null | {
@@ -44,6 +57,7 @@ type Offering = {
     };
     academic_policy_error: string | null;
     bulk_contexts: BulkContext[];
+    installment_contexts: InstallmentContext[];
 };
 
 type DemandItem = {
@@ -55,6 +69,7 @@ type DemandItem = {
     purpose: string;
     charge_basis: string;
     amount: string;
+    due_date: string | null;
     is_mandatory: boolean;
     is_enrollment_clearance_required: boolean;
     installment_allowed: boolean;
@@ -79,6 +94,12 @@ type Demand = {
     admission_no: string;
     application_no: string;
     candidate_name: string;
+    discipline_id: number | null;
+    discipline_name: string | null;
+    discipline_code: string | null;
+    age: number | null;
+    programme_name: string | null;
+    programme_code: string | null;
     billing_period_no: number;
     billing_period_label: string;
     demand_context: string;
@@ -91,6 +112,8 @@ type Demand = {
     paid_amount: string;
     adjusted_amount: string;
     outstanding_amount: string;
+    late_fine_amount: string;
+    payable_with_late_fine: string;
     status: string;
     generation_mode: string;
     generated_at: string;
@@ -132,15 +155,19 @@ function InstallmentDialog({ collegeId, demand, item, canManage }: { collegeId: 
 }
 
 type BulkInstallmentCandidate = { item_id:number; demand_no:string; admission_no:string; candidate_name:string; discipline:string; fee_head_code:string; fee_head_name:string; net_payable_amount:string; has_existing_schedule:boolean; eligible:boolean; reason:string|null };
-function BulkInstallmentPanel({collegeId,offering,context,canManage}:{collegeId:number;offering:Offering|undefined;context:BulkContext|null;canManage:boolean}){
+function BulkInstallmentPanel({collegeId,offering,canManage}:{collegeId:number;offering:Offering|undefined;canManage:boolean}){
+ const contexts=offering?.installment_contexts ?? [];
+ const [contextKey,setContextKey]=useState('');
+ const context=contexts.find(x=>x.key===contextKey) ?? contexts[0] ?? null;
  const [data,setData]=useState<BulkInstallmentCandidate[]>([]),[head,setHead]=useState(''),[selected,setSelected]=useState<number[]>([]),[rows,setRows]=useState([{percentage:'50',due_date:''},{percentage:'50',due_date:''}]),[loading,setLoading]=useState(false),[applying,setApplying]=useState(false),[error,setError]=useState(''),[expandedDisciplines,setExpandedDisciplines]=useState<string[]>([]);
- useEffect(()=>{setData([]);setHead('');setSelected([]);setError('');setExpandedDisciplines([])},[offering?.id,context?.key]);
- const load=async()=>{if(!offering||!context)return;setLoading(true);setError('');try{const q=new URLSearchParams({offering_id:String(offering.id),purpose:context.purpose,basis_group:context.basis_group,period_no:String(context.period_no)}),r=await fetch(`/college/${collegeId}/fee-installments/bulk-preview?${q}`,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Could not load eligible Fee Demands.');const j=await r.json(),a=j.data??[],h=a[0]?.fee_head_code??'';setData(a);setHead(h);setSelected(a.filter((x:BulkInstallmentCandidate)=>x.eligible&&x.fee_head_code===h).map((x:BulkInstallmentCandidate)=>x.item_id));setExpandedDisciplines([])}catch(e){setError(e instanceof Error?e.message:'Preview failed.')}finally{setLoading(false)}};
+ useEffect(()=>{setContextKey('');setData([]);setHead('');setSelected([]);setError('');setExpandedDisciplines([])},[offering?.id]);
+ useEffect(()=>{setData([]);setHead('');setSelected([]);setError('');setExpandedDisciplines([])},[context?.key]);
+ const load=async()=>{if(!offering||!context)return;setLoading(true);setError('');try{const q=new URLSearchParams({offering_id:String(offering.id),purpose:context.purpose,basis_group:context.basis_group,period_no:String(context.period_no)}),r=await fetch(`/college/${collegeId}/fee-installments/bulk-preview?${q}`,{headers:{Accept:'application/json'}});if(!r.ok){let message='Could not load eligible Fee Demands.';try{const body=await r.json();message=body?.message??message}catch{}throw new Error(message)}const j=await r.json(),a=j.data??[],h=a[0]?.fee_head_code??'';setData(a);setHead(h);setSelected(a.filter((x:BulkInstallmentCandidate)=>x.eligible&&x.fee_head_code===h).map((x:BulkInstallmentCandidate)=>x.item_id));setExpandedDisciplines([]);if(a.length===0)setError(`No active installment-enabled Fee Demand items were found in ${context.label}.`)}catch(e){setError(e instanceof Error?e.message:'Preview failed.')}finally{setLoading(false)}};
  const heads=Array.from(new Map(data.map(x=>[x.fee_head_code,x.fee_head_name])).entries()),visible=data.filter(x=>x.fee_head_code===head),eligible=visible.filter(x=>x.eligible),disciplines=Array.from(new Set(visible.map(x=>x.discipline))),pct=rows.reduce((a,r)=>a+Number(r.percentage||0),0),balanced=Math.abs(pct-100)<.009;
  const chooseHead=(h:string)=>{setHead(h);setSelected(data.filter(x=>x.fee_head_code===h&&x.eligible).map(x=>x.item_id));setExpandedDisciplines([])};
  const toggleDiscipline=(d:string)=>setExpandedDisciplines(old=>old.includes(d)?old.filter(x=>x!==d):[...old,d]);
  const apply=()=>{if(!offering||!context)return;setApplying(true);router.post(`/college/${collegeId}/fee-installments/bulk`,{offering_id:offering.id,purpose:context.purpose,basis_group:context.basis_group,period_no:context.period_no,fee_head_code:head,selected_item_ids:selected,installments:rows},{preserveScroll:true,onSuccess:load,onFinish:()=>setApplying(false)})};
- return <Card><CardHeader><CardTitle>Bulk Installment Schedule</CardTitle><p className="text-sm text-muted-foreground">Common schedule for all applicable students; individual schedule remains available for exceptions.</p></CardHeader><CardContent className="space-y-4"><div className="rounded-md border p-3 text-sm"><strong>Hierarchy:</strong> {offering?`${offering.degree_level??'—'} → ${offering.degree??'—'} → ${offering.program} → ${context?.label??'—'}`:'Select Program Offering above.'}</div><Button type="button" variant="outline" disabled={!canManage||!offering||!context||loading} onClick={load}>{loading?'Loading…':'Load Eligible Students'}</Button>{error&&<p className="text-sm text-destructive">{error}</p>}
+ return <Card><CardHeader><CardTitle>Bulk Installment Schedule</CardTitle><p className="text-sm text-muted-foreground">Common schedule for all applicable students; individual schedule remains available for exceptions.</p></CardHeader><CardContent className="space-y-4"><div className="grid gap-2 sm:grid-cols-[280px_1fr]"><div><Label>Installment Scope</Label><select className="mt-2 h-9 w-full rounded-md border bg-background px-3 text-sm" value={context?.key ?? ''} onChange={e=>setContextKey(e.target.value)} disabled={!offering||contexts.length===0}>{contexts.length===0&&<option value="">No active installment-enabled demand</option>}{contexts.map(x=><option key={x.key} value={x.key}>{x.label} · {x.cohort_count} student{x.cohort_count===1?'':'s'}</option>)}</select></div><div className="self-end rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">Installment scopes come from existing active Fee Demands. Admission Initial is included automatically when its Fee Head allows installments.</div></div><div className="rounded-md border p-3 text-sm"><strong>Hierarchy:</strong> {offering?`${offering.degree_level??'—'} → ${offering.degree??'—'} → ${offering.program} → ${context?.label??'—'}`:'Select Program Offering above.'}</div><Button type="button" variant="outline" disabled={!canManage||!offering||!context||loading} onClick={load}>{loading?'Loading…':'Load Eligible Students'}</Button>{error&&<p className="text-sm text-destructive">{error}</p>}
  {data.length>0&&<><div><Label>Installment-enabled Fee Head</Label><select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={head} onChange={e=>chooseHead(e.target.value)}>{heads.map(([c,n])=><option key={c} value={c}>{n} ({c})</option>)}</select></div><div className="flex flex-wrap gap-2"><Badge variant="outline">Scanned {visible.length}</Badge><Badge>Eligible {eligible.length}</Badge><Badge variant="outline">Selected {selected.length}</Badge><Badge variant="secondary">Existing {visible.filter(x=>x.has_existing_schedule).length}</Badge></div>
  <div className="space-y-2 rounded-md border p-3"><Label>Common Schedule — percentage of each student's net payable</Label><p className="text-xs text-muted-foreground">Define the common installment schedule first. Student groups stay collapsed below so large cohorts do not push the schedule out of view.</p>{rows.map((r,i)=><div key={i} className="grid gap-2 sm:grid-cols-[70px_1fr_1fr_auto] sm:items-end"><span>#{i+1}</span><div><Label>Percentage</Label><Input type="number" min="0.01" max="100" step="0.01" value={r.percentage} onChange={e=>setRows(old=>old.map((x,j)=>j===i?{...x,percentage:e.target.value}:x))}/></div><div><Label>Due Date</Label><DatePicker id={`bulk-inst-${i}`} name={`bulk_due_${i}`} value={r.due_date} onValueChange={v=>setRows(old=>old.map((x,j)=>j===i?{...x,due_date:v}:x))}/></div><Button type="button" variant="ghost" disabled={rows.length<=2} onClick={()=>setRows(old=>old.filter((_,j)=>j!==i))}>Remove</Button></div>)}<Button type="button" variant="outline" onClick={()=>setRows(old=>[...old,{percentage:'',due_date:''}])} disabled={rows.length>=24}>Add Installment</Button><p className={balanced?'text-sm':'text-sm text-destructive'}>Total {pct.toFixed(2)}% / 100%</p></div>
  <div className="space-y-2"><Label>Students by Discipline</Label>{disciplines.map(d=>{const group=visible.filter(x=>x.discipline===d),ids=group.filter(x=>x.eligible).map(x=>x.item_id),all=ids.length>0&&ids.every(id=>selected.includes(id)),expanded=expandedDisciplines.includes(d);return <div key={d} className="rounded-md border"><div className="flex items-center justify-between gap-3 bg-muted/20 p-2 text-sm font-medium"><label className="flex items-center gap-2"><input type="checkbox" checked={all} onChange={e=>setSelected(old=>e.target.checked?Array.from(new Set([...old,...ids])):old.filter(id=>!ids.includes(id)))}/>{d} ({ids.length} eligible)</label><Button type="button" size="sm" variant="ghost" onClick={()=>toggleDiscipline(d)}>{expanded?'Collapse':'Expand'} {expanded?'▲':'▼'}</Button></div>{expanded&&group.map(x=><label key={x.item_id} className={`flex flex-wrap items-center justify-between gap-2 border-t p-2 text-sm ${x.eligible?'':'opacity-60'}`}><span className="flex items-center gap-2"><input type="checkbox" disabled={!x.eligible} checked={selected.includes(x.item_id)} onChange={e=>setSelected(old=>e.target.checked?Array.from(new Set([...old,x.item_id])):old.filter(id=>id!==x.item_id))}/>{x.candidate_name} · {x.admission_no} · {x.demand_no}{x.has_existing_schedule&&<Badge variant="secondary">Existing schedule</Badge>}</span><span>{x.eligible?installmentMoney(x.net_payable_amount):x.reason}</span></label>)}</div>})}</div>
@@ -153,11 +180,17 @@ export default function Page({
     offerings,
     demands,
     can,
+    register,
+    register_sessions,
+    register_disciplines,
 }: {
     college: { id: number; name: string; code: string };
     offerings: Offering[];
     demands: Demand[];
     can: { generate: boolean; cancel: boolean; manage_installments: boolean };
+    register: { q: string; session_id: number; offering_id: number; discipline_id: number; status: string; per_page: number; current_page: number; last_page: number; from: number | null; to: number | null; total: number };
+    register_sessions: { id: number; name: string; code: string; is_current: boolean }[];
+    register_disciplines: { id: number; name: string; code: string }[];
 }) {
     const [offeringId, setOfferingId] = useState(offerings[0]?.id ?? 0);
     const [purpose, setPurpose] = useState(offerings[0]?.bulk_contexts.find((row) => row.purpose === 'ACADEMIC')?.purpose ?? offerings[0]?.bulk_contexts[0]?.purpose ?? 'ACADEMIC');
@@ -169,8 +202,7 @@ export default function Page({
     const [individualSearchLoading, setIndividualSearchLoading] = useState(false);
     const [openAdmission, setOpenAdmission] = useState<string | null>(null);
     const [openDemand, setOpenDemand] = useState<number | null>(null);
-    const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
+    const [search, setSearch] = useState(register.q ?? '');
     const [reason, setReason] = useState('');
 
     const selectedOffering = useMemo(
@@ -235,6 +267,10 @@ export default function Page({
             admission_no: string;
             application_no: string;
             candidate_name: string;
+            discipline_name: string | null;
+            discipline_code: string | null;
+            age: number | null;
+            programme_name: string | null;
             currency: string;
             demands: Demand[];
             total: number;
@@ -250,6 +286,10 @@ export default function Page({
                 admission_no: demand.admission_no,
                 application_no: demand.application_no,
                 candidate_name: demand.candidate_name,
+                discipline_name: demand.discipline_name,
+                discipline_code: demand.discipline_code,
+                age: demand.age,
+                programme_name: demand.programme_name,
                 currency: demand.currency,
                 demands: [],
                 total: 0,
@@ -268,24 +308,8 @@ export default function Page({
         return Array.from(grouped.values());
     }, [demands]);
 
-    const filteredDemandGroups = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        if (!query) return demandGroups;
-        return demandGroups.filter((group) => {
-            const groupMatch = [group.application_no, group.admission_no, group.candidate_name]
-                .some((value) => value?.toLowerCase().includes(query));
-            if (groupMatch) return true;
-            return group.demands.some((demand) =>
-                [demand.demand_no, demand.billing_period_label, demand.demand_context, demand.billing_basis_group === 'TERM' ? 'term-wise' : demand.billing_basis_group === 'ACADEMIC_YEAR' ? 'academic year-wise' : demand.billing_basis_group === 'ONE_TIME' ? 'one-time' : demand.billing_basis_group ?? '']
-                    .some((value) => value?.toLowerCase().includes(query)),
-            );
-        });
-    }, [demandGroups, search]);
+    const filteredDemandGroups = demandGroups;
 
-    const pageSize = 10;
-    const totalPages = Math.max(1, Math.ceil(filteredDemandGroups.length / pageSize));
-    const currentPage = Math.min(page, totalPages);
-    const pagedDemandGroups = filteredDemandGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     const money = (value: string, currency = 'INR') =>
         new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(Number(value));
@@ -549,208 +573,154 @@ export default function Page({
                     </CardContent>
                 </Card>
 
-                <BulkInstallmentPanel collegeId={college.id} offering={selectedOffering} context={selectedContext} canManage={can.manage_installments} />
+                <BulkInstallmentPanel collegeId={college.id} offering={selectedOffering} canManage={can.manage_installments} />
 
                 <Card>
                     <CardHeader className="pb-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-end justify-between gap-3">
                             <div>
-                                <CardTitle>Fee Demands ({filteredDemandGroups.length})</CardTitle>
+                                <CardTitle>Fee Demands ({register.total})</CardTitle>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    Demands are grouped by admission/application so the register stays compact. All demand groups and demand details are closed by default.
+                                    Compact operational register. Demand details stay closed until View is selected; records are paginated on the server for long-term scale.
                                 </p>
                             </div>
-                            <Input
-                                className="w-full md:w-96"
-                                placeholder="Search application no., admission no., student name, demand or period"
-                                value={search}
-                                onChange={(event) => {
-                                    setSearch(event.target.value);
-                                    setPage(1);
-                                    setOpenAdmission(null);
-                                    setOpenDemand(null);
-                                }}
-                            />
+                            <div className="grid w-full gap-2 md:grid-cols-[180px_240px_220px_170px_1fr_auto_auto]">
+                                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={register.session_id} onChange={(event) => router.get(window.location.pathname, { session_id: Number(event.target.value), register_offering_id: 0, register_discipline_id: 0, register_status: register.status, register_q: register.q, per_page: register.per_page }, { preserveState: true, preserveScroll: true })}>
+                                    {register_sessions.map((session) => <option key={session.id} value={session.id}>{session.name}{session.is_current ? ' (Current)' : ''}</option>)}
+                                </select>
+                                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={register.offering_id} onChange={(event) => router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: Number(event.target.value), register_discipline_id: 0, register_status: register.status, register_q: register.q, per_page: register.per_page }, { preserveState: true, preserveScroll: true })}>
+                                    <option value={0}>All Programme Offerings</option>
+                                    {offerings.filter((offering) => offering.academic_session_id === register.session_id).map((offering) => <option key={offering.id} value={offering.id}>{offering.program} ({offering.program_code})</option>)}
+                                </select>
+                                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={register.discipline_id} onChange={(event) => router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: Number(event.target.value), register_status: register.status, register_q: register.q, per_page: register.per_page }, { preserveState: true, preserveScroll: true })}>
+                                    <option value={0}>All Disciplines</option>
+                                    {register_disciplines.map((discipline) => <option key={discipline.id} value={discipline.id}>{discipline.name} ({discipline.code})</option>)}
+                                </select>
+                                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={register.status} onChange={(event) => router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: register.discipline_id, register_status: event.target.value, register_q: register.q, per_page: register.per_page }, { preserveState: true, preserveScroll: true })}>
+                                    <option value="">Active / Non-cancelled</option>
+                                    <option value="OPEN">Open</option>
+                                    <option value="PARTIALLY_PAID">Partially Paid</option>
+                                    <option value="PAID">Paid</option>
+                                    <option value="CANCELLED">Cancelled</option>
+                                </select>
+                                <Input
+                                    className="min-w-72 flex-1 md:w-96"
+                                    placeholder="Search application no., admission no., student name, demand or period"
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: register.discipline_id, register_status: register.status, register_q: search.trim(), per_page: register.per_page }, { preserveState: true, preserveScroll: true });
+                                    }}
+                                />
+                                <Button variant="outline" onClick={() => router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: register.discipline_id, register_status: register.status, register_q: search.trim(), per_page: register.per_page }, { preserveState: true, preserveScroll: true })}>Search</Button>
+                                {register.q && <Button variant="ghost" onClick={() => { setSearch(''); router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: register.discipline_id, register_status: register.status, per_page: register.per_page }, { preserveState: true, preserveScroll: true }); }}>Clear</Button>}
+                                <select
+                                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                                    value={register.per_page}
+                                    onChange={(event) => router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: register.discipline_id, register_status: register.status, register_q: register.q, per_page: Number(event.target.value) }, { preserveState: true, preserveScroll: true })}
+                                >
+                                    <option value={25}>25 / page</option>
+                                    <option value={50}>50 / page</option>
+                                    <option value={100}>100 / page</option>
+                                </select>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        {pagedDemandGroups.map((group) => {
-                            const groupOpen = openAdmission === group.key;
-                            return (
-                                <div key={group.key} className="rounded-md border">
-                                    <div className="grid gap-3 p-3 md:grid-cols-[1.1fr_1.4fr_0.8fr_0.8fr_0.9fr_0.8fr_auto] md:items-center">
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Application / Admission</p>
-                                            <p className="font-medium">{group.application_no || group.admission_no}</p>
-                                            {group.application_no && group.admission_no && group.application_no !== group.admission_no && (
-                                                <p className="text-xs text-muted-foreground">{group.admission_no}</p>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Candidate / Student</p>
-                                            <p className="font-medium">{group.candidate_name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Total</p>
-                                            <p className="font-semibold">{money(String(group.total), group.currency)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Mandatory</p>
-                                            <p className="font-semibold">{money(String(group.mandatory), group.currency)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Enrollment Clearance</p>
-                                            <p className="font-semibold">{money(String(group.clearance), group.currency)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Outstanding</p>
-                                            <p className="font-semibold">{money(String(group.outstanding), group.currency)}</p>
-                                        </div>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                setOpenAdmission(groupOpen ? null : group.key);
-                                                setOpenDemand(null);
-                                            }}
-                                        >
-                                            Demands ({group.demands.length}) {groupOpen ? '▲' : '▼'}
-                                        </Button>
-                                    </div>
-
-                                    {groupOpen && (
-                                        <div className="space-y-2 border-t p-3">
-                                            {group.demands.map((demand) => {
-                                                const demandOpen = openDemand === demand.id;
-                                                return (
-                                                    <div key={demand.id} className="rounded-md border bg-muted/20">
-                                                        <div className="flex flex-wrap items-center justify-between gap-3 p-3">
-                                                            <div>
-                                                                <p className="font-medium">{demand.billing_period_label}</p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {demand.demand_no} · {demand.generated_at}
-                                                                </p>
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <Badge variant="outline">{demand.demand_context.replaceAll('_', ' ')}</Badge>
-                                                                {demand.billing_basis_group && <Badge variant="outline">{basisLabel(demand.billing_basis_group)}</Badge>}
-                                                                <Badge variant="outline">{demand.generation_mode.replaceAll('_', ' ')}</Badge>
-                                                                <Badge variant={demand.status === 'CANCELLED' ? 'secondary' : 'default'}>{demand.status}</Badge>
-                                                                <span className="text-sm font-semibold">{money(demand.outstanding_amount, demand.currency)}</span>
-                                                                <Button size="sm" variant="outline" onClick={() => setOpenDemand(demandOpen ? null : demand.id)}>
-                                                                    {demandOpen ? 'Hide Details' : 'View Details'}
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-
-                                                        {demandOpen && (
-                                                            <div className="space-y-3 border-t p-3">
-                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                                                                    {[
-                                                                        ['Gross Demand', demand.total_amount],
-                                                                        ['Paid', demand.paid_amount],
-                                                                        ['Scholarship / Concession / Waiver', demand.adjusted_amount],
-                                                                        ['Outstanding', demand.outstanding_amount],
-                                                                    ].map(([label, value]) => (
-                                                                        <div key={label}>
-                                                                            <p className="text-xs text-muted-foreground">{label}</p>
-                                                                            <p className="font-semibold">{money(value, demand.currency)}</p>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-
-                                                                {demand.benefit_adjustments.length > 0 && (
-                                                                    <div className="rounded-md border bg-background p-3">
-                                                                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                                                            <div>
-                                                                                <p className="font-medium">Approved Student Benefits</p>
-                                                                                <p className="text-xs text-muted-foreground">Auditable adjustments reducing this demand; gross demand remains unchanged.</p>
-                                                                            </div>
-                                                                            <Badge variant="outline">−{money(demand.adjusted_amount, demand.currency)}</Badge>
-                                                                        </div>
-                                                                        <div className="space-y-2">
-                                                                            {demand.benefit_adjustments.map((benefit) => (
-                                                                                <div key={benefit.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 p-2">
-                                                                                    <div>
-                                                                                        <p className="text-sm font-medium">{benefit.scheme_name} <span className="text-xs text-muted-foreground">({benefit.scheme_code})</span></p>
-                                                                                        <p className="text-xs text-muted-foreground">{benefit.benefit_type.replaceAll('_', ' ')}{benefit.decided_at ? ` · Approved ${benefit.decided_at}` : ''}</p>
-                                                                                    </div>
-                                                                                    <span className="text-sm font-semibold">−{money(benefit.sanctioned_amount, demand.currency)}</span>
+                        <div className="overflow-x-auto rounded-md border">
+                            <table className="w-full min-w-[1450px] text-sm">
+                                <thead className="bg-muted/40 text-left">
+                                    <tr className="border-b">
+                                        <th className="px-3 py-2 font-medium">Application / Admission</th>
+                                        <th className="px-3 py-2 font-medium">Student</th>
+                                        <th className="px-3 py-2 font-medium">Discipline</th>
+                                        <th className="px-3 py-2 font-medium">Age</th>
+                                        <th className="px-3 py-2 font-medium">Programme</th>
+                                        <th className="px-3 py-2 text-right font-medium">Total</th>
+                                        <th className="px-3 py-2 text-right font-medium">Mandatory</th>
+                                        <th className="px-3 py-2 text-right font-medium">Enrollment Clearance</th>
+                                        <th className="px-3 py-2 text-right font-medium">Outstanding</th>
+                                        <th className="px-3 py-2 text-center font-medium">Demands</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredDemandGroups.map((group) => {
+                                        const groupOpen = openAdmission === group.key;
+                                        return (
+                                            <Fragment key={group.key}>
+                                                <tr className="border-b last:border-b-0">
+                                                    <td className="px-3 py-3">
+                                                        <div className="font-medium">{group.application_no || '—'}</div>
+                                                        <div className="text-xs text-muted-foreground">{group.admission_no || '—'}</div>
+                                                    </td>
+                                                    <td className="px-3 py-3 font-medium">{group.candidate_name || '—'}</td>
+                                                    <td className="px-3 py-3"><div>{group.discipline_name || 'General / Not mapped'}</div>{group.discipline_code && <div className="text-xs text-muted-foreground">{group.discipline_code}</div>}</td>
+                                                    <td className="px-3 py-3">{group.age ?? '—'}</td>
+                                                    <td className="px-3 py-3">{group.programme_name || '—'}</td>
+                                                    <td className="px-3 py-3 text-right font-semibold">{money(String(group.total), group.currency)}</td>
+                                                    <td className="px-3 py-3 text-right">{money(String(group.mandatory), group.currency)}</td>
+                                                    <td className="px-3 py-3 text-right">{money(String(group.clearance), group.currency)}</td>
+                                                    <td className="px-3 py-3 text-right font-semibold">{money(String(group.outstanding), group.currency)}</td>
+                                                    <td className="px-3 py-3 text-center">
+                                                        <Button size="sm" variant="outline" onClick={() => { setOpenAdmission(groupOpen ? null : group.key); setOpenDemand(null); }}>
+                                                            View ({group.demands.length}) {groupOpen ? '▲' : '▼'}
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                                {groupOpen && (
+                                                    <tr className="border-b bg-muted/10">
+                                                        <td colSpan={10} className="p-3">
+                                                            <div className="space-y-2">
+                                                                {group.demands.map((demand) => {
+                                                                    const demandOpen = openDemand === demand.id;
+                                                                    return (
+                                                                        <div key={demand.id} className="rounded-md border bg-background">
+                                                                            <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+                                                                                <div>
+                                                                                    <p className="font-medium">{demand.demand_no} · {demand.billing_period_label}</p>
+                                                                                    <p className="text-xs text-muted-foreground">{demand.demand_context} · {basisLabel(demand.billing_basis_group)} · {demand.status}</p>
                                                                                 </div>
-                                                                            ))}
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <Badge variant="outline">Outstanding {money(demand.outstanding_amount, demand.currency)}</Badge>{Number(demand.late_fine_amount)>0&&<Badge variant="destructive">Late Fine {money(demand.late_fine_amount,demand.currency)}</Badge>}
+                                                                                    <Button size="sm" variant="outline" onClick={() => setOpenDemand(demandOpen ? null : demand.id)}>Details {demandOpen ? '▲' : '▼'}</Button>
+                                                                                </div>
+                                                                            </div>
+                                                                            {demandOpen && (
+                                                                                <div className="space-y-3 border-t bg-muted/10 p-3">
+                                                                                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+                                                                                        {[
+                                                                                            ['Gross Demand', demand.total_amount], ['Mandatory', demand.mandatory_amount], ['Enrollment Clearance', demand.enrollment_clearance_amount], ['Approved Adjustments', demand.adjusted_amount], ['Outstanding', demand.outstanding_amount], ['Late Fine', demand.late_fine_amount], ['Payable incl. Fine', demand.payable_with_late_fine],
+                                                                                        ].map(([label, value]) => <div key={label} className="rounded-md border bg-background p-2"><p className="text-xs text-muted-foreground">{label}</p><p className="font-semibold">{money(value, demand.currency)}</p></div>)}
+                                                                                    </div>
+                                                                                    {demand.benefit_adjustments.length > 0 && <div className="rounded-md border bg-background p-3"><p className="mb-2 font-medium">Approved Student Benefits</p>{demand.benefit_adjustments.map((benefit) => <div key={benefit.id} className="flex justify-between border-t py-2 text-sm"><span>{benefit.scheme_name} ({benefit.scheme_code})</span><span className="font-semibold">−{money(benefit.sanctioned_amount, demand.currency)}</span></div>)}</div>}
+                                                                                    {demand.items.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background p-3"><div><p className="font-medium">{item.fee_head_name} <span className="text-xs text-muted-foreground">({item.fee_head_code})</span></p><p className="text-xs text-muted-foreground">{item.owner_type} · {item.structure_name} · {item.purpose} · {item.charge_basis.replaceAll('_', ' ')} · Standard Due {item.due_date ? item.due_date.slice(0,10) : 'Not set'}</p></div><div className="flex flex-wrap gap-2"><Badge variant="outline">{money(item.amount, demand.currency)}</Badge>{Number(item.benefit_adjustment_amount) > 0 && <Badge variant="secondary">Benefit −{money(item.benefit_adjustment_amount, demand.currency)}</Badge>}{item.is_mandatory && <Badge>Mandatory</Badge>}{item.is_enrollment_clearance_required && <Badge variant="destructive">Enrollment Clearance</Badge>}<Badge variant="outline">Installment {item.installment_allowed ? 'Allowed' : 'No'}</Badge>{item.installment_allowed && demand.status !== 'CANCELLED' && <InstallmentDialog collegeId={college.id} demand={demand} item={item} canManage={can.manage_installments} />}<Badge variant="outline">{item.is_refundable ? 'Refundable' : 'Non-refundable'}</Badge></div></div>)}
+                                                                                    {can.cancel && demand.status !== 'CANCELLED' && Number(demand.outstanding_amount) === Number(demand.total_amount) && <div className="flex gap-2"><Input placeholder="Cancellation reason" value={reason} onChange={(event) => setReason(event.target.value)} /><Button variant="destructive" disabled={!reason.trim()} onClick={() => router.patch(`/college/${college.id}/fee-demands/${demand.id}/cancel`, { reason }, { preserveScroll: true, onSuccess: () => setReason('') })}>Cancel Demand</Button></div>}
+                                                                                </div>
+                                                                            )}
                                                                         </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {demand.items.map((item) => (
-                                                                    <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background p-3">
-                                                                        <div>
-                                                                            <p className="font-medium">
-                                                                                {item.fee_head_name} <span className="text-xs text-muted-foreground">({item.fee_head_code})</span>
-                                                                            </p>
-                                                                            <p className="text-xs text-muted-foreground">
-                                                                                {item.owner_type} · {item.structure_name} · {item.purpose} · {item.charge_basis.replaceAll('_', ' ')}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="flex flex-wrap gap-2">
-                                                                            <Badge variant="outline">{money(item.amount, demand.currency)}</Badge>
-                                                                            {Number(item.benefit_adjustment_amount) > 0 && <Badge variant="secondary">Benefit −{money(item.benefit_adjustment_amount, demand.currency)}</Badge>}
-                                                                            {item.is_mandatory && <Badge>Mandatory</Badge>}
-                                                                            {item.is_enrollment_clearance_required && <Badge variant="destructive">Enrollment Clearance</Badge>}
-                                                                            <Badge variant="outline">Installment {item.installment_allowed ? 'Allowed' : 'No'}</Badge>
-                                                                            {item.installment_allowed && demand.status !== 'CANCELLED' && <InstallmentDialog collegeId={college.id} demand={demand} item={item} canManage={can.manage_installments} />}
-                                                                            <Badge variant="outline">{item.is_refundable ? 'Refundable' : 'Non-refundable'}</Badge>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-
-                                                                {can.cancel && demand.status !== 'CANCELLED' && Number(demand.outstanding_amount) === Number(demand.total_amount) && (
-                                                                    <div className="flex gap-2">
-                                                                        <Input placeholder="Cancellation reason" value={reason} onChange={(event) => setReason(event.target.value)} />
-                                                                        <Button
-                                                                            variant="destructive"
-                                                                            disabled={!reason.trim()}
-                                                                            onClick={() =>
-                                                                                router.patch(
-                                                                                    `/college/${college.id}/fee-demands/${demand.id}/cancel`,
-                                                                                    { reason },
-                                                                                    { preserveScroll: true, onSuccess: () => setReason('') },
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            Cancel Demand
-                                                                        </Button>
-                                                                    </div>
-                                                                )}
+                                                                    );
+                                                                })}
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
 
-                        {!filteredDemandGroups.length && (
-                            <div className="py-10 text-center text-sm text-muted-foreground">
-                                {demands.length ? 'No fee demands match this search.' : 'No fee demands yet. New Admission Confirmations create admission-stage demand automatically; Academic period charges can be raised from the workflow above.'}
-                            </div>
-                        )}
+                        {!filteredDemandGroups.length && <div className="py-10 text-center text-sm text-muted-foreground">{register.q ? 'No fee demands match this search.' : 'No fee demands yet.'}</div>}
 
-                        {filteredDemandGroups.length > pageSize && (
-                            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-                                <p className="text-xs text-muted-foreground">
-                                    Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredDemandGroups.length)} of {filteredDemandGroups.length} admissions
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</Button>
-                                    <Badge variant="outline">Page {currentPage} of {totalPages}</Badge>
-                                    <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>Next</Button>
-                                </div>
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                            <p className="text-xs text-muted-foreground">{register.total ? `Showing ${register.from}–${register.to} of ${register.total} admissions` : '0 admissions'}</p>
+                            <div className="flex items-center gap-2">
+                                <Button size="sm" variant="outline" disabled={register.current_page <= 1} onClick={() => router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: register.discipline_id, register_status: register.status, register_q: register.q, per_page: register.per_page, page: register.current_page - 1 }, { preserveState: true, preserveScroll: true })}>Previous</Button>
+                                <Badge variant="outline">Page {register.current_page} of {register.last_page}</Badge>
+                                <Button size="sm" variant="outline" disabled={register.current_page >= register.last_page} onClick={() => router.get(window.location.pathname, { session_id: register.session_id, register_offering_id: register.offering_id, register_discipline_id: register.discipline_id, register_status: register.status, register_q: register.q, per_page: register.per_page, page: register.current_page + 1 }, { preserveState: true, preserveScroll: true })}>Next</Button>
                             </div>
-                        )}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
