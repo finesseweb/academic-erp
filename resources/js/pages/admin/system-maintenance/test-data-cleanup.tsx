@@ -9,7 +9,7 @@ import {
     RotateCcw,
     ShieldAlert,
 } from 'lucide-react';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -71,6 +71,8 @@ type Entity = {
     name: string;
     status?: string | null;
     kind?: string | null;
+    can_deactivate_for_testing?: boolean;
+    status_normalized?: string | null;
     dependencies: Record<string, number>;
     blocked: boolean;
     blocking_references: Ref[];
@@ -118,6 +120,8 @@ type Props = {
         applicants: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
+        fee_late_fine_charges: Entity[];
+        fee_installment_schedules: Entity[];
         fee_student_benefits: Entity[];
         fee_demands: Entity[];
         fee_scholarship_schemes: Entity[];
@@ -159,6 +163,8 @@ type TabKey =
     | 'academic_policies'
     | 'college_admission_form_templates'
     | 'college_application_fee_rules'
+    | 'fee_late_fine_charges'
+    | 'fee_installment_schedules'
     | 'fee_student_benefits'
     | 'fee_demands'
     | 'fee_scholarship_schemes'
@@ -197,11 +203,14 @@ type ActionTarget = {
         | 'reset_policy_approval'
         | 'cleanup_academic_policy'
         | 'cleanup_master'
+        | 'cleanup_bulk'
         | 'deactivate_admission_form_template'
         | 'cleanup_legacy_unlinked_regular'
         | 'full_access_reset'
         | 'full_reset';
-    type?: Exclude<TabKey, 'curriculum' | 'academic_policies'>;
+    type?: TabKey;
+    ids?: number[];
+    all?: boolean;
     id: number;
     code: string;
     name: string;
@@ -213,6 +222,8 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'applicants', label: 'Applicants' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
+    { key: 'fee_late_fine_charges', label: 'Late Fine Charges' },
+    { key: 'fee_installment_schedules', label: 'Installment Schedules' },
     { key: 'fee_student_benefits', label: 'Student Benefits / Sanctions' },
     { key: 'fee_demands', label: 'Fee Demands' },
     { key: 'fee_scholarship_schemes', label: 'Scholarship / Benefits' },
@@ -279,6 +290,8 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
     {
         label: 'Fee Management',
         keys: [
+            'fee_late_fine_charges',
+            'fee_installment_schedules',
             'fee_student_benefits',
             'fee_demands',
             'fee_scholarship_schemes',
@@ -325,9 +338,13 @@ export default function TestDataCleanup({
     const [tab, setTab] = useState<TabKey>('college_admission_applications');
     const [applicantOfferingFilter, setApplicantOfferingFilter] = useState('all');
     const [target, setTarget] = useState<ActionTarget | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const form = useForm({
         confirmation_code: '',
+        type: '',
+        ids: [] as number[],
+        all: false,
     });
 
     const applicantOfferingOptions = useMemo(() => {
@@ -370,10 +387,80 @@ export default function TestDataCleanup({
         );
     }, [tab, entities, applicantOfferingFilter]);
 
+    const bulkSelectableRows = useMemo(() => {
+        if (tab === 'curriculum') {
+            return curricula.map((item) => ({
+                id: item.id,
+                blocked: !item.can_cleanup,
+            }));
+        }
+
+        if (tab === 'academic_policies') {
+            return academicPolicies.map((item) => ({
+                id: item.id,
+                blocked: !item.can_cleanup,
+            }));
+        }
+
+        return currentEntities.map((item) => ({
+            id: item.id,
+            blocked: item.blocked,
+        }));
+    }, [tab, curricula, academicPolicies, currentEntities]);
+
+    const cleanableCurrentEntities = useMemo(
+        () => bulkSelectableRows.filter((item) => !item.blocked),
+        [bulkSelectableRows],
+    );
+
+    useEffect(() => {
+        setSelectedIds([]);
+    }, [tab, applicantOfferingFilter]);
+
+    const toggleSelected = (id: number, checked: boolean) => {
+        setSelectedIds((current) =>
+            checked
+                ? Array.from(new Set([...current, id]))
+                : current.filter((value) => value !== id),
+        );
+    };
+
+    const toggleAllVisible = (checked: boolean) => {
+        const visibleIds = cleanableCurrentEntities.map((item) => item.id);
+        setSelectedIds((current) => {
+            if (checked) {
+                return Array.from(new Set([...current, ...visibleIds]));
+            }
+            return current.filter((id) => !visibleIds.includes(id));
+        });
+    };
+
+    const allVisibleSelected =
+        cleanableCurrentEntities.length > 0 &&
+        cleanableCurrentEntities.every((item) => selectedIds.includes(item.id));
+
+    const cleanableModuleCount = useMemo(() => {
+        if (tab === 'curriculum') {
+            return curricula.filter((item) => item.can_cleanup).length;
+        }
+        if (tab === 'academic_policies') {
+            return academicPolicies.filter((item) => item.can_cleanup).length;
+        }
+        return entities[tab].filter((item) => !item.blocked).length;
+    }, [tab, entities, curricula, academicPolicies]);
+
+    const bulkConfirmationCode = (type: string) =>
+        `CLEAN-${type.replaceAll('_', '-').toUpperCase()}-TEST-DATA`;
+
     const openAction = (value: ActionTarget) => {
         setTarget(value);
         form.clearErrors();
-        form.setData('confirmation_code', '');
+        form.setData({
+            confirmation_code: '',
+            type: value.type ?? '',
+            ids: value.ids ?? [],
+            all: value.all ?? false,
+        });
     };
 
     const submit = (event: FormEvent) => {
@@ -409,6 +496,20 @@ export default function TestDataCleanup({
                 {
                     preserveScroll: true,
                     onSuccess: () => setTarget(null),
+                },
+            );
+            return;
+        }
+
+        if (target.mode === 'cleanup_bulk') {
+            form.post(
+                '/admin/system-maintenance/test-data-cleanup/bulk-clean',
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setTarget(null);
+                        setSelectedIds([]);
+                    },
                 },
             );
             return;
@@ -674,11 +775,58 @@ export default function TestDataCleanup({
 
                 {tab === 'curriculum' ? (
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <BookOpenCheck className="size-5" />
-                                Curriculum Test Data
-                            </CardTitle>
+                        <CardHeader className="space-y-3">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <BookOpenCheck className="size-5" />
+                                    Curriculum Test Data
+                                </CardTitle>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        {selectedIds.length} selected · {cleanableCurrentEntities.length} cleanable
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={!enabled || selectedIds.length === 0}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'cleanup_bulk',
+                                                type: 'curriculum',
+                                                ids: selectedIds,
+                                                all: false,
+                                                id: 0,
+                                                code: bulkConfirmationCode('curriculum'),
+                                                name: `Clean ${selectedIds.length} selected Curriculum record(s)`,
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Clean Selected ({selectedIds.length})
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="destructive"
+                                        disabled={!enabled || cleanableModuleCount === 0}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'cleanup_bulk',
+                                                type: 'curriculum',
+                                                ids: [],
+                                                all: true,
+                                                id: 0,
+                                                code: bulkConfirmationCode('curriculum'),
+                                                name: 'Clean all cleanable Curriculum records',
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Clean All Cleanable ({cleanableModuleCount})
+                                    </Button>
+                                </div>
+                            </div>
                         </CardHeader>
 
                         <CardContent className="p-0">
@@ -686,6 +834,16 @@ export default function TestDataCleanup({
                                 <table className="w-full text-sm">
                                     <thead className="border-b bg-muted/50 text-left">
                                         <tr>
+                                            <th className="w-12 px-4 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label="Select all cleanable Curriculum records"
+                                                    checked={allVisibleSelected}
+                                                    disabled={!enabled || cleanableCurrentEntities.length === 0}
+                                                    onChange={(event) => toggleAllVisible(event.target.checked)}
+                                                    className="size-4 rounded border-input"
+                                                />
+                                            </th>
                                             <th className="px-4 py-3">
                                                 Curriculum
                                             </th>
@@ -706,6 +864,16 @@ export default function TestDataCleanup({
                                                 key={item.id}
                                                 className="border-b last:border-0"
                                             >
+                                                <td className="px-4 py-4 align-top">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`Select ${item.name}`}
+                                                        checked={selectedIds.includes(item.id)}
+                                                        disabled={!enabled || !item.can_cleanup}
+                                                        onChange={(event) => toggleSelected(item.id, event.target.checked)}
+                                                        className="mt-1 size-4 rounded border-input"
+                                                    />
+                                                </td>
                                                 <td className="px-4 py-4">
                                                     <div className="font-medium">
                                                         {item.name}
@@ -811,13 +979,60 @@ export default function TestDataCleanup({
                     </Card>
                 ) : tab === 'academic_policies' ? (
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <BookOpenCheck className="size-5" />
-                                Academic Policy Test Data
-                            </CardTitle>
+                        <CardHeader className="space-y-3">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <BookOpenCheck className="size-5" />
+                                    Academic Policy Test Data
+                                </CardTitle>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        {selectedIds.length} selected · {cleanableCurrentEntities.length} cleanable
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={!enabled || selectedIds.length === 0}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'cleanup_bulk',
+                                                type: 'academic_policies',
+                                                ids: selectedIds,
+                                                all: false,
+                                                id: 0,
+                                                code: bulkConfirmationCode('academic_policies'),
+                                                name: `Clean ${selectedIds.length} selected Academic Policy record(s)`,
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Clean Selected ({selectedIds.length})
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="destructive"
+                                        disabled={!enabled || cleanableModuleCount === 0}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'cleanup_bulk',
+                                                type: 'academic_policies',
+                                                ids: [],
+                                                all: true,
+                                                id: 0,
+                                                code: bulkConfirmationCode('academic_policies'),
+                                                name: 'Clean all cleanable Academic Policy version chains',
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Clean All Cleanable ({cleanableModuleCount})
+                                    </Button>
+                                </div>
+                            </div>
                             <p className="text-sm text-muted-foreground">
-                                Cleanup is version-chain aware. A clean action removes the complete test policy version chain only when no downstream operational reference exists.
+                                Cleanup is version-chain aware. Bulk cleanup de-duplicates chains automatically and preserves any policy with downstream operational references.
                             </p>
                         </CardHeader>
 
@@ -826,6 +1041,16 @@ export default function TestDataCleanup({
                                 <table className="w-full text-sm">
                                     <thead className="border-b bg-muted/50 text-left">
                                         <tr>
+                                            <th className="w-12 px-4 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label="Select all cleanable Academic Policy records"
+                                                    checked={allVisibleSelected}
+                                                    disabled={!enabled || cleanableCurrentEntities.length === 0}
+                                                    onChange={(event) => toggleAllVisible(event.target.checked)}
+                                                    className="size-4 rounded border-input"
+                                                />
+                                            </th>
                                             <th className="px-4 py-3">Academic Policy</th>
                                             <th className="px-4 py-3">Status</th>
                                             <th className="px-4 py-3">Dependencies</th>
@@ -836,6 +1061,16 @@ export default function TestDataCleanup({
                                     <tbody>
                                         {academicPolicies.map((item) => (
                                             <tr key={item.id} className="border-b last:border-0">
+                                                <td className="px-4 py-4 align-top">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`Select ${item.name}`}
+                                                        checked={selectedIds.includes(item.id)}
+                                                        disabled={!enabled || !item.can_cleanup}
+                                                        onChange={(event) => toggleSelected(item.id, event.target.checked)}
+                                                        className="mt-1 size-4 rounded border-input"
+                                                    />
+                                                </td>
                                                 <td className="px-4 py-4">
                                                     <div className="font-medium">{item.name}</div>
                                                     <div className="text-xs text-muted-foreground">
@@ -903,7 +1138,7 @@ export default function TestDataCleanup({
                                         ))}
                                         {!academicPolicies.length && (
                                             <tr>
-                                                <td colSpan={5} className="px-6 py-14 text-center text-muted-foreground">
+                                                <td colSpan={6} className="px-6 py-14 text-center text-muted-foreground">
                                                     No Academic Policy test data found.
                                                 </td>
                                             </tr>
@@ -916,18 +1151,65 @@ export default function TestDataCleanup({
                 ) : (
                     <Card>
                         <CardHeader className="space-y-3">
-                            <CardTitle className="flex items-center gap-2">
-                                {tab === 'courses' ? (
-                                    <GraduationCap className="size-5" />
-                                ) : (
-                                    <Layers3 className="size-5" />
-                                )}
-                                {
-                                    tabs.find(
-                                        (item) => item.key === tab,
-                                    )?.label
-                                }
-                            </CardTitle>
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    {tab === 'courses' ? (
+                                        <GraduationCap className="size-5" />
+                                    ) : (
+                                        <Layers3 className="size-5" />
+                                    )}
+                                    {
+                                        tabs.find(
+                                            (item) => item.key === tab,
+                                        )?.label
+                                    }
+                                </CardTitle>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        {selectedIds.length} selected · {cleanableCurrentEntities.length} cleanable in current view
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={!enabled || selectedIds.length === 0}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'cleanup_bulk',
+                                                type: tab,
+                                                ids: selectedIds,
+                                                all: false,
+                                                id: 0,
+                                                code: bulkConfirmationCode(tab),
+                                                name: `Clean ${selectedIds.length} selected ${tabLabel(tab)} record(s)`,
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Clean Selected ({selectedIds.length})
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="destructive"
+                                        disabled={!enabled || cleanableModuleCount === 0}
+                                        onClick={() =>
+                                            openAction({
+                                                mode: 'cleanup_bulk',
+                                                type: tab,
+                                                ids: [],
+                                                all: true,
+                                                id: 0,
+                                                code: bulkConfirmationCode(tab),
+                                                name: `Clean all cleanable ${tabLabel(tab)} records`,
+                                            })
+                                        }
+                                    >
+                                        <Eraser className="size-4" />
+                                        Clean All Cleanable ({cleanableModuleCount})
+                                    </Button>
+                                </div>
+                            </div>
                             {tab === 'applicants' && (
                                 <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-end sm:justify-between">
                                     <div>
@@ -996,6 +1278,16 @@ export default function TestDataCleanup({
                                 <table className="w-full text-sm">
                                     <thead className="border-b bg-muted/50 text-left">
                                         <tr>
+                                            <th className="w-12 px-4 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label="Select all cleanable records in current view"
+                                                    checked={allVisibleSelected}
+                                                    disabled={!enabled || cleanableCurrentEntities.length === 0}
+                                                    onChange={(event) => toggleAllVisible(event.target.checked)}
+                                                    className="size-4 rounded border-input"
+                                                />
+                                            </th>
                                             <th className="px-4 py-3">
                                                 Record
                                             </th>
@@ -1017,6 +1309,16 @@ export default function TestDataCleanup({
                                                     key={item.id}
                                                     className="border-b last:border-0"
                                                 >
+                                                    <td className="px-4 py-4 align-top">
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`Select ${item.name}`}
+                                                            checked={selectedIds.includes(item.id)}
+                                                            disabled={!enabled || item.blocked}
+                                                            onChange={(event) => toggleSelected(item.id, event.target.checked)}
+                                                            className="mt-1 size-4 rounded border-input"
+                                                        />
+                                                    </td>
                                                     <td className="px-4 py-4">
                                                         <div className="font-medium">
                                                             {
@@ -1029,6 +1331,10 @@ export default function TestDataCleanup({
                                                             }
                                                             {item.kind
                                                                 ? ` · ${item.kind}`
+                                                                : ''}
+                                                            {tab === 'college_admission_form_templates' &&
+                                                                (item.status_normalized ?? item.status)
+                                                                ? ` · ${(item.status_normalized ?? item.status ?? '').toUpperCase()}`
                                                                 : ''}
                                                         </div>
                                                         {tab === 'applicants' && (
@@ -1092,13 +1398,29 @@ export default function TestDataCleanup({
 
                                                     <td className="px-4 py-4">
                                                         <div className="flex flex-wrap justify-end gap-2">
-                                                            {tab === 'college_admission_form_templates' &&
-                                                                item.status === 'ACTIVE' && (
+                                                            {tab === 'college_admission_form_templates' && (() => {
+                                                                const normalizedStatus = (
+                                                                    item.status_normalized ??
+                                                                    item.status ??
+                                                                    ''
+                                                                )
+                                                                    .trim()
+                                                                    .toUpperCase();
+                                                                const canDeactivate =
+                                                                    item.can_deactivate_for_testing === true ||
+                                                                    normalizedStatus === 'ACTIVE';
+
+                                                                return (
                                                                     <Button
                                                                         type="button"
                                                                         size="sm"
                                                                         variant="outline"
-                                                                        disabled={!enabled}
+                                                                        disabled={!enabled || !canDeactivate}
+                                                                        title={
+                                                                            canDeactivate
+                                                                                ? 'Return this ACTIVE template to DRAFT for testing corrections. Cleanup dependencies do not block this action.'
+                                                                                : `Deactivate for Testing is available only for ACTIVE templates. Current status: ${normalizedStatus || 'Unknown'}.`
+                                                                        }
                                                                         onClick={() =>
                                                                             openAction({
                                                                                 mode: 'deactivate_admission_form_template',
@@ -1111,7 +1433,8 @@ export default function TestDataCleanup({
                                                                         <RotateCcw className="size-4" />
                                                                         Deactivate for Testing
                                                                     </Button>
-                                                                )}
+                                                                );
+                                                            })()}
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
@@ -1126,11 +1449,7 @@ export default function TestDataCleanup({
                                                                         {
                                                                             mode:
                                                                                 'cleanup_master',
-                                                                            type:
-                                                                                tab as Exclude<
-                                                                                    TabKey,
-                                                                                    'curriculum' | 'academic_policies'
-                                                                                >,
+                                                                            type: tab,
                                                                             id:
                                                                                 item.id,
                                                                             code:
@@ -1169,6 +1488,8 @@ export default function TestDataCleanup({
                                       ? 'Full User & Role Test Reset'
                                     : target.mode === 'cleanup_legacy_unlinked_regular'
                                       ? 'Clean Legacy Unlinked Applications'
+                                    : target.mode === 'cleanup_bulk'
+                                      ? 'Bulk Test Data Cleanup'
                                     : target.mode === 'reset_approval' ||
                                         target.mode === 'reset_policy_approval'
                                       ? 'Reset Test Approval'
@@ -1199,6 +1520,10 @@ export default function TestDataCleanup({
                                           ? 'All cleanable internal University/College staff test users and custom roles will be permanently removed. The current logged-in user, SUPER_ADMIN identities, applicants, system roles, permissions, audit logs and operationally referenced users/roles are preserved.'
                                         : target.mode === 'cleanup_legacy_unlinked_regular'
                                           ? 'Only old PUBLIC + REGULAR + SUBMITTED applications with no eligibility-processing choice link will be removed. Dynamic answers, academic preferences and course choices for those applications are cleaned child-first. Applicant users/login identities, applicant profiles and registration numbers are preserved. Any record with downstream Score, Interview, Merit, Seat, Admission or Student references is skipped.'
+                                        : target.mode === 'cleanup_bulk'
+                                          ? target.all
+                                              ? 'All currently cleanable records in this module will be removed in one action. Records protected by dependency checks are preserved automatically; the cleanup does not bypass module safety rules.'
+                                              : 'Only the checked cleanable records will be removed in one action. Dependency checks remain enforced for every selected record.'
                                         : target.mode === 'reset_approval'
                                           ? 'Approval requests/history for this test Curriculum will be removed and the Curriculum will return to DRAFT / NOT_SUBMITTED. Structure is preserved.'
                                         : target.mode === 'reset_policy_approval'
@@ -1237,6 +1562,16 @@ export default function TestDataCleanup({
                                                 form.errors
                                                     .confirmation_code
                                             }
+                                        </p>
+                                    )}
+                                    {form.errors.ids && (
+                                        <p className="text-xs text-destructive">
+                                            {form.errors.ids}
+                                        </p>
+                                    )}
+                                    {form.errors.type && (
+                                        <p className="text-xs text-destructive">
+                                            {form.errors.type}
                                         </p>
                                     )}
                                     {form.errors.record && (

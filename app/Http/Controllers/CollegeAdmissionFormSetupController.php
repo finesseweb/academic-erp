@@ -194,18 +194,21 @@ class CollegeAdmissionFormSetupController extends Controller
             'condition_source_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
             'condition_operator'=>['nullable',Rule::in(['EQUALS','NOT_EQUALS','IN','NOT_IN','CONTAINS','IS_EMPTY','IS_NOT_EMPTY'])],
             'condition_values'=>['nullable','string','max:5000'],
-            'degree_level_id'=>['nullable','integer','exists:degree_levels,id'],'degree_id'=>['nullable','integer','exists:degrees,id'],
-            'program_template_id'=>['nullable','integer','exists:program_templates,id'],'college_program_offering_id'=>['nullable','integer','exists:college_program_offerings,id'],
-            'curriculum_id'=>['nullable','integer','exists:curricula,id'],'college_admission_cycle_id'=>['nullable','integer','exists:college_admission_cycles,id'],
+            'degree_level_ids'=>['nullable','array','max:50'],'degree_level_ids.*'=>['integer','distinct','exists:degree_levels,id'],
+            'degree_ids'=>['nullable','array','max:50'],'degree_ids.*'=>['integer','distinct','exists:degrees,id'],
+            'program_template_ids'=>['nullable','array','max:100'],'program_template_ids.*'=>['integer','distinct','exists:program_templates,id'],
+            'college_program_offering_ids'=>['nullable','array','max:100'],'college_program_offering_ids.*'=>['integer','distinct','exists:college_program_offerings,id'],
+            'curriculum_ids'=>['nullable','array','max:100'],'curriculum_ids.*'=>['integer','distinct','exists:curricula,id'],
+            'college_admission_cycle_ids'=>['nullable','array','max:100'],'college_admission_cycle_ids.*'=>['integer','distinct','exists:college_admission_cycles,id'],
         ]);
         if ($step->fields()->where('field_key',$data['field_key'])->exists()) throw ValidationException::withMessages(['field_key'=>'This field key already exists in the step.']);
         if (in_array($data['field_type'],['SELECT','RADIO','CHECKBOX','MULTISELECT'],true) && blank($data['options']??null)) throw ValidationException::withMessages(['options'=>'Add at least one option for this field type.']);
-        $this->assertAcademicScopeIds($college,$data);
+        $scopeSelections = $this->assertAcademicScopeSelections($college,$data);
         if (filled($data['college_admission_form_panel_id'] ?? null) && ! CollegeAdmissionFormPanel::query()->whereKey($data['college_admission_form_panel_id'])->where('college_admission_form_step_id',$step->id)->exists()) throw ValidationException::withMessages(['college_admission_form_panel_id'=>'Selected panel is outside this step.']);
         $sourceField = $this->conditionSourceForTemplate($template, $data['condition_source_field_id'] ?? null);
         if ($sourceField && in_array($sourceField->field_type,['FILE','IMAGE'],true)) throw ValidationException::withMessages(['condition_source_field_id'=>'File/Image fields cannot be used as a condition source.']);
         if ($sourceField && ! in_array($data['condition_operator']??'EQUALS',['IS_EMPTY','IS_NOT_EMPTY'],true) && blank($data['condition_values']??null)) throw ValidationException::withMessages(['condition_values'=>'Enter the value that should make this field appear.']);
-        $field = DB::transaction(function() use($fieldRuleService,$step,$data,$sourceField){
+        $field = DB::transaction(function() use($fieldRuleService,$step,$data,$sourceField,$scopeSelections){
             $field=$step->fields()->create([
                 'college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,
                 'field_key'=>$data['field_key'],'label'=>trim($data['label']),'field_type'=>$data['field_type'],'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,
@@ -217,8 +220,7 @@ class CollegeAdmissionFormSetupController extends Controller
             foreach ($options as $i => [$label, $value]) {
                 $field->options()->create(['label'=>$label,'value'=>$value,'display_order'=>($i+1)*10,'is_active'=>true]);
             }
-            $scope = collect(['degree_level_id','degree_id','program_template_id','college_program_offering_id','curriculum_id','college_admission_cycle_id'])->mapWithKeys(fn($key)=>[$key=>$data[$key]??null])->all();
-            if (collect($scope)->filter(fn($v)=>filled($v))->isNotEmpty()) $field->scopes()->create([...$scope,'is_active'=>true]);
+            $this->syncAcademicScopes($field, $scopeSelections);
             if ($sourceField) $field->conditions()->create(['source_field_id'=>$sourceField->id,'operator'=>$data['condition_operator']??'EQUALS','compare_values'=>in_array($data['condition_operator']??'EQUALS',['IS_EMPTY','IS_NOT_EMPTY'],true)?[]:$this->canonicalConditionValues($sourceField, $this->splitValues($data['condition_values']??'')),'display_order'=>10,'is_active'=>true]);
             $fieldRuleService->sync($field, $data);
             return $field->load(['options','conditions.sourceField','scopes','comparisonRule.sourceField','copyRule.sourceField','copyRule.triggerField']);
@@ -296,14 +298,23 @@ class CollegeAdmissionFormSetupController extends Controller
             'condition_source_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
             'condition_operator'=>['nullable',Rule::in(['EQUALS','NOT_EQUALS','IN','NOT_IN','CONTAINS','IS_EMPTY','IS_NOT_EMPTY'])],
             'condition_values'=>['nullable','string','max:5000'],
+            'degree_level_ids'=>['nullable','array','max:50'],'degree_level_ids.*'=>['integer','distinct','exists:degree_levels,id'],
+            'degree_ids'=>['nullable','array','max:50'],'degree_ids.*'=>['integer','distinct','exists:degrees,id'],
+            'program_template_ids'=>['nullable','array','max:100'],'program_template_ids.*'=>['integer','distinct','exists:program_templates,id'],
+            'college_program_offering_ids'=>['nullable','array','max:100'],'college_program_offering_ids.*'=>['integer','distinct','exists:college_program_offerings,id'],
+            'curriculum_ids'=>['nullable','array','max:100'],'curriculum_ids.*'=>['integer','distinct','exists:curricula,id'],
+            'college_admission_cycle_ids'=>['nullable','array','max:100'],'college_admission_cycle_ids.*'=>['integer','distinct','exists:college_admission_cycles,id'],
         ]);
         if(filled($data['college_admission_form_panel_id']??null)&&!$step->panels()->whereKey($data['college_admission_form_panel_id'])->exists()) throw ValidationException::withMessages(['college_admission_form_panel_id'=>'Selected panel is outside this step.']);
+        $scopeSelections = $this->assertAcademicScopeSelections($college, $data);
+        $scopeProvided = $request->hasAny(['degree_level_ids','degree_ids','program_template_ids','college_program_offering_ids','curriculum_ids','college_admission_cycle_ids']);
         $sourceField = $this->conditionSourceForTemplate($template, $data['condition_source_field_id'] ?? null);
         $this->assertConditionConfiguration($field, $sourceField, $data);
         $fieldRuleService->assertConfiguration($template, $step, $field->field_type, $data, $field);
-        DB::transaction(function () use ($field, $fieldRuleService, $data, $sourceField) {
+        DB::transaction(function () use ($field, $fieldRuleService, $data, $sourceField, $scopeSelections, $scopeProvided) {
             $field->update(['college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,'label'=>trim($data['label']),'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??$field->display_order,'validation_rules'=>$fieldRuleService->intrinsicRules($data, $field->field_type, $field->validation_rules??[])]);
             $fieldRuleService->sync($field,$data);
+            if ($scopeProvided) $this->syncAcademicScopes($field, $scopeSelections);
             $this->syncCondition($field, $sourceField, $data);
         });
         return back()->with('toast',['type'=>'success','message'=>'Field and answer-based condition updated.']);
@@ -529,6 +540,57 @@ class CollegeAdmissionFormSetupController extends Controller
             'scope_type'=>$universityScope?'UNIVERSITY':'COLLEGE','scope_reference'=>$universityScope?'university':'college:'.$college->id,
             'before'=>null,'after'=>json_encode($after),'ip_address'=>$request->ip(),'created_at'=>now(),
         ]);
+    }
+
+    private function assertAcademicScopeSelections(College $college, array $data): array
+    {
+        $selections = [
+            'degree_level_id' => collect($data['degree_level_ids'] ?? [])->map(fn($v)=>(int)$v)->unique()->values()->all(),
+            'degree_id' => collect($data['degree_ids'] ?? [])->map(fn($v)=>(int)$v)->unique()->values()->all(),
+            'program_template_id' => collect($data['program_template_ids'] ?? [])->map(fn($v)=>(int)$v)->unique()->values()->all(),
+            'college_program_offering_id' => collect($data['college_program_offering_ids'] ?? [])->map(fn($v)=>(int)$v)->unique()->values()->all(),
+            'curriculum_id' => collect($data['curriculum_ids'] ?? [])->map(fn($v)=>(int)$v)->unique()->values()->all(),
+            'college_admission_cycle_id' => collect($data['college_admission_cycle_ids'] ?? [])->map(fn($v)=>(int)$v)->unique()->values()->all(),
+        ];
+
+        $levels = DegreeLevel::query()->where('university_id',$college->university_id)->whereIn('id',$selections['degree_level_id'])->get()->keyBy('id');
+        $degrees = Degree::query()->where('university_id',$college->university_id)->whereIn('id',$selections['degree_id'])->get()->keyBy('id');
+        $programs = ProgramTemplate::query()->where('university_id',$college->university_id)->whereIn('id',$selections['program_template_id'])->get()->keyBy('id');
+        $offerings = $college->programOfferings()->whereIn('id',$selections['college_program_offering_id'])->get()->keyBy('id');
+        $curricula = Curriculum::query()->currentApproved()->where('university_id',$college->university_id)->whereIn('id',$selections['curriculum_id'])->get()->keyBy('id');
+        $cycles = CollegeAdmissionCycle::query()->where('college_id',$college->id)->whereIn('id',$selections['college_admission_cycle_id'])->get()->keyBy('id');
+
+        if ($levels->count() !== count($selections['degree_level_id'])) throw ValidationException::withMessages(['degree_level_ids'=>'One or more Degree Levels are outside this University.']);
+        if ($degrees->count() !== count($selections['degree_id'])) throw ValidationException::withMessages(['degree_ids'=>'One or more Degrees are outside this University.']);
+        if ($programs->count() !== count($selections['program_template_id'])) throw ValidationException::withMessages(['program_template_ids'=>'One or more Programs are outside this University.']);
+        if ($offerings->count() !== count($selections['college_program_offering_id'])) throw ValidationException::withMessages(['college_program_offering_ids'=>'One or more Program Offerings are outside this College.']);
+        if ($curricula->count() !== count($selections['curriculum_id'])) throw ValidationException::withMessages(['curriculum_ids'=>'Use only current approved ACTIVE Curriculum versions.']);
+        if ($cycles->count() !== count($selections['college_admission_cycle_id'])) throw ValidationException::withMessages(['college_admission_cycle_ids'=>'One or more Admission Cycles are outside this College.']);
+
+        if ($selections['degree_level_id'] && $degrees->contains(fn($degree)=>!in_array((int)$degree->degree_level_id,$selections['degree_level_id'],true))) throw ValidationException::withMessages(['degree_ids'=>'Every selected Degree must belong to one of the selected Degree Levels.']);
+        if ($selections['degree_id'] && $programs->contains(fn($program)=>!in_array((int)$program->degree_id,$selections['degree_id'],true))) throw ValidationException::withMessages(['program_template_ids'=>'Every selected Program must belong to one of the selected Degrees.']);
+        if ($selections['program_template_id'] && $offerings->contains(fn($offering)=>!in_array((int)$offering->program_template_id,$selections['program_template_id'],true))) throw ValidationException::withMessages(['college_program_offering_ids'=>'Every selected Program Offering must belong to one of the selected Programs.']);
+        if ($selections['program_template_id'] && $curricula->contains(fn($curriculum)=>!in_array((int)$curriculum->program_template_id,$selections['program_template_id'],true))) throw ValidationException::withMessages(['curriculum_ids'=>'Every selected Curriculum must belong to one of the selected Programs.']);
+        if ($selections['college_program_offering_id'] && $curricula->isNotEmpty() && $offerings->contains(fn($offering)=>filled($offering->curriculum_id) && !in_array((int)$offering->curriculum_id,$selections['curriculum_id'],true))) throw ValidationException::withMessages(['curriculum_ids'=>'Selected Curriculum values must match the selected Program Offering curriculum.']);
+        if ($selections['college_program_offering_id'] && $cycles->contains(fn($cycle)=>!in_array((int)$cycle->college_program_offering_id,$selections['college_program_offering_id'],true))) throw ValidationException::withMessages(['college_admission_cycle_ids'=>'Every selected Admission Cycle must belong to one of the selected Program Offerings.']);
+
+        $combinationCount = collect($selections)->reduce(fn($count,$values)=>$count * max(count($values),1),1);
+        if ($combinationCount > 500) throw ValidationException::withMessages(['academic_applicability'=>'Too many Academic Applicability combinations. Narrow the selection to 500 combinations or fewer.']);
+        return $selections;
+    }
+
+    private function syncAcademicScopes(CollegeAdmissionFormField $field, array $selections): void
+    {
+        $field->scopes()->delete();
+        if (collect($selections)->every(fn($values)=>count($values)===0)) return;
+        $rows = [[]];
+        foreach ($selections as $key => $selectedValues) {
+            $values = $selectedValues ?: [null];
+            $next = [];
+            foreach ($rows as $row) foreach ($values as $value) $next[] = [...$row, $key=>$value];
+            $rows = $next;
+        }
+        foreach ($rows as $row) $field->scopes()->create([...$row,'is_active'=>true]);
     }
 
     private function assertAcademicScopeIds(College $college, array $data): void

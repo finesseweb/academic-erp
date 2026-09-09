@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AcademicSession;
+use App\Models\AcademicCalendarTermPeriod;
 use App\Models\College;
 use App\Models\CollegeProgramOffering;
 use App\Models\Curriculum;
@@ -219,6 +220,24 @@ class FeeFoundationService
             foreach ($activeItems as $item) {
                 if ($item->head?->status !== 'ACTIVE') throw ValidationException::withMessages(['status' => 'All active billing-period Fee Items must use ACTIVE Fee Heads before this structure can be activated.']);
             }
+            foreach ($items as $item) {
+                foreach ($periods as $periodNo) {
+                    if ($recurring && $item->periodExclusions->contains(fn ($x) => (int) $x->period_no === (int) $periodNo)) continue;
+                    $setting = $recurring ? $item->periodSettings->first(fn ($x) => (int) $x->period_no === (int) $periodNo) : null;
+                    $itemStatus = $setting?->status ?? $item->status;
+                    $override = $recurring ? $item->periodAmounts->first(fn ($x) => (int) $x->period_no === (int) $periodNo) : null;
+                    $amount = (float) ($override?->amount ?? $item->amount);
+                    if ($itemStatus !== 'ACTIVE' || $amount <= 0) continue;
+                    $dueDate = $recurring ? $setting?->due_date : $item->due_date;
+                    if (! $dueDate) {
+                        throw ValidationException::withMessages(['status' => 'Every ACTIVE Fee Head in every configured Billing Period must have a Standard Due Date before the Fee Structure can be activated.']);
+                    }
+                }
+            }
+            foreach ($items as $item) {
+                $settings=$item->periodSettings->keyBy('period_no')->map(fn($x)=>['due_date'=>$x->due_date?->format('Y-m-d'),'status'=>$x->status])->all();
+                $this->assertDueDatesInsideCurriculumPeriods($structure, $item->due_date?->format('Y-m-d'), $settings);
+            }
             if ($college) {
                 $offering = CollegeProgramOffering::whereKey($structure->college_program_offering_id)->where('college_id', $college->id)->where('status', 'ACTIVE')->first();
                 if (! $offering) throw ValidationException::withMessages(['status' => 'The College Program Offering must be ACTIVE before its Fee Structure can be activated.']);
@@ -285,12 +304,17 @@ class FeeFoundationService
             $data['period_applicable'] ?? []
         );
         $periodSettings = $this->normalizePeriodSettings($structure, $data['period_settings'] ?? []);
+        $this->assertDueDatesInsideCurriculumPeriods($structure, $data['due_date'] ?? null, $periodSettings);
+        if (! in_array($structure->charge_basis, ['PER_TERM', 'PER_ACADEMIC_YEAR'], true) && empty($data['due_date'])) {
+            throw ValidationException::withMessages(['due_date' => 'A Standard Due Date is required for this Fee Head and Billing Period.']);
+        }
         if ($college) {
             $this->assertNoEffectiveUniversityFeeHeadOverlap($structure, $head, $periodExclusions, $periodSettings, $college);
         }
         $before = $item?->load(['periodAmounts', 'periodExclusions', 'periodSettings'])->toArray();
         $values = [
             'fee_structure_id' => $structure->id, 'fee_head_id' => $head->id, 'amount' => $data['amount'],
+            'due_date' => in_array($structure->charge_basis, ['PER_TERM', 'PER_ACADEMIC_YEAR'], true) ? null : ($data['due_date'] ?? null),
             'is_mandatory' => (bool) ($data['is_mandatory'] ?? false),
             'is_enrollment_clearance_required' => (bool) ($data['is_enrollment_clearance_required'] ?? false),
             'installment_allowed' => (bool) ($data['installment_allowed'] ?? false),
@@ -830,6 +854,47 @@ class FeeFoundationService
         return [$periodAmounts, $periodExclusions];
     }
 
+
+    private function assertDueDatesInsideCurriculumPeriods(FeeStructure $structure, ?string $itemDueDate, array $periodSettings): void
+    {
+        if ($structure->charge_basis === 'ONE_TIME') return; // Admission/true one-time charges are not forced into a curriculum term.
+        $structure->loadMissing(['programTemplate','curriculum.terms','offering.programTemplate','offering.curriculum.terms']);
+        $curriculum=$structure->curriculum ?: $structure->offering?->curriculum;
+        if (!$curriculum) return;
+        $calendarId=DB::table('academic_calendars')->where('university_id',$structure->university_id)->where('academic_session_id',$structure->academic_session_id)->where('status','ACTIVE')->value('id');
+        if (!$calendarId) throw ValidationException::withMessages(['due_date'=>'Activate the University Academic Calendar for this Academic Session and assign Curriculum Academic Period dates before setting Fee Due Dates.']);
+        $termPeriods=AcademicCalendarTermPeriod::query()->with('curriculumTerm')->where('academic_calendar_id',$calendarId)->where('status','ACTIVE')->whereHas('curriculumTerm',fn($q)=>$q->where('curriculum_id',$curriculum->id))->get()->each(function($p) use($curriculum){
+            $periodStart=$p->start_date->format('Y-m-d');
+            $periodEnd=$p->end_date->format('Y-m-d');
+            $effectiveStart=$curriculum->effective_from?->format('Y-m-d');
+            $effectiveEnd=$curriculum->effective_to?->format('Y-m-d');
+            if(($effectiveStart && $periodStart<$effectiveStart) || ($effectiveEnd && $periodEnd>$effectiveEnd)) {
+                throw ValidationException::withMessages(['due_date'=>"The Academic Calendar period '{$p->curriculumTerm->name}' is outside the Curriculum Effective From/To window. Correct the Academic Period before configuring Fee Due Dates."]);
+            }
+        })->keyBy(fn($p)=>(int)$p->curriculumTerm->sequence_no);
+        $program=$structure->programTemplate ?: $structure->offering?->programTemplate;
+        $termsPerYear=match(strtoupper((string)$program?->term_structure)){ 'SEMESTER'=>2,'TRIMESTER'=>3,default=>1 };
+        $check=function(int $periodNo,string $dueDate) use($structure,$termPeriods,$termsPerYear){
+            if($structure->charge_basis==='PER_ACADEMIC_YEAR' || $structure->charge_basis==='SPECIFIC_ACADEMIC_YEAR') {
+                $first=(($periodNo-1)*$termsPerYear)+1; $last=$periodNo*$termsPerYear;
+                $parts=collect(range($first,$last))->map(fn($n)=>$termPeriods->get($n));
+                if($parts->contains(null)) throw ValidationException::withMessages(['due_date'=>"Academic Calendar period dates are incomplete for Academic Year {$periodNo}. Set all covered Curriculum Term dates first."]);
+                $start=$parts->min(fn($p)=>$p->start_date->format('Y-m-d')); $end=$parts->max(fn($p)=>$p->end_date->format('Y-m-d'));
+            } else {
+                $p=$termPeriods->get($periodNo);
+                if(!$p) throw ValidationException::withMessages(['due_date'=>"Academic Calendar dates are not set for Curriculum Period {$periodNo}. Set the Curriculum Term period first."]);
+                $start=$p->start_date->format('Y-m-d'); $end=$p->end_date->format('Y-m-d');
+            }
+            $d=date('Y-m-d',strtotime($dueDate));
+            if($d<$start || $d>$end) throw ValidationException::withMessages(['due_date'=>"Standard Due Date must fall inside the applicable Academic Period ({$start} to {$end})."]);
+        };
+        if(in_array($structure->charge_basis,['PER_TERM','PER_ACADEMIC_YEAR'],true)) {
+            foreach($periodSettings as $periodNo=>$setting) if(($setting['status']??'ACTIVE')==='ACTIVE' && !empty($setting['due_date'])) $check((int)$periodNo,$setting['due_date']);
+        } elseif(in_array($structure->charge_basis,['SPECIFIC_TERM','SPECIFIC_ACADEMIC_YEAR'],true) && $itemDueDate) {
+            $check((int)$structure->charge_period_no,$itemDueDate);
+        }
+    }
+
     private function normalizePeriodSettings(FeeStructure $structure, array $rawSettings): array
     {
         if (! in_array($structure->charge_basis, ['PER_TERM', 'PER_ACADEMIC_YEAR'], true) || empty($rawSettings)) {
@@ -845,12 +910,18 @@ class FeeFoundationService
                 throw ValidationException::withMessages(['period_settings' => 'Period-specific charge settings were supplied for an academic period that is not available in the applicable Curriculum.']);
             }
             if (! is_array($setting)) continue;
+            $status = in_array(($setting['status'] ?? 'ACTIVE'), ['ACTIVE', 'INACTIVE'], true) ? $setting['status'] : 'ACTIVE';
+            $dueDate = trim((string) ($setting['due_date'] ?? ''));
+            if ($status === 'ACTIVE' && $dueDate === '') {
+                throw ValidationException::withMessages(['period_settings' => 'A Standard Due Date is required for each ACTIVE Fee Head in a Billing Period.']);
+            }
             $normalized[$periodNo] = [
+                'due_date' => $dueDate !== '' ? $dueDate : null,
                 'is_mandatory' => filter_var($setting['is_mandatory'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'is_enrollment_clearance_required' => filter_var($setting['is_enrollment_clearance_required'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'installment_allowed' => filter_var($setting['installment_allowed'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'display_order' => max(0, min(65535, (int) ($setting['display_order'] ?? 0))),
-                'status' => in_array(($setting['status'] ?? 'ACTIVE'), ['ACTIVE', 'INACTIVE'], true) ? $setting['status'] : 'ACTIVE',
+                'status' => $status,
             ];
         }
 

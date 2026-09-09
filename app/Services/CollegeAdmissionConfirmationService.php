@@ -6,6 +6,8 @@ use App\Models\Admission;
 use App\Models\College;
 use App\Models\CollegeAdmissionSeatAllocation;
 use App\Models\FeeDemand;
+use App\Models\FeeInstallmentSchedule;
+use App\Models\FeeStudentBenefit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -18,8 +20,10 @@ class CollegeAdmissionConfirmationService
             ->where('college_id', $college->id)
             ->where('status', 'ALLOCATED')
             ->with([
-                'application:id,application_no,candidate_name,email,status',
+                'application:id,application_no,candidate_name,email,status,admission_mode',
                 'choice:id,preference_no',
+                'intake.offering.programTemplate.degree.degreeLevel:id,name,code',
+                'intake.offering.academicSession:id,name,code,is_current',
                 'documentVerification:id,college_admission_application_id,status,finalized_at',
                 'selectionRule:id,name,code,version_no,college_program_intake_id,bucket_key,basis_capacity',
                 'selectionRule.intake.offering.programTemplate.degree.degreeLevel:id,name,code',
@@ -42,8 +46,9 @@ class CollegeAdmissionConfirmationService
         $rows = $allocations->map(function (CollegeAdmissionSeatAllocation $allocation) use ($admissions) {
             $admission = $admissions->get($allocation->id);
             $rule = $allocation->selectionRule;
-            $program = $rule?->intake?->offering?->programTemplate;
+            $program = $rule?->intake?->offering?->programTemplate ?? $allocation->intake?->offering?->programTemplate;
             $degree = $program?->degree;
+            $session = $rule?->intake?->offering?->academicSession ?? $allocation->intake?->offering?->academicSession;
 
             return [
                 'seat_allocation_id' => $allocation->id,
@@ -51,9 +56,13 @@ class CollegeAdmissionConfirmationService
                 'application_no' => $allocation->application?->application_no,
                 'candidate_name' => $allocation->application?->candidate_name,
                 'application_status' => $allocation->application?->status,
+                'admission_mode' => $allocation->application?->admission_mode ?? 'REGULAR',
                 'preference_no' => (int) ($allocation->choice?->preference_no ?? 1),
-                'merit_rank' => (int) $allocation->merit_rank,
-                'final_weighted_score' => (float) $allocation->final_weighted_score,
+                'merit_rank' => $allocation->merit_rank !== null ? (int) $allocation->merit_rank : null,
+                'final_weighted_score' => $allocation->final_weighted_score !== null ? (float) $allocation->final_weighted_score : null,
+                'program_name' => $program?->name,
+                'program_code' => $program?->code,
+                'session_name' => $session?->name,
                 'document_verification_status' => $allocation->documentVerification?->status,
                 'physical_seat_type' => $allocation->physical_seat_type,
                 'physical_category_code' => $allocation->physical_category_code,
@@ -236,6 +245,35 @@ class CollegeAdmissionConfirmationService
             }
 
             foreach ($demands as $demand) {
+                // Revocation invalidates every still-unposted child workflow attached to this demand.
+                if (Schema::hasTable('fee_late_fine_charges')) {
+                    DB::table('fee_late_fine_charges')->where('fee_demand_id',$demand->id)->where('status','ACTIVE')->update([
+                        'status'=>'REVERSED','superseded_at'=>now(),'updated_at'=>now(),
+                    ]);
+                }
+                // Historical rows are preserved; they are cancelled, never deleted.
+                FeeInstallmentSchedule::query()
+                    ->where('fee_demand_id', $demand->id)
+                    ->where('status', 'ACTIVE')
+                    ->update([
+                        'status' => 'CANCELLED',
+                        'cancelled_at' => now(),
+                        'cancelled_by' => $actorId,
+                        'cancellation_reason' => 'Automatically cancelled because Admission Confirmation was revoked.',
+                        'updated_at' => now(),
+                    ]);
+
+                FeeStudentBenefit::query()
+                    ->where('fee_demand_id', $demand->id)
+                    ->where('status', 'PENDING')
+                    ->update([
+                        'status' => 'CANCELLED',
+                        'cancelled_at' => now(),
+                        'cancelled_by' => $actorId,
+                        'cancellation_reason' => 'Automatically cancelled because Admission Confirmation was revoked.',
+                        'updated_at' => now(),
+                    ]);
+
                 $demand->update([
                     'status' => 'CANCELLED',
                     'cancelled_at' => now(),

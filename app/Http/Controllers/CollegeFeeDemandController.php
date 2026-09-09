@@ -3,14 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\Admission;
+use App\Models\AcademicSession;
 use App\Models\College;
 use App\Models\CollegeProgramOffering;
 use App\Models\FeeDemand;
 use App\Services\AcademicPolicyResolverService;
 use App\Services\ApplicableFeeDemandService;
+use App\Services\FeeLateFineService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -22,7 +26,8 @@ class CollegeFeeDemandController extends Controller
         Request $request,
         College $college,
         AcademicPolicyResolverService $policyResolver,
-        ApplicableFeeDemandService $feeDemandService
+        ApplicableFeeDemandService $feeDemandService,
+        FeeLateFineService $lateFineService
     ): Response {
         $this->auth($request, $college, 'college_fee_demand.view');
 
@@ -51,6 +56,7 @@ class CollegeFeeDemandController extends Controller
                     'program' => $offering->programTemplate?->name,
                     'program_code' => $offering->programTemplate?->code,
                     'session' => $offering->academicSession?->name,
+                    'academic_session_id' => $offering->academic_session_id,
                     'curriculum_id' => $offering->curriculum_id,
                     'academic_policy' => $policy ? [
                         'id' => $policy->id,
@@ -61,21 +67,113 @@ class CollegeFeeDemandController extends Controller
                     ] : null,
                     'academic_policy_error' => $policyError,
                     'bulk_contexts' => $feeDemandService->bulkContexts($college, $offering, $policy),
+                    'installment_contexts' => $feeDemandService->installmentContexts($college, $offering),
                 ];
             })
             ->values();
 
-        $demands = FeeDemand::query()
-            ->with(['admission.application:id,candidate_name,application_no', 'items'])
+        $sessions = AcademicSession::query()
+            ->where('university_id', $college->university_id)
+            ->where('status', 'ACTIVE')
+            ->orderByDesc('is_current')
+            ->orderByDesc('starts_on')
+            ->get(['id', 'name', 'code', 'is_current']);
+        $currentSessionId = (int) ($sessions->firstWhere('is_current', true)?->id ?? $sessions->first()?->id ?? 0);
+        $registerSessionId = (int) $request->query('session_id', $currentSessionId);
+        $registerOfferingId = (int) $request->query('register_offering_id', 0);
+        $registerDisciplineId = (int) $request->query('register_discipline_id', 0);
+        $registerStatus = strtoupper(trim((string) $request->query('register_status', '')));
+
+        $registerSearch = trim((string) $request->query('register_q', ''));
+        $registerPerPage = (int) $request->query('per_page', 25);
+        if (! in_array($registerPerPage, [25, 50, 100], true)) {
+            $registerPerPage = 25;
+        }
+
+        $registerDisciplines = DB::table('college_admission_application_academic_preferences as pref')
+            ->join('college_admission_applications as a', 'a.id', '=', 'pref.college_admission_application_id')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'pref.college_program_offering_id')
+            ->join('academic_disciplines as disc', 'disc.id', '=', 'pref.discipline_id')
+            ->where('a.college_id', $college->id)
+            ->when($registerSessionId > 0, fn ($query) => $query->where('cpo.academic_session_id', $registerSessionId))
+            ->when($registerOfferingId > 0, fn ($query) => $query->where('pref.college_program_offering_id', $registerOfferingId))
+            ->select('disc.id', 'disc.name', 'disc.code')
+            ->distinct()
+            ->orderBy('disc.name')
+            ->get();
+
+        if ($registerDisciplineId > 0 && ! $registerDisciplines->contains(fn ($discipline) => (int) $discipline->id === $registerDisciplineId)) {
+            $registerDisciplineId = 0;
+        }
+
+        // Register scalability rule (ADR 145): paginate admission/application groups on the server.
+        // Detailed demands are loaded only for admissions visible on the current register page.
+        $groupQuery = FeeDemand::query()
+            ->select('admission_id')
             ->where('college_id', $college->id)
+            ->whereNotNull('admission_id')
+            ->when($registerSessionId > 0, fn ($query) => $query->where('academic_session_id', $registerSessionId))
+            ->when($registerOfferingId > 0, fn ($query) => $query->where('college_program_offering_id', $registerOfferingId))
+            ->when($registerDisciplineId > 0, fn ($query) => $query->whereHas('admission.application.academicPreference', fn ($preference) => $preference->where('discipline_id', $registerDisciplineId)))
+            ->when($registerStatus !== '', fn ($query) => $query->where('status', $registerStatus), fn ($query) => $query->where('status', '!=', 'CANCELLED'))
+            ->when($registerSearch !== '', function ($query) use ($registerSearch) {
+                $query->where(function ($searchQuery) use ($registerSearch) {
+                    $searchQuery->where('demand_no', 'like', '%'.$registerSearch.'%')
+                        ->orWhere('billing_period_label', 'like', '%'.$registerSearch.'%')
+                        ->orWhereHas('admission', function ($admissionQuery) use ($registerSearch) {
+                            $admissionQuery->where('admission_no', 'like', '%'.$registerSearch.'%')
+                                ->orWhereHas('application', function ($applicationQuery) use ($registerSearch) {
+                                    $applicationQuery->where('candidate_name', 'like', '%'.$registerSearch.'%')
+                                        ->orWhere('application_no', 'like', '%'.$registerSearch.'%')
+                                        ->orWhereHas('academicPreference.discipline', function ($discipline) use ($registerSearch) {
+                                            $discipline->where('name', 'like', '%'.$registerSearch.'%')
+                                                ->orWhere('code', 'like', '%'.$registerSearch.'%');
+                                        });
+                                });
+                        });
+                });
+            })
+            ->groupBy('admission_id')
+            ->orderByDesc('admission_id')
+            ->paginate($registerPerPage)
+            ->withQueryString();
+
+        $visibleAdmissionIds = collect($groupQuery->items())->pluck('admission_id')->filter()->values();
+
+        $offeringLabels = $offerings->keyBy('id');
+
+        $demandModels = FeeDemand::query()
+            ->with([
+                'admission.application:id,candidate_name,application_no,date_of_birth',
+                'admission.application.academicPreference.discipline:id,name,code',
+                'items.installmentSchedules' => fn ($query) => $query->where('status', 'ACTIVE'),
+                'studentBenefits' => fn ($query) => $query
+                    ->where('status', 'APPROVED')
+                    ->with('items:id,fee_student_benefit_id,fee_demand_item_id,sanctioned_amount'),
+            ])
+            ->where('college_id', $college->id)
+            ->whereIn('admission_id', $visibleAdmissionIds)
+            ->when($registerSessionId > 0, fn ($query) => $query->where('academic_session_id', $registerSessionId))
+            ->when($registerOfferingId > 0, fn ($query) => $query->where('college_program_offering_id', $registerOfferingId))
+            ->when($registerDisciplineId > 0, fn ($query) => $query->whereHas('admission.application.academicPreference', fn ($preference) => $preference->where('discipline_id', $registerDisciplineId)))
+            ->when($registerStatus !== '', fn ($query) => $query->where('status', $registerStatus), fn ($query) => $query->where('status', '!=', 'CANCELLED'))
             ->orderByDesc('id')
-            ->get()
-            ->map(fn (FeeDemand $demand) => [
+            ->get();
+
+        $lateFineByDemand = $lateFineService->activeFineForDemandIds($demandModels->pluck('id')->all());
+
+        $demands = $demandModels->map(fn (FeeDemand $demand) => [
                 'id' => $demand->id,
                 'demand_no' => $demand->demand_no,
                 'admission_no' => $demand->admission?->admission_no,
                 'application_no' => $demand->admission?->application?->application_no,
                 'candidate_name' => $demand->admission?->application?->candidate_name,
+                'discipline_id' => $demand->admission?->application?->academicPreference?->discipline?->id,
+                'discipline_name' => $demand->admission?->application?->academicPreference?->discipline?->name,
+                'discipline_code' => $demand->admission?->application?->academicPreference?->discipline?->code,
+                'age' => $demand->admission?->application?->date_of_birth ? Carbon::parse($demand->admission->application->date_of_birth)->age : null,
+                'programme_name' => data_get($offeringLabels->get($demand->college_program_offering_id), 'program'),
+                'programme_code' => data_get($offeringLabels->get($demand->college_program_offering_id), 'program_code'),
                 'billing_period_no' => $demand->billing_period_no,
                 'billing_period_label' => $demand->billing_period_label ?: 'Billing Period '.$demand->billing_period_no,
                 'demand_context' => $demand->demand_context ?: 'LEGACY',
@@ -85,23 +183,66 @@ class CollegeFeeDemandController extends Controller
                 'total_amount' => $demand->total_amount,
                 'mandatory_amount' => $demand->mandatory_amount,
                 'enrollment_clearance_amount' => $demand->enrollment_clearance_amount,
+                'paid_amount' => $demand->paid_amount,
+                'adjusted_amount' => $demand->adjusted_amount,
                 'outstanding_amount' => $demand->outstanding_amount,
+                'late_fine_amount' => number_format((float) ($lateFineByDemand[$demand->id] ?? 0), 2, '.', ''),
+                'payable_with_late_fine' => number_format((float) $demand->outstanding_amount + (float) ($lateFineByDemand[$demand->id] ?? 0), 2, '.', ''),
                 'status' => $demand->status,
                 'generation_mode' => $demand->generation_mode ?? 'MANUAL_RECOVERY',
                 'generated_at' => $demand->generated_at?->format('Y-m-d H:i'),
-                'items' => $demand->items->map(fn ($item) => $item->only([
-                    'id', 'owner_type', 'structure_name', 'fee_head_name', 'fee_head_code', 'purpose', 'charge_basis', 'amount',
-                    'is_mandatory', 'is_enrollment_clearance_required', 'installment_allowed', 'is_refundable',
-                ])),
+                'benefit_adjustments' => $demand->studentBenefits->map(fn ($benefit) => [
+                    'id' => $benefit->id,
+                    'scheme_name' => $benefit->scheme_name_snapshot,
+                    'scheme_code' => $benefit->scheme_code_snapshot,
+                    'benefit_type' => $benefit->benefit_type_snapshot,
+                    'sanctioned_amount' => $benefit->sanctioned_amount,
+                    'decided_at' => $benefit->decided_at?->format('Y-m-d H:i'),
+                ])->values(),
+                'items' => $demand->items->map(function ($item) use ($demand) {
+                    $benefitAdjustment = $demand->studentBenefits
+                        ->flatMap->items
+                        ->where('fee_demand_item_id', $item->id)
+                        ->sum(fn ($benefitItem) => (float) ($benefitItem->sanctioned_amount ?? 0));
+
+                    return array_merge($item->only([
+                        'id', 'owner_type', 'structure_name', 'fee_head_name', 'fee_head_code', 'purpose', 'charge_basis', 'amount',
+                        'is_mandatory', 'is_enrollment_clearance_required', 'installment_allowed', 'is_refundable',
+                    ]), [
+                        'benefit_adjustment_amount' => number_format($benefitAdjustment, 2, '.', ''),
+                        'net_payable_amount' => number_format(max(0, (float) $item->amount - $benefitAdjustment), 2, '.', ''),
+                        'installment_schedules' => $item->installmentSchedules->map(fn ($row) => [
+                            'id' => $row->id, 'installment_no' => $row->installment_no, 'amount' => $row->amount,
+                            'due_date' => $row->due_date?->format('Y-m-d'), 'status' => $row->status,
+                        ])->values(),
+                    ]);
+                }),
             ]);
+
 
         return Inertia::render('college-fee-demands/index', [
             'college' => $college->only(['id', 'name', 'code']),
             'offerings' => $offerings,
             'demands' => $demands,
+            'register_disciplines' => $registerDisciplines,
+            'register_sessions' => $sessions->map(fn ($session) => ['id' => $session->id, 'name' => $session->name, 'code' => $session->code, 'is_current' => (bool) $session->is_current])->values(),
+            'register' => [
+                'q' => $registerSearch,
+                'session_id' => $registerSessionId,
+                'offering_id' => $registerOfferingId,
+                'discipline_id' => $registerDisciplineId,
+                'status' => $registerStatus,
+                'per_page' => $registerPerPage,
+                'current_page' => $groupQuery->currentPage(),
+                'last_page' => $groupQuery->lastPage(),
+                'from' => $groupQuery->firstItem(),
+                'to' => $groupQuery->lastItem(),
+                'total' => $groupQuery->total(),
+            ],
             'can' => [
                 'generate' => $request->user()->hasCollegePermission('college_fee_demand.generate', $college->id),
                 'cancel' => $request->user()->hasCollegePermission('college_fee_demand.cancel', $college->id),
+                'manage_installments' => $request->user()->hasCollegePermission('college_fee_installment.manage', $college->id),
             ],
         ]);
     }
@@ -347,12 +488,23 @@ class CollegeFeeDemandController extends Controller
             return back();
         }
 
-        $demand->update([
-            'status' => 'CANCELLED',
-            'cancelled_at' => now(),
-            'cancelled_by' => $request->user()->id,
-            'cancellation_reason' => $validated['reason'],
-        ]);
+        DB::transaction(function () use ($demand,$request,$validated) {
+            if (\Illuminate\Support\Facades\Schema::hasTable('fee_late_fine_charges')) {
+                DB::table('fee_late_fine_charges')->where('fee_demand_id',$demand->id)->where('status','ACTIVE')->update(['status'=>'REVERSED','superseded_at'=>now(),'updated_at'=>now()]);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('fee_installment_schedules')) {
+                DB::table('fee_installment_schedules')->where('fee_demand_id',$demand->id)->where('status','ACTIVE')->update([
+                    'status'=>'CANCELLED','cancelled_at'=>now(),'cancelled_by'=>$request->user()->id,
+                    'cancellation_reason'=>'Automatically cancelled because Fee Demand was cancelled.','updated_at'=>now(),
+                ]);
+            }
+            $demand->update([
+                'status' => 'CANCELLED',
+                'cancelled_at' => now(),
+                'cancelled_by' => $request->user()->id,
+                'cancellation_reason' => $validated['reason'],
+            ]);
+        });
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Fee Demand cancelled. Historical snapshot is retained.']);
     }

@@ -108,6 +108,91 @@ class ApplicableFeeDemandService
     }
 
     /**
+     * Installment execution contexts are derived from EXISTING active Fee Demands,
+     * not from demand-generation contexts. This intentionally includes
+     * ADMISSION_INITIAL / MIXED demands created automatically at Admission Confirmation.
+     */
+    public function installmentContexts(College $college, CollegeProgramOffering $offering): array
+    {
+        $purposeExpr = "CASE
+            WHEN fee_demands.demand_context IS NOT NULL AND TRIM(fee_demands.demand_context) <> '' THEN UPPER(fee_demands.demand_context)
+            WHEN UPPER(COALESCE(fee_demands.generation_mode,'')) IN ('ADMISSION_AUTO','MANUAL_RECOVERY') THEN 'ADMISSION_INITIAL'
+            WHEN UPPER(COALESCE(item.purpose,'')) IN ('ADMISSION','ADMISSION_INITIAL') THEN 'ADMISSION_INITIAL'
+            WHEN UPPER(COALESCE(item.purpose,'')) = 'ACADEMIC' THEN 'ACADEMIC'
+            WHEN UPPER(COALESCE(item.purpose,'')) = 'EXAMINATION' THEN 'EXAMINATION'
+            ELSE 'OTHER'
+        END";
+
+        $basisExpr = "CASE
+            WHEN (".$purposeExpr.") = 'ADMISSION_INITIAL' THEN 'MIXED'
+            WHEN fee_demands.billing_basis_group IS NOT NULL AND TRIM(fee_demands.billing_basis_group) <> '' THEN UPPER(fee_demands.billing_basis_group)
+            WHEN UPPER(COALESCE(item.charge_basis,'')) IN ('PER_TERM','SPECIFIC_TERM') THEN 'TERM'
+            WHEN UPPER(COALESCE(item.charge_basis,'')) IN ('PER_ACADEMIC_YEAR','SPECIFIC_ACADEMIC_YEAR') THEN 'ACADEMIC_YEAR'
+            ELSE 'ONE_TIME'
+        END";
+
+        $periodExpr = 'COALESCE(fee_demands.billing_period_no, item.source_period_no, 1)';
+
+        /*
+         * ADR 153 / MySQL ONLY_FULL_GROUP_BY compatibility:
+         * Normalize each Fee Demand Item in an inner query first, then aggregate
+         * only by the normalized aliases in the outer query. Grouping directly
+         * by repeated CASE expressions caused MySQL 8 / ONLY_FULL_GROUP_BY to
+         * treat raw demand_context/billing_basis_group references as non-grouped.
+         */
+        $normalized = FeeDemand::query()
+            ->join('fee_demand_items as item', 'item.fee_demand_id', '=', 'fee_demands.id')
+            ->where('fee_demands.college_id', $college->id)
+            ->where('fee_demands.college_program_offering_id', $offering->id)
+            ->where('fee_demands.status', '!=', 'CANCELLED')
+            ->where('item.installment_allowed', true)
+            ->selectRaw('fee_demands.admission_id as admission_id')
+            ->selectRaw('item.id as item_id')
+            ->selectRaw($purposeExpr.' as normalized_purpose')
+            ->selectRaw($basisExpr.' as normalized_basis_group')
+            ->selectRaw($periodExpr.' as normalized_period_no')
+            ->selectRaw("COALESCE(fee_demands.billing_period_label,'') as raw_period_label");
+
+        return DB::query()
+            ->fromSub($normalized, 'installment_scope')
+            ->select([
+                'normalized_purpose',
+                'normalized_basis_group',
+                'normalized_period_no',
+            ])
+            ->selectRaw("MAX(raw_period_label) as raw_period_label")
+            ->selectRaw('COUNT(DISTINCT admission_id) as cohort_count')
+            ->selectRaw('COUNT(item_id) as item_count')
+            ->groupBy('normalized_purpose', 'normalized_basis_group', 'normalized_period_no')
+            ->orderBy('normalized_period_no')
+            ->get()
+            ->map(function ($row) {
+                $purpose = strtoupper((string) $row->normalized_purpose);
+                $basis = strtoupper((string) $row->normalized_basis_group);
+                $periodNo = (int) $row->normalized_period_no;
+                $rawLabel = trim((string) ($row->raw_period_label ?? ''));
+
+                $label = $purpose === 'ADMISSION_INITIAL'
+                    ? 'Admission Initial'
+                    : ($rawLabel !== '' ? $rawLabel : str_replace('_', ' ', $purpose).' · Period '.$periodNo);
+
+                return [
+                    'key' => $purpose.'|'.$basis.'|'.$periodNo,
+                    'purpose' => $purpose,
+                    'basis_group' => $basis,
+                    'period_no' => $periodNo,
+                    'label' => $label,
+                    'ready' => true,
+                    'reason' => null,
+                    'cohort_count' => (int) $row->cohort_count,
+                    'item_count' => (int) $row->item_count,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * Bulk contexts are derived from the effective Fee Setup itself.
      * No independent Semester/Year list is maintained by Fee Demand.
      */
@@ -568,6 +653,7 @@ class ApplicableFeeDemandService
             if ($basis === 'ONE_TIME') {
                 $amount = (float) $item->amount;
                 $setting = [
+                    'due_date' => $item->due_date?->format('Y-m-d'),
                     'is_mandatory' => (bool) $item->is_mandatory,
                     'is_enrollment_clearance_required' => (bool) $item->is_enrollment_clearance_required,
                     'installment_allowed' => (bool) $item->installment_allowed,
@@ -578,6 +664,7 @@ class ApplicableFeeDemandService
                 // Specific-period structures are item-level policies scoped by the structure's exact period.
                 $amount = (float) $item->amount;
                 $setting = [
+                    'due_date' => $item->due_date?->format('Y-m-d'),
                     'is_mandatory' => (bool) $item->is_mandatory,
                     'is_enrollment_clearance_required' => (bool) $item->is_enrollment_clearance_required,
                     'installment_allowed' => (bool) $item->installment_allowed,
@@ -595,6 +682,7 @@ class ApplicableFeeDemandService
                 }
                 $amount = (float) $periodAmount->amount;
                 $setting = [
+                    'due_date' => $periodSetting->due_date?->format('Y-m-d'),
                     'is_mandatory' => (bool) $periodSetting->is_mandatory,
                     'is_enrollment_clearance_required' => (bool) $periodSetting->is_enrollment_clearance_required,
                     'installment_allowed' => (bool) $periodSetting->installment_allowed,
@@ -605,6 +693,11 @@ class ApplicableFeeDemandService
 
             if ($amount <= 0) {
                 continue;
+            }
+            if (empty($setting['due_date'])) {
+                throw ValidationException::withMessages([
+                    'fee' => 'Fee Setup is incomplete: '.$item->head->name.' in '.$structure->name.' has no Standard Due Date for this Billing Period. Deactivate the Fee Structure, set the Due Date, and reactivate it before generating a new demand.',
+                ]);
             }
 
             $rows[] = [

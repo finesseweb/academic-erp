@@ -12,6 +12,13 @@ class StoreAcademicCalendarEventRequest extends FormRequest
         return $this->user()?->hasPermission('academic_calendar.event_create') ?? false;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('academic_calendar_term_period_id') === 'GENERAL') {
+            $this->merge(['academic_calendar_term_period_id' => null]);
+        }
+    }
+
     public function rules(): array
     {
         return $this->eventRules();
@@ -20,6 +27,7 @@ class StoreAcademicCalendarEventRequest extends FormRequest
     protected function eventRules(): array
     {
         return [
+            'academic_calendar_term_period_id' => ['nullable', 'integer', 'exists:academic_calendar_term_periods,id'],
             'event_type' => ['required', Rule::in(['ACADEMIC', 'REGISTRATION', 'INSTRUCTION', 'EXAMINATION_WINDOW', 'HOLIDAY', 'VACATION', 'OTHER'])],
             'title' => ['required', 'string', 'max:180'],
             'start_date' => ['required', 'date'],

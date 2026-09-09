@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AcademicSession;
+use App\Models\AcademicCalendarTermPeriod;
 use App\Models\College;
 use App\Models\CollegeProgramOffering;
 use App\Models\Curriculum;
@@ -143,13 +144,28 @@ class FeeManagementController extends Controller
     private function structures(int $universityId, ?int $collegeId)
     {
         return FeeStructure::with([
-            'academicSession:id,name,code,status','programTemplate:id,name,code,term_structure,duration_terms','curriculum:id,program_template_id,academic_session_id,name,code,version,lifecycle_status,approval_status', 'curriculum.terms:id,curriculum_id,sequence_no,name,status',
+            'academicSession:id,name,code,status','programTemplate:id,name,code,term_structure,duration_terms','curriculum:id,program_template_id,academic_session_id,name,code,version,effective_from,effective_to,lifecycle_status,approval_status', 'curriculum.terms:id,curriculum_id,sequence_no,name,status',
             'offering.programTemplate:id,name,code,term_structure,duration_terms','offering.academicSession:id,name,code,status',
             'offering.curriculum.terms:id,curriculum_id,sequence_no,name,status',
-            'items.head:id,name,code,status,fee_category_id','items.head.category:id,name,code,status','items.periodAmounts:id,fee_structure_item_id,period_no,amount','items.periodExclusions:id,fee_structure_item_id,period_no','items.periodSettings:id,fee_structure_item_id,period_no,is_mandatory,is_enrollment_clearance_required,installment_allowed,display_order,status',
+            'items.head:id,name,code,status,fee_category_id','items.head.category:id,name,code,status','items.periodAmounts:id,fee_structure_item_id,period_no,amount','items.periodExclusions:id,fee_structure_item_id,period_no','items.periodSettings:id,fee_structure_item_id,period_no,due_date,is_mandatory,is_enrollment_clearance_required,installment_allowed,display_order,status',
         ])->where('university_id',$universityId)
             ->when($collegeId,fn($q)=>$q->where('college_id',$collegeId),fn($q)=>$q->whereNull('college_id'))
-            ->orderByDesc('academic_session_id')->orderBy('purpose')->get();
+            ->orderByDesc('academic_session_id')->orderBy('purpose')->get()
+            ->each(function ($structure) {
+                $curriculumId=$structure->curriculum_id ?: $structure->offering?->curriculum_id;
+                if(!$curriculumId){ $structure->setAttribute('academic_period_bounds', []); return; }
+                $calendarId=\App\Models\AcademicCalendar::query()->where('university_id',$structure->university_id)->where('academic_session_id',$structure->academic_session_id)->where('status','ACTIVE')->value('id');
+                $curriculum=$structure->curriculum ?: $structure->offering?->curriculum;
+                $effectiveFrom=$curriculum?->effective_from?->format('Y-m-d');
+                $effectiveTo=$curriculum?->effective_to?->format('Y-m-d');
+                $bounds=$calendarId ? AcademicCalendarTermPeriod::query()->with('curriculumTerm:id,curriculum_id,sequence_no,name')->where('academic_calendar_id',$calendarId)->where('status','ACTIVE')->whereHas('curriculumTerm',fn($q)=>$q->where('curriculum_id',$curriculumId))->get()->map(function($p) use($effectiveFrom,$effectiveTo){
+                    $start=$p->start_date->format('Y-m-d'); $end=$p->end_date->format('Y-m-d');
+                    if($effectiveFrom && $start<$effectiveFrom) $start=$effectiveFrom;
+                    if($effectiveTo && $end>$effectiveTo) $end=$effectiveTo;
+                    return ['period_no'=>$p->curriculumTerm->sequence_no,'name'=>$p->curriculumTerm->name,'start_date'=>$start,'end_date'=>$end,'curriculum_effective_from'=>$effectiveFrom,'curriculum_effective_to'=>$effectiveTo];
+                })->filter(fn($b)=>$b['start_date']<=$b['end_date'])->values()->all() : [];
+                $structure->setAttribute('academic_period_bounds',$bounds);
+            });
     }
 
 
@@ -181,6 +197,6 @@ class FeeManagementController extends Controller
     private function categoryRules(): array { return ['name'=>['required','string','max:120'],'code'=>['required','string','max:40'],'description'=>['nullable','string','max:1000'],'display_order'=>['nullable','integer','min:0','max:65535']]; }
     private function headRules(): array { return ['name'=>['required','string','max:120'],'code'=>['required','string','max:40'],'fee_category_id'=>['required','integer'],'description'=>['nullable','string','max:1000'],'is_refundable'=>['nullable','boolean']]; }
     private function structureRules(bool $college): array { $rules=['name'=>['required','string','max:160'],'code'=>['required','string','max:50'],'purpose'=>['required',Rule::in(['ADMISSION','ACADEMIC','EXAMINATION','OTHER'])],'charge_basis'=>['required',Rule::in(['ONE_TIME','PER_TERM','PER_ACADEMIC_YEAR','SPECIFIC_TERM','SPECIFIC_ACADEMIC_YEAR'])],'charge_period_no'=>['nullable','integer','min:1','max:30'],'currency'=>['required','string','size:3'],'notes'=>['nullable','string','max:1500']]; if($college)$rules['college_program_offering_id']=['required','integer']; else {$rules['academic_session_id']=['required','integer'];$rules['program_template_id']=['nullable','integer'];$rules['curriculum_id']=['nullable','integer'];$rules['college_applicability']=['required',Rule::in(['MANDATORY','OPTIONAL'])];} return $rules; }
-    private function itemRules(): array { return ['fee_head_id'=>['required','integer'],'amount'=>['required','numeric','gt:0','max:999999999.99'],'period_amounts'=>['nullable','array'],'period_amounts.*'=>['nullable','numeric','gt:0','max:999999999.99'],'period_applicable'=>['nullable','array'],'period_applicable.*'=>['nullable','boolean'],'period_settings'=>['nullable','array'],'period_settings.*'=>['nullable','array'],'period_settings.*.is_mandatory'=>['nullable','boolean'],'period_settings.*.is_enrollment_clearance_required'=>['nullable','boolean'],'period_settings.*.installment_allowed'=>['nullable','boolean'],'period_settings.*.display_order'=>['nullable','integer','min:0','max:65535'],'period_settings.*.status'=>['nullable',Rule::in(['ACTIVE','INACTIVE'])],'is_mandatory'=>['nullable','boolean'],'is_enrollment_clearance_required'=>['nullable','boolean'],'installment_allowed'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:65535'],'status'=>['required',Rule::in(['ACTIVE','INACTIVE'])]]; }
+    private function itemRules(): array { return ['fee_head_id'=>['required','integer'],'amount'=>['required','numeric','gt:0','max:999999999.99'],'due_date'=>['nullable','date'],'period_amounts'=>['nullable','array'],'period_amounts.*'=>['nullable','numeric','gt:0','max:999999999.99'],'period_applicable'=>['nullable','array'],'period_applicable.*'=>['nullable','boolean'],'period_settings'=>['nullable','array'],'period_settings.*'=>['nullable','array'],'period_settings.*.due_date'=>['nullable','date'],'period_settings.*.is_mandatory'=>['nullable','boolean'],'period_settings.*.is_enrollment_clearance_required'=>['nullable','boolean'],'period_settings.*.installment_allowed'=>['nullable','boolean'],'period_settings.*.display_order'=>['nullable','integer','min:0','max:65535'],'period_settings.*.status'=>['nullable',Rule::in(['ACTIVE','INACTIVE'])],'is_mandatory'=>['nullable','boolean'],'is_enrollment_clearance_required'=>['nullable','boolean'],'installment_allowed'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:65535'],'status'=>['required',Rule::in(['ACTIVE','INACTIVE'])]]; }
     private function u(Request $r,string $p):void{abort_unless($r->user()->hasPermission($p),403);} private function c(Request $r,College $c,string $p):void{abort_unless($r->user()->hasCollegePermission($p,$c->id),403);}
 }

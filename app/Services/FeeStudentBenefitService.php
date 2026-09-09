@@ -13,6 +13,13 @@ use Illuminate\Validation\ValidationException;
 
 class FeeStudentBenefitService
 {
+    public function __construct(private FeeInstallmentAdjustmentService $installmentAdjustments) {}
+
+    public function installmentContext(FeeStudentBenefit $benefit): array
+    {
+        return $this->installmentAdjustments->context($benefit);
+    }
+
     public function applicableSchemes(College $college, FeeDemand $demand): array
     {
         $context = $this->demandContext($college, $demand);
@@ -37,8 +44,16 @@ class FeeStudentBenefitService
             ->orderBy('name')
             ->get();
 
-        return $schemes->map(function (FeeScholarshipScheme $scheme) use ($demand, $context) {
+        $activeAssignments = FeeStudentBenefit::query()
+            ->where('fee_demand_id', $demand->id)
+            ->whereIn('fee_scholarship_scheme_id', $schemes->pluck('id'))
+            ->whereIn('status', ['PENDING', 'APPROVED'])
+            ->get(['id', 'fee_scholarship_scheme_id', 'status'])
+            ->keyBy('fee_scholarship_scheme_id');
+
+        return $schemes->map(function (FeeScholarshipScheme $scheme) use ($demand, $context, $activeAssignments) {
             $preview = $this->preview($scheme, $demand, $context);
+            $activeAssignment = $activeAssignments->get($scheme->id);
             return [
                 'id' => $scheme->id,
                 'name' => $scheme->name,
@@ -53,10 +68,195 @@ class FeeStudentBenefitService
                 'fee_heads' => $scheme->feeHeads->map->only(['id','name','code'])->values(),
                 'eligible' => $preview['eligible'],
                 'eligibility_reason' => $preview['reason'],
+                'already_assigned_status' => $activeAssignment?->status,
+                'already_assigned_benefit_id' => $activeAssignment?->id,
                 'eligible_base_amount' => $preview['eligible_base_amount'],
                 'calculated_benefit_amount' => $preview['calculated_benefit_amount'],
             ];
         })->values()->all();
+    }
+
+    public function bulkSchemes(College $college): array
+    {
+        return FeeScholarshipScheme::query()
+            ->with([
+                'academicSession:id,name,code',
+                'programTemplate:id,name,code',
+                'offering:id,program_template_id',
+                'feeHeads:id,name,code',
+                'reservationCategories:id,name,code',
+            ])
+            ->where('university_id', $college->university_id)
+            ->where('status', 'ACTIVE')
+            ->where(function ($query) use ($college) {
+                $query->whereNull('college_id')
+                    ->orWhere('college_id', $college->id);
+            })
+            ->orderByDesc('academic_session_id')
+            ->orderByRaw('college_id is null desc')
+            ->orderBy('name')
+            ->get()
+            ->map(function (FeeScholarshipScheme $scheme) {
+                return [
+                    'id' => $scheme->id,
+                    'name' => $scheme->name,
+                    'code' => $scheme->code,
+                    'owner_type' => $scheme->college_id ? 'COLLEGE' : 'UNIVERSITY',
+                    'academic_session' => $scheme->academicSession?->only(['id','name','code']),
+                    'program_template' => $scheme->programTemplate?->only(['id','name','code']),
+                    'benefit_type' => $scheme->benefit_type,
+                    'calculation_type' => $scheme->calculation_type,
+                    'benefit_value' => $scheme->benefit_value,
+                    'maximum_benefit_amount' => $scheme->maximum_benefit_amount,
+                    'approval_mode' => $scheme->approval_mode,
+                    'eligibility_mode' => $scheme->eligibility_mode,
+                    'fee_heads' => $scheme->feeHeads->map->only(['id','name','code'])->values(),
+                    'reservation_categories' => $scheme->reservationCategories->map->only(['id','name','code'])->values(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    public function bulkCandidates(College $college, FeeScholarshipScheme $scheme): array
+    {
+        if ($scheme->status !== 'ACTIVE' || (int) $scheme->university_id !== (int) $college->university_id) {
+            throw ValidationException::withMessages(['scheme_id' => 'Selected scheme is not ACTIVE for this College.']);
+        }
+        if ($scheme->college_id !== null && (int) $scheme->college_id !== (int) $college->id) {
+            throw ValidationException::withMessages(['scheme_id' => 'Selected College scheme does not belong to this College.']);
+        }
+
+        $scheme->loadMissing(['feeHeads:id,name,code','reservationCategories:id,name,code']);
+
+        $query = FeeDemand::query()
+            ->from('fee_demands as d')
+            ->join('admissions as ad', 'ad.id', '=', 'd.admission_id')
+            ->join('college_admission_applications as a', 'a.id', '=', 'ad.college_admission_application_id')
+            ->join('college_program_offerings as o', 'o.id', '=', 'd.college_program_offering_id')
+            ->join('program_templates as pt', 'pt.id', '=', 'o.program_template_id')
+            ->join('degrees as deg', 'deg.id', '=', 'pt.degree_id')
+            ->join('degree_levels as dl', 'dl.id', '=', 'deg.degree_level_id')
+            ->leftJoin('college_admission_application_academic_preferences as ap', 'ap.college_admission_application_id', '=', 'a.id')
+            ->leftJoin('academic_disciplines as disc', 'disc.id', '=', 'ap.discipline_id')
+            ->where('d.college_id', $college->id)
+            ->where('d.academic_session_id', $scheme->academic_session_id)
+            ->whereIn('d.status', ['OPEN','PARTIALLY_CLEARED']);
+
+        if ($scheme->college_id !== null) {
+            $query->where('d.college_program_offering_id', $scheme->college_program_offering_id);
+        } elseif ($scheme->program_template_id !== null) {
+            $query->where('o.program_template_id', $scheme->program_template_id);
+        }
+
+        $rows = $query
+            ->orderBy('dl.display_order')->orderBy('dl.name')
+            ->orderBy('deg.display_order')->orderBy('deg.name')
+            ->orderBy('disc.display_order')->orderBy('disc.name')
+            ->orderBy('a.candidate_name')
+            ->limit(1000)
+            ->get([
+                'd.id','d.demand_no','d.billing_period_label','d.total_amount','d.adjusted_amount','d.outstanding_amount','d.status',
+                'ad.admission_no','a.application_no','a.candidate_name',
+                'dl.id as degree_level_id','dl.name as degree_level_name','dl.code as degree_level_code',
+                'deg.id as degree_id','deg.name as degree_name','deg.code as degree_code',
+                'disc.id as discipline_id','disc.name as discipline_name','disc.code as discipline_code',
+            ]);
+
+        $eligible = [];
+        $ineligibleCount = 0;
+        $alreadyAssignedCount = 0;
+        $ineligibleReasons = [];
+
+        foreach ($rows as $row) {
+            $demand = FeeDemand::query()->find((int) $row->id);
+            if (! $demand) continue;
+
+            $context = $this->demandContext($college, $demand);
+            $alreadyAssigned = FeeStudentBenefit::query()
+                ->where('fee_demand_id', $demand->id)
+                ->where('fee_scholarship_scheme_id', $scheme->id)
+                ->whereIn('status', ['PENDING','APPROVED'])
+                ->exists();
+            if ($alreadyAssigned) {
+                $alreadyAssignedCount++;
+                continue;
+            }
+
+            $preview = $this->preview($scheme, $demand, $context);
+            if (! $preview['eligible'] || $preview['calculated_benefit_amount'] <= 0) {
+                $ineligibleCount++;
+                $reason = $preview['reason'] ?: 'Calculated benefit is zero for the remaining eligible amount.';
+                $ineligibleReasons[$reason] = ($ineligibleReasons[$reason] ?? 0) + 1;
+                continue;
+            }
+
+            $eligible[] = [
+                'demand_id' => (int) $row->id,
+                'demand_no' => $row->demand_no,
+                'billing_period_label' => $row->billing_period_label,
+                'total_amount' => $row->total_amount,
+                'outstanding_amount' => $row->outstanding_amount,
+                'admission_no' => $row->admission_no,
+                'application_no' => $row->application_no,
+                'candidate_name' => $row->candidate_name,
+                'degree_level' => ['id'=>(int) $row->degree_level_id,'name'=>$row->degree_level_name,'code'=>$row->degree_level_code],
+                'degree' => ['id'=>(int) $row->degree_id,'name'=>$row->degree_name,'code'=>$row->degree_code],
+                'discipline' => $row->discipline_id ? ['id'=>(int) $row->discipline_id,'name'=>$row->discipline_name,'code'=>$row->discipline_code] : null,
+                'reservation_categories' => $context['reservation_categories'],
+                'eligible_base_amount' => $preview['eligible_base_amount'],
+                'calculated_benefit_amount' => $preview['calculated_benefit_amount'],
+            ];
+        }
+
+        return [
+            'students' => $eligible,
+            'summary' => [
+                'eligible' => count($eligible),
+                'ineligible' => $ineligibleCount,
+                'already_assigned' => $alreadyAssignedCount,
+                'scanned' => $rows->count(),
+                'limited' => $rows->count() >= 1000,
+                'ineligible_reasons' => collect($ineligibleReasons)
+                    ->map(fn ($count, $reason) => ['reason' => $reason, 'count' => $count])
+                    ->sortByDesc('count')
+                    ->values()
+                    ->all(),
+            ],
+        ];
+    }
+
+    public function bulkAssign(College $college, FeeScholarshipScheme $scheme, array $demandIds, int $actorId, ?string $note = null): array
+    {
+        $applied = 0;
+        $approved = 0;
+        $pending = 0;
+        $skipped = [];
+
+        foreach (array_values(array_unique(array_map('intval', $demandIds))) as $demandId) {
+            $demand = FeeDemand::query()->where('college_id', $college->id)->find($demandId);
+            if (! $demand) {
+                $skipped[] = ['demand_id' => $demandId, 'reason' => 'Fee Demand is no longer available.'];
+                continue;
+            }
+
+            try {
+                $benefit = $this->assign($college, $demand, $scheme, $actorId, $note);
+                $applied++;
+                if ($benefit->status === 'APPROVED') $approved++;
+                else $pending++;
+            } catch (ValidationException $e) {
+                $messages = collect($e->errors())->flatten()->filter()->values();
+                $skipped[] = ['demand_id' => $demandId, 'reason' => $messages->first() ?: 'Student is no longer eligible.'];
+            }
+        }
+
+        return [
+            'applied' => $applied,
+            'approved' => $approved,
+            'pending' => $pending,
+            'skipped' => $skipped,
+        ];
     }
 
     public function assign(College $college, FeeDemand $demand, FeeScholarshipScheme $scheme, int $actorId, ?string $note = null): FeeStudentBenefit
@@ -119,16 +319,16 @@ class FeeStudentBenefitService
             }
 
             if ($automatic) {
-                $this->approveLocked($benefit, $lockedDemand, (float) $preview['calculated_benefit_amount'], $actorId, 'Automatically sanctioned by scheme policy.');
+                $this->approveLocked($benefit, $lockedDemand, (float) $preview['calculated_benefit_amount'], $actorId, 'Automatically sanctioned by scheme policy.', 'PROPORTIONAL', [], null);
             }
 
             return $benefit->fresh('items');
         });
     }
 
-    public function approve(College $college, FeeStudentBenefit $benefit, float $sanctionedAmount, int $actorId, ?string $note = null): FeeStudentBenefit
+    public function approve(College $college, FeeStudentBenefit $benefit, float $sanctionedAmount, int $actorId, ?string $note = null, string $installmentAdjustmentMode = 'PROPORTIONAL', array $customInstallments = [], ?string $ip = null): FeeStudentBenefit
     {
-        return DB::transaction(function () use ($college, $benefit, $sanctionedAmount, $actorId, $note) {
+        return DB::transaction(function () use ($college, $benefit, $sanctionedAmount, $actorId, $note, $installmentAdjustmentMode, $customInstallments, $ip) {
             $locked = FeeStudentBenefit::query()->whereKey($benefit->id)->lockForUpdate()->firstOrFail();
             $this->assertCollege($locked, $college);
             if ($locked->status !== 'PENDING') {
@@ -141,7 +341,7 @@ class FeeStudentBenefitService
             if ($demand->status === 'CANCELLED') {
                 throw ValidationException::withMessages(['benefit' => 'Cannot approve a benefit against a cancelled Fee Demand.']);
             }
-            $this->approveLocked($locked, $demand, $sanctionedAmount, $actorId, $note);
+            $this->approveLocked($locked, $demand, $sanctionedAmount, $actorId, $note, $installmentAdjustmentMode, $customInstallments, $ip);
             return $locked->fresh('items');
         });
     }
@@ -160,24 +360,58 @@ class FeeStudentBenefitService
         ]);
     }
 
-    public function cancel(College $college, FeeStudentBenefit $benefit, int $actorId, string $reason): void
+    public function cancel(College $college, FeeStudentBenefit $benefit, int $actorId, string $reason): bool
     {
-        $this->assertCollege($benefit, $college);
-        if ($benefit->status === 'APPROVED') {
-            throw ValidationException::withMessages(['benefit' => 'Approved benefits cannot be cancelled directly. A financial reversal workflow is required.']);
-        }
-        if ($benefit->status === 'CANCELLED') {
-            throw ValidationException::withMessages(['benefit' => 'This benefit is already cancelled.']);
-        }
-        $benefit->update([
-            'status' => 'CANCELLED',
-            'cancelled_at' => now(),
-            'cancelled_by' => $actorId,
-            'cancellation_reason' => trim($reason),
-        ]);
+        return DB::transaction(function () use ($college, $benefit, $actorId, $reason) {
+            $locked = FeeStudentBenefit::query()->whereKey($benefit->id)->lockForUpdate()->firstOrFail();
+            $this->assertCollege($locked, $college);
+
+            if ($locked->status === 'CANCELLED') {
+                throw ValidationException::withMessages(['benefit' => 'This benefit is already removed.']);
+            }
+            if ($locked->status === 'REJECTED') {
+                throw ValidationException::withMessages(['benefit' => 'A rejected benefit does not need to be removed.']);
+            }
+
+            $reversed = false;
+            if ($locked->status === 'APPROVED') {
+                $demand = FeeDemand::query()->whereKey($locked->fee_demand_id)->lockForUpdate()->firstOrFail();
+                if ($demand->status === 'CANCELLED') {
+                    throw ValidationException::withMessages(['benefit' => 'The linked Fee Demand is cancelled, so the approved benefit cannot be reversed here.']);
+                }
+
+                $sanctioned = round((float) $locked->sanctioned_amount, 2);
+                $newAdjusted = max(round((float) $demand->adjusted_amount - $sanctioned, 2), 0);
+                $outstanding = max(round((float) $demand->total_amount - (float) $demand->paid_amount - $newAdjusted, 2), 0);
+                $covered = round((float) $demand->paid_amount + $newAdjusted, 2);
+                $status = $outstanding <= 0
+                    ? 'CLEARED'
+                    : ($covered > 0 ? 'PARTIALLY_CLEARED' : 'OPEN');
+
+                $demand->update([
+                    'adjusted_amount' => $newAdjusted,
+                    'outstanding_amount' => $outstanding,
+                    'status' => $status,
+                ]);
+                $reversed = true;
+            }
+
+            $locked->update([
+                'status' => 'CANCELLED',
+                'cancelled_at' => now(),
+                'cancelled_by' => $actorId,
+                'cancellation_reason' => trim($reason),
+            ]);
+
+            if ($reversed) {
+                $this->installmentAdjustments->applyCancellation($locked->fresh('items.demandItem'), $actorId);
+            }
+
+            return $reversed;
+        });
     }
 
-    private function approveLocked(FeeStudentBenefit $benefit, FeeDemand $demand, float $sanctionedAmount, int $actorId, ?string $note): void
+    private function approveLocked(FeeStudentBenefit $benefit, FeeDemand $demand, float $sanctionedAmount, int $actorId, ?string $note, string $installmentAdjustmentMode = 'PROPORTIONAL', array $customInstallments = [], ?string $ip = null): void
     {
         $items = FeeStudentBenefitItem::query()->where('fee_student_benefit_id', $benefit->id)->orderBy('id')->lockForUpdate()->get();
         $calculatedTotal = max((float) $items->sum(fn ($i) => (float) $i->calculated_amount), 0.01);
@@ -214,6 +448,8 @@ class FeeStudentBenefitService
             'outstanding_amount' => $outstanding,
             'status' => $status,
         ]);
+
+        $this->installmentAdjustments->applyApproval($benefit->fresh('items.demandItem'), $installmentAdjustmentMode, $customInstallments, $actorId, $ip);
     }
 
     private function preview(FeeScholarshipScheme $scheme, FeeDemand $demand, array $context): array

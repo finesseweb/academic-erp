@@ -159,7 +159,7 @@ class CollegeAdmissionApplicationService
             ? $this->resolveChoices($college, $cycle, $choiceInput, $admissionMode)
             : ($admissionMode === 'REGULAR'
                 ? $this->resolveRegularProcessingContextFromAcademicPreference($application, $college, $cycle)
-                : []);
+                : $this->resolveDirectProcessingContextFromAcademicPreference($application, $college, $cycle));
 
         return DB::transaction(function () use ($application, $college, $contexts, $actorId, $ip) {
             $before = $application->load('choices')->toArray();
@@ -175,6 +175,39 @@ class CollegeAdmissionApplicationService
             $this->audit('COLLEGE_ADMISSION_APPLICATION_SUBMITTED', $fresh, $college, $actorId, $ip, $before, $fresh->toArray());
 
             return $fresh;
+        });
+    }
+
+    public function ensureDirectProcessingChoice(
+        CollegeAdmissionApplication $application,
+        College $college,
+        ?int $actorId,
+        ?string $ip
+    ): ?CollegeAdmissionApplicationChoice {
+        $this->assertOwned($application, $college);
+        if (strtoupper((string) $application->admission_mode) !== 'DIRECT' || $application->status !== 'SUBMITTED') {
+            return null;
+        }
+
+        $existing = $application->choices()->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $cycle = $this->activeCycle($college, (int) $application->college_admission_cycle_id);
+        $contexts = $this->resolveDirectProcessingContextFromAcademicPreference($application, $college, $cycle);
+
+        return DB::transaction(function () use ($application, $college, $contexts, $actorId, $ip) {
+            DB::table('college_admission_applications')->where('id', $application->id)->lockForUpdate()->get();
+            $existing = $application->choices()->lockForUpdate()->first();
+            if ($existing) {
+                return $existing;
+            }
+            $before = $application->load('choices')->toArray();
+            $this->replaceChoices($application, $contexts);
+            $choice = $application->choices()->first();
+            $this->audit('COLLEGE_DIRECT_ADMISSION_PROCESSING_CONTEXT_LOCKED', $application, $college, $actorId, $ip, $before, $application->fresh()->load('choices')->toArray());
+            return $choice;
         });
     }
 
@@ -436,6 +469,81 @@ class CollegeAdmissionApplicationService
         return [$matches->first()];
     }
 
+
+    /**
+     * DIRECT admission bypasses Eligibility / Score / Interview / Merit, but it
+     * still needs one locked Intake + seat-bucket context so Document
+     * Verification, Seat Allocation and Admission Confirmation can continue.
+     */
+    private function resolveDirectProcessingContextFromAcademicPreference(
+        CollegeAdmissionApplication $application,
+        College $college,
+        CollegeAdmissionCycle $cycle,
+    ): array {
+        $preference = DB::table('college_admission_application_academic_preferences')
+            ->where('college_admission_application_id', $application->id)
+            ->first(['discipline_id', 'specialization_id']);
+
+        if (! $preference) {
+            throw ValidationException::withMessages([
+                'application' => 'Direct Admission cannot continue because its academic preference is missing. Review the application and submit again.',
+            ]);
+        }
+
+        $disciplineId = $preference->discipline_id ? (int) $preference->discipline_id : null;
+        $specializationId = $preference->specialization_id ? (int) $preference->specialization_id : null;
+
+        $intakes = CollegeProgramIntake::query()
+            ->with(['offering', 'allocations'])
+            ->where('college_program_offering_id', $cycle->college_program_offering_id)
+            ->where('status', 'ACTIVE')
+            ->get();
+
+        $matches = collect();
+        foreach ($intakes as $intake) {
+            foreach ($this->reservationService->availableBuckets($intake) as $bucket) {
+                if (! $this->bucketMatchesAcademicPreference($intake, $bucket, $disciplineId, $specializationId)) {
+                    continue;
+                }
+
+                $plan = CollegeProgramReservationPlan::query()
+                    ->where('college_program_intake_id', $intake->id)
+                    ->where('bucket_key', $bucket['bucket_key'])
+                    ->first();
+                if ($plan && $plan->status !== 'ACTIVE') {
+                    continue;
+                }
+
+                $matches->push([
+                    'preference_no' => 1,
+                    'college_program_intake_id' => $intake->id,
+                    'college_program_reservation_plan_id' => $plan?->id,
+                    'college_admission_selection_rule_id' => null,
+                    'bucket_type' => $bucket['bucket_type'],
+                    'bucket_key' => $bucket['bucket_key'],
+                    'basis_capacity' => (int) $bucket['basis_capacity'],
+                    'eligibility_status' => 'ELIGIBLE',
+                    'eligibility_reason' => 'DIRECT_ADMISSION_SELECTION_BYPASS',
+                    'eligibility_checked_at' => now(),
+                    'eligibility_checked_by' => null,
+                ]);
+            }
+        }
+
+        if ($matches->isEmpty()) {
+            throw ValidationException::withMessages([
+                'application' => 'Direct Admission has no ACTIVE Intake / seat bucket matching this Program, Discipline and Specialization. Configure the Intake before submitting the application.',
+            ]);
+        }
+        if ($matches->count() > 1) {
+            throw ValidationException::withMessages([
+                'application' => 'Direct Admission has more than one matching ACTIVE Intake / seat-bucket path. Keep one unambiguous path for this Program / Discipline / Specialization before accepting Direct Admission.',
+            ]);
+        }
+
+        return [$matches->first()];
+    }
+
     private function bucketMatchesAcademicPreference(
         CollegeProgramIntake $intake,
         array $bucket,
@@ -478,10 +586,10 @@ class CollegeAdmissionApplicationService
         foreach ($contexts as $context) {
             $application->choices()->create([
                 ...$context,
-                'eligibility_status' => 'PENDING',
-                'eligibility_reason' => null,
-                'eligibility_checked_at' => null,
-                'eligibility_checked_by' => null,
+                'eligibility_status' => $context['eligibility_status'] ?? 'PENDING',
+                'eligibility_reason' => $context['eligibility_reason'] ?? null,
+                'eligibility_checked_at' => $context['eligibility_checked_at'] ?? null,
+                'eligibility_checked_by' => $context['eligibility_checked_by'] ?? null,
             ]);
         }
     }

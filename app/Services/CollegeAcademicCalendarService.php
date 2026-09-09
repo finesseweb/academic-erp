@@ -77,6 +77,7 @@ class CollegeAcademicCalendarService
         $this->assertCollegeActive($college);
         $event = $this->validateOverrideEvent($calendar, (int) $data['academic_calendar_event_id']);
         $this->assertDatesInsideSession($calendar, $data['start_date'], $data['end_date']);
+        $this->assertOverrideInsideTermPeriod($event, $data['start_date'], $data['end_date']);
 
         $existing = CollegeCalendarOverride::query()
             ->where('college_academic_calendar_id', $calendar->id)
@@ -115,6 +116,7 @@ class CollegeAcademicCalendarService
         $this->assertCollegeActive($college);
         $this->validateOverrideEvent($calendar, (int) $override->academic_calendar_event_id);
         $this->assertDatesInsideSession($calendar, $data['start_date'], $data['end_date']);
+        $this->assertOverrideInsideTermPeriod($override->universityEvent()->firstOrFail(), $data['start_date'], $data['end_date']);
 
         DB::transaction(function () use ($override, $college, $data, $actorId, $ip) {
             $before = $override->toArray();
@@ -173,6 +175,18 @@ class CollegeAcademicCalendarService
         if ($event->status !== 'ACTIVE') throw ValidationException::withMessages(['academic_calendar_event_id' => 'Only ACTIVE University calendar events can be overridden.']);
         if (! $event->allow_college_override) throw ValidationException::withMessages(['academic_calendar_event_id' => 'University governance does not allow College override for this event.']);
         return $event;
+    }
+
+
+    private function assertOverrideInsideTermPeriod(AcademicCalendarEvent $event, string $startDate, string $endDate): void
+    {
+        if (!$event->academic_calendar_term_period_id) return;
+        $period=$event->termPeriod()->first();
+        if(!$period) return;
+        $start=date('Y-m-d',strtotime($startDate)); $end=date('Y-m-d',strtotime($endDate));
+        if($start<$period->start_date->format('Y-m-d') || $end>$period->end_date->format('Y-m-d')) {
+            throw ValidationException::withMessages(['start_date'=>'College event override must remain inside the University Curriculum Academic Period.']);
+        }
     }
 
     private function assertDatesInsideSession(CollegeAcademicCalendar $calendar, string $startDate, string $endDate): void

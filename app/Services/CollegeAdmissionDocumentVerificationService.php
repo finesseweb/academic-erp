@@ -88,6 +88,81 @@ class CollegeAdmissionDocumentVerificationService
         ];
     }
 
+    public function directScreen(College $college): array
+    {
+        $applications = CollegeAdmissionApplication::query()
+            ->where('college_id', $college->id)
+            ->where('status', 'SUBMITTED')
+            ->where('admission_mode', 'DIRECT')
+            ->with([
+                'fieldValues.field:id,label,field_type,is_required',
+                'documentVerification.items',
+                'academicPreference.discipline:id,name,code',
+                'academicPreference.specialization:id,name,code',
+                'admissionCycle.programOffering.programTemplate:id,name,code',
+                'admissionCycle.programOffering.academicSession:id,name,code,is_current',
+            ])
+            ->orderBy('submitted_at')
+            ->orderBy('id')
+            ->get();
+
+        return [
+            'summary' => [
+                'total' => $applications->count(),
+                'verified' => $applications->where(fn ($app) => $app->documentVerification?->status === 'VERIFIED')->count(),
+                'pending' => $applications->where(fn ($app) => ! $app->documentVerification || $app->documentVerification->status === 'PENDING')->count(),
+                'deficient' => $applications->where(fn ($app) => $app->documentVerification?->status === 'DEFICIENT')->count(),
+            ],
+            'rows' => $applications->map(function (CollegeAdmissionApplication $application) {
+                $verification = $application->documentVerification;
+                $reviewByValue = $verification?->items?->keyBy('college_admission_application_field_value_id') ?? collect();
+                $preference = $application->academicPreference;
+                $offering = $application->admissionCycle?->programOffering;
+
+                $documents = $application->fieldValues
+                    ->filter(fn ($value) => $value->field && in_array($value->field->field_type, ['FILE', 'IMAGE'], true) && filled($value->file_path))
+                    ->map(function ($value) use ($reviewByValue) {
+                        $review = $reviewByValue->get($value->id);
+                        return [
+                            'field_value_id' => $value->id,
+                            'field_id' => $value->college_admission_form_field_id,
+                            'label' => $value->field?->label,
+                            'field_type' => $value->field?->field_type,
+                            'is_required' => (bool) $value->field?->is_required,
+                            'file_name' => $value->file_name,
+                            'file_mime' => $value->file_mime,
+                            'file_size' => $value->file_size,
+                            'review' => $review ? [
+                                'status' => $review->status,
+                                'remarks' => $review->remarks,
+                                'reviewed_at' => optional($review->reviewed_at)->toIso8601String(),
+                            ] : null,
+                        ];
+                    })->values()->all();
+
+                return [
+                    'application_id' => $application->id,
+                    'application_no' => $application->application_no,
+                    'candidate_name' => $application->candidate_name,
+                    'admission_mode' => 'DIRECT',
+                    'rank' => null,
+                    'final_weighted_score' => null,
+                    'program_name' => $offering?->programTemplate?->name,
+                    'session_name' => $offering?->academicSession?->name,
+                    'discipline_name' => $preference?->discipline?->name,
+                    'specialization_name' => $preference?->specialization?->name,
+                    'verification' => $verification ? [
+                        'id' => $verification->id,
+                        'status' => $verification->status,
+                        'notes' => $verification->notes,
+                        'finalized_at' => optional($verification->finalized_at)->toIso8601String(),
+                    ] : null,
+                    'documents' => $documents,
+                ];
+            })->all(),
+        ];
+    }
+
     public function reviewItem(
         College $college,
         CollegeAdmissionApplicationFieldValue $fieldValue,

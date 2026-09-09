@@ -8,6 +8,8 @@ use App\Http\Requests\UpdateAcademicCalendarEventRequest;
 use App\Http\Requests\UpdateAcademicCalendarRequest;
 use App\Models\AcademicCalendar;
 use App\Models\AcademicCalendarEvent;
+use App\Models\AcademicCalendarTermPeriod;
+use App\Models\Curriculum;
 use App\Models\AcademicSession;
 use App\Models\University;
 use App\Services\AcademicCalendarService;
@@ -42,7 +44,7 @@ class AcademicCalendarController extends Controller
             ]);
 
         $calendars = AcademicCalendar::query()
-            ->with(['academicSession:id,name,code,starts_on,ends_on,status,is_current', 'events'])
+            ->with(['academicSession:id,name,code,starts_on,ends_on,status,is_current', 'events.termPeriod.curriculumTerm.curriculum.programTemplate:id,name,code', 'termPeriods.curriculumTerm.curriculum.programTemplate:id,name,code'])
             ->where('university_id', $university->id)
             ->orderByDesc('id')
             ->get();
@@ -50,6 +52,7 @@ class AcademicCalendarController extends Controller
         return Inertia::render('academic-calendars/index', [
             'sessions' => $sessions,
             'calendars' => $calendars,
+            'curriculaBySession' => Curriculum::query()->with(['programTemplate:id,name,code','terms'=>fn($q)=>$q->where('status','ACTIVE')->orderBy('sequence_no')])->where('university_id',$university->id)->currentApproved()->get()->groupBy('academic_session_id'),
             'can' => [
                 'create' => $request->user()->hasPermission('academic_calendar.create'),
                 'update' => $request->user()->hasPermission('academic_calendar.update'),
@@ -57,6 +60,7 @@ class AcademicCalendarController extends Controller
                 'eventCreate' => $request->user()->hasPermission('academic_calendar.event_create'),
                 'eventUpdate' => $request->user()->hasPermission('academic_calendar.event_update'),
                 'eventDisable' => $request->user()->hasPermission('academic_calendar.event_disable'),
+                'periodManage' => $request->user()->hasPermission('academic_calendar.event_update'),
             ],
         ]);
     }
@@ -120,6 +124,25 @@ class AcademicCalendarController extends Controller
         $this->service->changeEventStatus($academicCalendar, $event, $data['status'], $request->user()->id, $request->ip());
 
         return back()->with('success', 'Calendar event status updated.');
+    }
+
+
+    public function storeTermPeriod(Request $request, AcademicCalendar $academicCalendar): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('academic_calendar.event_update'), 403);
+        $this->owned($academicCalendar);
+        $data=$request->validate(['curriculum_term_id'=>['required','integer','exists:curriculum_terms,id'],'start_date'=>['required','date'],'end_date'=>['required','date','after_or_equal:start_date'],'allow_college_override'=>['required','boolean']]);
+        $this->service->upsertTermPeriod($academicCalendar, null, $data, $request->user()->id, $request->ip());
+        return back()->with('success','Academic period saved.');
+    }
+
+    public function updateTermPeriod(Request $request, AcademicCalendar $academicCalendar, AcademicCalendarTermPeriod $period): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('academic_calendar.event_update'), 403);
+        $this->owned($academicCalendar);
+        $data=$request->validate(['start_date'=>['required','date'],'end_date'=>['required','date','after_or_equal:start_date'],'allow_college_override'=>['required','boolean']]);
+        $this->service->upsertTermPeriod($academicCalendar, $period, $data, $request->user()->id, $request->ip());
+        return back()->with('success','Academic period updated.');
     }
 
     private function owned(AcademicCalendar $calendar): void

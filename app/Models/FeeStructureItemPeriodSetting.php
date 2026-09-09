@@ -10,6 +10,7 @@ class FeeStructureItemPeriodSetting extends Model
     protected $fillable = [
         'fee_structure_item_id',
         'period_no',
+        'due_date',
         'is_mandatory',
         'is_enrollment_clearance_required',
         'installment_allowed',
@@ -21,6 +22,7 @@ class FeeStructureItemPeriodSetting extends Model
 
     protected $casts = [
         'period_no' => 'integer',
+        'due_date' => 'date:Y-m-d',
         'is_mandatory' => 'boolean',
         'is_enrollment_clearance_required' => 'boolean',
         'installment_allowed' => 'boolean',

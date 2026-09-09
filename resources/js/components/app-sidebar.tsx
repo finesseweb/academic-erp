@@ -692,6 +692,13 @@ export function AppSidebar() {
                           permission: 'college_fee_student_benefit.view',
                           directNavigation: true,
                       },
+                      {
+                          title: 'Late Fine / Penalty',
+                          href: `/college/${collegeId}/fee-late-fines`,
+                          icon: ScrollText,
+                          permission: 'college_fee_late_fine.view',
+                          directNavigation: true,
+                      },
                   ],
               },
           ]

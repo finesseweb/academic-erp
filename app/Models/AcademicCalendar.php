@@ -18,6 +18,11 @@ class AcademicCalendar extends Model
         return $this->belongsTo(AcademicSession::class);
     }
 
+    public function termPeriods(): HasMany
+    {
+        return $this->hasMany(AcademicCalendarTermPeriod::class)->orderBy('start_date');
+    }
+
     public function events(): HasMany
     {
         return $this->hasMany(AcademicCalendarEvent::class)->orderBy('start_date')->orderBy('display_order');
