@@ -78,6 +78,13 @@ class CollegeFeeLateFineController extends Controller
         return back()->with('toast',['type'=>'success','message'=>'Late Fine Rule status updated.']);
     }
 
+    public function destroyRule(Request $request, College $college, FeeLateFineRule $rule, FeeLateFineService $service): RedirectResponse
+    {
+        $this->auth($request,$college,'college_fee_late_fine.manage');
+        $service->deleteUnusedRule($rule,$college,$request->user()->id);
+        return back()->with('toast',['type'=>'success','message'=>'Unused Late Fine Rule deleted.']);
+    }
+
     public function recalculate(Request $request, College $college, FeeLateFineService $service): RedirectResponse
     {
         $this->auth($request,$college,'college_fee_late_fine.calculate');

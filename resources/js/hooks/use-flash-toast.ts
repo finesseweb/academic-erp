@@ -6,6 +6,7 @@ import type { FlashToast } from '@/types/ui';
 type FlashPageProps = {
     flash?: {
         toast?: FlashToast | null;
+        feedback_event_id?: string | null;
     };
     errors?: Record<string, string | string[]>;
 };
@@ -22,6 +23,7 @@ export function useFlashToast(): void {
     const props = page.props as FlashPageProps;
     const flashToast = props.flash?.toast;
     const errors = props.errors;
+    const feedbackEventId = props.flash?.feedback_event_id ?? flashToast?.event_id ?? null;
 
     useEffect(() => {
         if (!flashToast?.message) {
@@ -43,7 +45,7 @@ export function useFlashToast(): void {
                 toast.info(flashToast.message);
                 break;
         }
-    }, [flashToast]);
+    }, [flashToast, feedbackEventId]);
 
     useEffect(() => {
         if (flashToast?.message || !errors) {
@@ -57,5 +59,5 @@ export function useFlashToast(): void {
         if (firstError) {
             toast.error(firstError);
         }
-    }, [errors, flashToast]);
+    }, [errors, flashToast, feedbackEventId]);
 }
