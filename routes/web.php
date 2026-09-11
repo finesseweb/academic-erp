@@ -54,6 +54,8 @@ use App\Http\Controllers\CollegeFeeLateFineController;
 use App\Http\Controllers\CollegeFeePaymentController;
 use App\Http\Controllers\CollegePaymentGatewayController;
 use App\Http\Controllers\CollegeOnlinePaymentController;
+use App\Http\Controllers\CollegeOnlineFeePaymentController;
+use App\Http\Controllers\PaymentWebhookController;
 use App\Http\Controllers\CollegeFeeStudentBenefitController;
 use App\Http\Controllers\FeeScholarshipController;
 use App\Http\Controllers\PermissionController;
@@ -81,7 +83,10 @@ Route::get('/apply/{slug}/application', [PublicAdmissionApplicationController::c
 Route::post('/apply/{slug}/application', [PublicAdmissionApplicationController::class, 'store'])->name('applicant.application.store');
 Route::get('/student', [StudentPortalController::class, 'index'])->middleware('auth')->name('student.portal');
 
-
+Route::post('payments/webhooks/razorpay', [PaymentWebhookController::class, 'razorpay'])->name('payments.webhooks.razorpay');
+Route::post('payments/webhooks/cashfree', [PaymentWebhookController::class, 'cashfree'])->name('payments.webhooks.cashfree');
+Route::post('payments/webhooks/payu', [PaymentWebhookController::class, 'payu'])->name('payments.webhooks.payu');
+Route::post('payments/payu/return', [CollegeOnlineFeePaymentController::class, 'payuReturn'])->name('payments.payu.return');
 
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
@@ -349,8 +354,13 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('college/{college}/payment-gateways/{gateway}/mappings/bulk', [CollegePaymentGatewayController::class, 'mappingsBulk'])->name('college-payment-gateways.mappings.bulk');
     Route::post('college/{college}/payment-gateways/routing/bulk', [CollegePaymentGatewayController::class, 'routingBulk'])->name('college-payment-gateways.routing.bulk');
     Route::post('college/{college}/payment-gateways/{gateway}/razorpay/test-order', [CollegeOnlinePaymentController::class, 'createRazorpayTestOrder'])->name('college-payment-gateways.razorpay.test-order');
+    Route::post('college/{college}/payment-gateways/{gateway}/cashfree/test-order', [CollegeOnlinePaymentController::class, 'createCashfreeTestOrder'])->name('college-payment-gateways.cashfree.test-order');
+    Route::post('college/{college}/payment-gateways/{gateway}/payu/test-api', [CollegeOnlinePaymentController::class, 'testPayUCredentials'])->name('college-payment-gateways.payu.test-api');
     Route::get('college/{college}/fee-payments', [CollegeFeePaymentController::class, 'index'])->name('college-fee-payments.index');
     Route::post('college/{college}/fee-payments', [CollegeFeePaymentController::class, 'store'])->name('college-fee-payments.store');
+    Route::post('college/{college}/fee-payments/online/initiate', [CollegeOnlineFeePaymentController::class, 'initiate'])->name('college-fee-payments.online.initiate');
+    Route::post('college/{college}/fee-payments/online/razorpay/verify', [CollegeOnlineFeePaymentController::class, 'verifyRazorpay'])->name('college-fee-payments.online.razorpay.verify');
+    Route::post('college/{college}/fee-payments/online/cashfree/verify', [CollegeOnlineFeePaymentController::class, 'verifyCashfree'])->name('college-fee-payments.online.cashfree.verify');
     Route::get('college/{college}/fee-late-fines', [CollegeFeeLateFineController::class, 'index'])->name('college-fee-late-fines.index');
     Route::post('college/{college}/fee-late-fines/rules', [CollegeFeeLateFineController::class, 'store'])->name('college-fee-late-fines.rules.store');
     Route::patch('college/{college}/fee-late-fines/rules/{rule}', [CollegeFeeLateFineController::class, 'update'])->name('college-fee-late-fines.rules.update');

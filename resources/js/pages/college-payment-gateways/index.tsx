@@ -88,16 +88,28 @@ function GatewayCard({
                         >
                             <Pencil className="size-4" />
                         </Button>
-                        {gateway.provider === 'RAZORPAY' && gateway.environment === 'TEST' && gateway.status === 'ACTIVE' && (
+                        {gateway.environment === 'TEST' && gateway.status === 'ACTIVE' && ['RAZORPAY', 'CASHFREE', 'PAYU'].includes(gateway.provider) && (
                             <Form
-                                action={`/college/${collegeId}/payment-gateways/${gateway.id}/razorpay/test-order`}
+                                action={
+                                    gateway.provider === 'RAZORPAY'
+                                        ? `/college/${collegeId}/payment-gateways/${gateway.id}/razorpay/test-order`
+                                        : gateway.provider === 'CASHFREE'
+                                            ? `/college/${collegeId}/payment-gateways/${gateway.id}/cashfree/test-order`
+                                            : `/college/${collegeId}/payment-gateways/${gateway.id}/payu/test-api`
+                                }
                                 method="post"
                             >
                                 {({ processing }) => (
                                     <Button
                                         size="icon"
                                         variant="outline"
-                                        title="Create ₹1 Razorpay TEST order"
+                                        title={
+                                            gateway.provider === 'RAZORPAY'
+                                                ? 'Create ₹1 Razorpay TEST order'
+                                                : gateway.provider === 'CASHFREE'
+                                                    ? 'Create ₹1 Cashfree Sandbox order'
+                                                    : 'Verify PayU TEST API credentials'
+                                        }
                                         disabled={processing}
                                     >
                                         <FlaskConical className="size-4" />
@@ -156,7 +168,7 @@ function GatewayCard({
                                         <Input
                                             name="merchant_id"
                                             defaultValue={gateway.merchant_id}
-                                            placeholder={gateway.provider === 'NTTDATA_ATOM' ? 'Provided MID' : 'Only if provider gives one'}
+                                            placeholder="Only if provider gives one"
                                         />
                                     </div>
                                 )}

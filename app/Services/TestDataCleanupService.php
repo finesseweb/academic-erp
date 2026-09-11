@@ -1980,7 +1980,7 @@ class TestDataCleanupService
             ->leftJoin('colleges as c', 'c.id', '=', 'opt.college_id')
             ->leftJoin('college_payment_gateways as cpg', 'cpg.id', '=', 'opt.college_payment_gateway_id')
             ->where('opt.university_id', $universityId)
-            ->where('opt.purpose', 'CREDENTIAL_TEST_ORDER')
+            ->whereIn('opt.purpose', ['CREDENTIAL_TEST_ORDER', 'CREDENTIAL_TEST_API'])
             ->orderByDesc('opt.id')
             ->get([
                 'opt.id',
@@ -2027,7 +2027,7 @@ class TestDataCleanupService
             $transaction = DB::table('online_payment_transactions')
                 ->where('id', $id)
                 ->where('university_id', $universityId)
-                ->where('purpose', 'CREDENTIAL_TEST_ORDER')
+                ->whereIn('purpose', ['CREDENTIAL_TEST_ORDER', 'CREDENTIAL_TEST_API'])
                 ->lockForUpdate()
                 ->first();
 
@@ -2098,6 +2098,12 @@ class TestDataCleanupService
                     if($schedule) DB::table('fee_installment_schedules')->where('id',$schedule->id)->update(['paid_amount'=>max(0,round((float)$schedule->paid_amount-(float)$a->amount,2)),'updated_at'=>now()]);
                 }
             }
+            $onlineTransactions = Schema::hasTable('online_payment_transactions')
+                ? DB::table('online_payment_transactions')->where('fee_payment_id', $payment->id)->lockForUpdate()->get()
+                : collect();
+            if ($onlineTransactions->isNotEmpty()) {
+                DB::table('online_payment_transactions')->whereIn('id', $onlineTransactions->pluck('id'))->delete();
+            }
             DB::table('fee_payment_allocations')->where('fee_payment_id',$payment->id)->delete();
             DB::table('fee_payments')->where('id',$payment->id)->delete();
             foreach($demandIds as $demandId){
@@ -2108,7 +2114,7 @@ class TestDataCleanupService
                 $status=$out<=0?'CLEARED':(($principal+(float)$d->adjusted_amount)>0?'PARTIALLY_CLEARED':'OPEN');
                 DB::table('fee_demands')->where('id',$demandId)->update(['paid_amount'=>$principal,'outstanding_amount'=>$out,'status'=>$status,'updated_at'=>now()]);
             }
-            $this->audit('TEST_FEE_PAYMENT_CLEANED','fee_payment',$id,['payment'=>(array)$payment,'allocations'=>$allocations->toArray()],$actorId);
+            $this->audit('TEST_FEE_PAYMENT_CLEANED','fee_payment',$id,['payment'=>(array)$payment,'allocations'=>$allocations->toArray(),'online_transactions'=>$onlineTransactions->toArray()],$actorId);
             return ['fee_payment_id'=>$id,'allocations_deleted'=>$allocations->count()];
         });
     }

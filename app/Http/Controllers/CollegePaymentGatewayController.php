@@ -20,8 +20,11 @@ class CollegePaymentGatewayController extends Controller
     {
         $this->auth($request, $college, 'college_payment_gateway.view');
 
+        $supportedProviders = array_keys(PaymentGatewayProviderRegistry::definitions());
+
         $gateways = CollegePaymentGateway::query()
             ->where('college_id', $college->id)
+            ->whereIn('provider', $supportedProviders)
             ->with('mappings')
             ->orderBy('provider')
             ->get()
@@ -117,6 +120,7 @@ class CollegePaymentGatewayController extends Controller
     {
         $this->auth($request, $college, 'college_payment_gateway.manage');
         $this->own($college, $gateway);
+        $this->supported($gateway);
         if ($gateway->status === 'ACTIVE') {
             return back()->with('toast', [
                 'type' => 'error',
@@ -168,6 +172,7 @@ class CollegePaymentGatewayController extends Controller
     {
         $this->auth($request, $college, 'college_payment_gateway.manage');
         $this->own($college, $gateway);
+        $this->supported($gateway);
 
         $data = $request->validate([
             'status' => ['required', Rule::in(['ACTIVE', 'INACTIVE'])],
@@ -198,6 +203,7 @@ class CollegePaymentGatewayController extends Controller
     {
         $this->auth($request, $college, 'college_payment_gateway.manage');
         $this->own($college, $gateway);
+        $this->supported($gateway);
 
         $data = $request->validate($this->mappingRules($college));
 
@@ -242,6 +248,7 @@ class CollegePaymentGatewayController extends Controller
     {
         $this->auth($request, $college, 'college_payment_gateway.manage');
         $this->own($college, $gateway);
+        $this->supported($gateway);
 
         $data = $request->validate([
             'mappings' => ['required', 'array', 'min:1'],
@@ -332,6 +339,7 @@ class CollegePaymentGatewayController extends Controller
         $profileIds = CollegePaymentGateway::query()
             ->where('college_id', $college->id)
             ->where('environment', $environment)
+            ->whereIn('provider', array_keys(PaymentGatewayProviderRegistry::definitions()))
             ->pluck('id');
 
         foreach ($data['mappings'] as $mapping) {
@@ -479,6 +487,11 @@ class CollegePaymentGatewayController extends Controller
         }
 
         return $config;
+    }
+
+    private function supported(CollegePaymentGateway $gateway): void
+    {
+        abort_unless(array_key_exists($gateway->provider, PaymentGatewayProviderRegistry::definitions()), 404);
     }
 
     private function auth(Request $request, College $college, string $permission): void

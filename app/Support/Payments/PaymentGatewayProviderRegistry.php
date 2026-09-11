@@ -46,6 +46,7 @@ class PaymentGatewayProviderRegistry
                 ],
                 'show' => [
                     'merchant_id' => true,
+                    // Cashfree webhook verification uses the same Secret Key.
                     'webhook_secret' => false,
                     'default_product_code' => false,
                     'enc_key' => false,
@@ -66,6 +67,7 @@ class PaymentGatewayProviderRegistry
                 ],
                 'show' => [
                     'merchant_id' => true,
+                    // PayU callback/webhook authenticity is verified with reverse hash using Salt.
                     'webhook_secret' => false,
                     'default_product_code' => false,
                     'enc_key' => false,
@@ -74,26 +76,6 @@ class PaymentGatewayProviderRegistry
                 'required_for_activation' => ['key_id', 'key_secret'],
                 'routing_product_mode' => 'OPTIONAL',
                 'routing_help' => 'Product Code is optional. If blank, PayU productinfo will be generated from the Fee Head / ERP transaction context.',
-            ],
-            'NTTDATA_ATOM' => [
-                'code' => 'NTTDATA_ATOM',
-                'name' => 'NTT DATA Payment Services (Atom)',
-                'credential_labels' => [
-                    'merchant_id' => 'Merchant ID',
-                    'key_id' => 'Login',
-                    'key_secret' => 'Password',
-                    'webhook_secret' => 'Webhook Secret',
-                ],
-                'show' => [
-                    'merchant_id' => true,
-                    'webhook_secret' => false,
-                    'default_product_code' => true,
-                    'enc_key' => true,
-                    'dec_key' => true,
-                ],
-                'required_for_activation' => ['merchant_id', 'key_id', 'key_secret'],
-                'routing_product_mode' => 'PROFILE_OR_HEAD_REQUIRED',
-                'routing_help' => 'A Product ID is required by this provider. Set one default Product ID on the credential profile, or override it per Fee Head.',
             ],
         ];
     }

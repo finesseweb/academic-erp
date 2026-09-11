@@ -98,6 +98,56 @@ class FeePaymentService
         });
     }
 
+
+    public function previewSelection(FeeDemand $demand, array $data): array
+    {
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Payment amount must be greater than zero.']);
+        }
+
+        $demand->loadMissing([
+            'items.installmentSchedules' => fn ($q) => $q->where('status', 'ACTIVE'),
+            'studentBenefits' => fn ($q) => $q->where('status', 'APPROVED')->with('items'),
+        ]);
+
+        $candidates = $this->allocationCandidates(
+            $demand,
+            (bool) ($data['include_optional'] ?? false),
+            (bool) ($data['include_late_fine'] ?? true),
+            (bool) ($data['include_future'] ?? false),
+            (string) $data['payment_date'],
+        );
+
+        $available = round((float) $candidates->sum('open_amount'), 2);
+        if ($available <= 0) {
+            throw ValidationException::withMessages(['amount' => 'No selected payable balance remains on this demand.']);
+        }
+        if ($amount > $available + 0.009) {
+            throw ValidationException::withMessages(['amount' => 'Payment exceeds selected payable balance of '.number_format($available, 2, '.', '').'.']);
+        }
+
+        $remaining = $amount;
+        $selected = collect();
+        foreach ($candidates as $candidate) {
+            if ($remaining <= 0.009) break;
+            $share = round(min($remaining, (float) $candidate['open_amount']), 2);
+            if ($share <= 0) continue;
+            $selected->push(array_merge($candidate, ['allocated_amount' => $share]));
+            $remaining = round($remaining - $share, 2);
+        }
+
+        if ($remaining > 0.009) {
+            throw ValidationException::withMessages(['amount' => 'Payment could not be fully allocated.']);
+        }
+
+        return [
+            'amount' => $amount,
+            'available' => $available,
+            'allocations' => $selected->values()->all(),
+        ];
+    }
+
     public function outstandingFineBreakdown(FeeDemand $demand): array
     {
         if (! Schema::hasTable('fee_late_fine_charges')) return ['mandatory'=>0.0,'optional'=>0.0,'total'=>0.0];
@@ -135,7 +185,7 @@ class FeePaymentService
                 if (! $includeFuture && $item['due_date'] > $paymentDate) continue;
                 if (! $item['is_mandatory'] && ! $includeOptional) continue;
                 $rows->push([
-                    'source_type'=>$item['source'],'due_date'=>$item['due_date'],'fee_demand_item_id'=>$item['fee_demand_item_id'],
+                    'source_type'=>$item['source'],'due_date'=>$item['due_date'],'fee_demand_item_id'=>$item['fee_demand_item_id'],'fee_head_id'=>$item['fee_head_id'],
                     'fee_installment_schedule_id'=>$item['fee_installment_schedule_id'],'fee_late_fine_charge_id'=>null,
                     'is_mandatory'=>$item['is_mandatory'],'open_amount'=>(float)$item['open_amount'],
                     'priority'=>$item['is_mandatory']?10:30,
@@ -147,7 +197,7 @@ class FeePaymentService
             $fineRows = DB::table('fee_late_fine_charges as f')
                 ->join('fee_demand_items as i','i.id','=','f.fee_demand_item_id')
                 ->where('f.fee_demand_id',$demand->id)->where('f.status','ACTIVE')
-                ->select('f.id','f.fee_demand_item_id','f.fee_installment_schedule_id','f.due_date','f.fine_amount','i.is_mandatory')
+                ->select('f.id','f.fee_demand_item_id','f.fee_installment_schedule_id','f.due_date','f.fine_amount','i.is_mandatory','i.fee_head_id')
                 ->orderBy('f.due_date')->orderBy('f.id')->get();
             foreach ($fineRows as $fine) {
                 if (! $includeFuture && substr((string)$fine->due_date,0,10) > $paymentDate) continue;
@@ -156,7 +206,7 @@ class FeePaymentService
                     ->where('a.fee_late_fine_charge_id',$fine->id)->where('a.source_type','LATE_FINE')->where('p.status','POSTED')->sum('a.amount');
                 $open=max(0,round((float)$fine->fine_amount-$already,2)); if($open<=0) continue;
                 $rows->push(['source_type'=>'LATE_FINE','due_date'=>(string)$fine->due_date,'fee_demand_item_id'=>(int)$fine->fee_demand_item_id,
-                    'fee_installment_schedule_id'=>(int)$fine->fee_installment_schedule_id,'fee_late_fine_charge_id'=>(int)$fine->id,
+                    'fee_head_id'=>(int)$fine->fee_head_id,'fee_installment_schedule_id'=>(int)$fine->fee_installment_schedule_id,'fee_late_fine_charge_id'=>(int)$fine->id,
                     'is_mandatory'=>(bool)$fine->is_mandatory,'open_amount'=>$open,'priority'=>$fine->is_mandatory?20:40]);
             }
         }
