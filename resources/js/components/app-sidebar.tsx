@@ -5,6 +5,7 @@ import {
     Building2,
     CalendarRange,
     ClipboardCheck,
+    CreditCard,
     FileCog,
     ChevronRight,
     GraduationCap,
@@ -690,6 +691,20 @@ export function AppSidebar() {
                           href: `/college/${collegeId}/fee-student-benefits`,
                           icon: TicketCheck,
                           permission: 'college_fee_student_benefit.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Payment Gateways',
+                          href: `/college/${collegeId}/payment-gateways`,
+                          icon: CreditCard,
+                          permission: 'college_payment_gateway.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Payment Collection',
+                          href: `/college/${collegeId}/fee-payments`,
+                          icon: ScrollText,
+                          permission: 'college_fee_payment.view',
                           directNavigation: true,
                       },
                       {

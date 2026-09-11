@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -46,7 +47,28 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [
-                'toast' => fn () => $request->session()->get('toast'),
+                'toast' => function () use ($request) {
+                    $toast = $request->session()->get('toast');
+
+                    if (! is_array($toast) || blank($toast['message'] ?? null)) {
+                        return $toast;
+                    }
+
+                    // Every mutation response gets a unique event id. This makes
+                    // repeated identical messages (for example Save -> Save)
+                    // observable by the shared client toast hook as separate events.
+                    return [
+                        ...$toast,
+                        'event_id' => (string) Str::uuid(),
+                    ];
+                },
+                'feedback_event_id' => function () use ($request) {
+                    $toast = $request->session()->get('toast');
+                    $hasToast = is_array($toast) && filled(data_get($toast, 'message'));
+                    $hasErrors = $request->session()->has('errors');
+
+                    return ($hasToast || $hasErrors) ? (string) Str::uuid() : null;
+                },
             ],
         ];
     }

@@ -18,6 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias(['active' => EnsureUserIsActive::class]);
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        $middleware->validateCsrfTokens(except: [
+            'payments/webhooks/razorpay',
+            'payments/webhooks/cashfree',
+            'payments/webhooks/payu',
+            'payments/payu/return',
+        ]);
 
         $middleware->web(append: [
             HandleAppearance::class,

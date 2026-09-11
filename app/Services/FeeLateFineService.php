@@ -62,6 +62,36 @@ class FeeLateFineService
         return FeeLateFineRule::create($payload + ['status' => 'INACTIVE', 'created_by' => $actorId]);
     }
 
+    public function deleteUnusedRule(FeeLateFineRule $rule, College $college, int $actorId): void
+    {
+        $this->assertOwner($rule, $college);
+
+        if ($rule->status !== 'INACTIVE') {
+            throw ValidationException::withMessages([
+                'rule' => 'Deactivate the Late Fine Rule before deleting it.',
+            ]);
+        }
+
+        if ($rule->charges()->exists()) {
+            throw ValidationException::withMessages([
+                'rule' => 'This Late Fine Rule has calculation history and cannot be deleted. Clean the related test Late Fine Charges first, then try again.',
+            ]);
+        }
+
+        $before = $rule->toArray();
+        $ruleId = (int) $rule->id;
+        $rule->delete();
+
+        $this->audit(
+            $actorId,
+            'FEE_LATE_FINE_RULE_DELETED',
+            'fee_late_fine_rule',
+            $ruleId,
+            $before,
+            ['reason' => 'Unused INACTIVE Late Fine Rule removed manually.']
+        );
+    }
+
     public function setStatus(FeeLateFineRule $rule, College $college, string $status, int $actorId): void
     {
         $this->assertOwner($rule, $college);
@@ -126,6 +156,16 @@ class FeeLateFineService
                     ->latest('id')
                     ->first();
                 $calc = $this->calculate($rule, $row, $asOf);
+
+                // ADR 171: once money has been allocated to a posted fine revision, that
+                // financial revision is crystallized and must not be silently reversed or
+                // superseded by a later calculator run. Later adjustment/reversal ADRs must
+                // use explicit financial history rather than rewriting a paid charge.
+                if ($active && $this->postedPaymentAgainstFine((int) $active->id) > 0) {
+                    $stats['unchanged']++;
+                    return;
+                }
+
                 if ($calc['fine_amount'] <= 0) {
                     if ($active) {
                         $active->update(['status'=>'REVERSED','superseded_at'=>now()]);
@@ -161,14 +201,34 @@ class FeeLateFineService
     public function activeFineForDemandIds(array $demandIds): array
     {
         if (empty($demandIds) || ! Schema::hasTable('fee_late_fine_charges')) return [];
-        return DB::table('fee_late_fine_charges')
+
+        $charges = DB::table('fee_late_fine_charges')
             ->whereIn('fee_demand_id', $demandIds)
             ->where('status', 'ACTIVE')
-            ->select('fee_demand_id', DB::raw('SUM(fine_amount) as total_fine'))
-            ->groupBy('fee_demand_id')
-            ->pluck('total_fine', 'fee_demand_id')
-            ->map(fn($v)=>(float)$v)
-            ->all();
+            ->get(['id','fee_demand_id','fine_amount']);
+
+        $paidByCharge = collect();
+        if (Schema::hasTable('fee_payment_allocations') && Schema::hasTable('fee_payments') && $charges->isNotEmpty()) {
+            $paidByCharge = DB::table('fee_payment_allocations as a')
+                ->join('fee_payments as p','p.id','=','a.fee_payment_id')
+                ->whereIn('a.fee_late_fine_charge_id',$charges->pluck('id'))
+                ->where('a.source_type','LATE_FINE')->where('p.status','POSTED')
+                ->select('a.fee_late_fine_charge_id',DB::raw('SUM(a.amount) as paid_amount'))
+                ->groupBy('a.fee_late_fine_charge_id')->pluck('paid_amount','a.fee_late_fine_charge_id');
+        }
+
+        return $charges->groupBy('fee_demand_id')->map(function ($rows) use ($paidByCharge) {
+            return (float) $rows->sum(fn($r)=>max(0,round((float)$r->fine_amount-(float)($paidByCharge[$r->id]??0),2)));
+        })->all();
+    }
+
+    private function postedPaymentAgainstFine(int $chargeId): float
+    {
+        if (! Schema::hasTable('fee_payment_allocations') || ! Schema::hasTable('fee_payments')) return 0.0;
+        return (float) DB::table('fee_payment_allocations as a')
+            ->join('fee_payments as p','p.id','=','a.fee_payment_id')
+            ->where('a.fee_late_fine_charge_id',$chargeId)->where('a.source_type','LATE_FINE')->where('p.status','POSTED')
+            ->sum('a.amount');
     }
 
     public function assertOwner(FeeLateFineRule $rule, College $college): void

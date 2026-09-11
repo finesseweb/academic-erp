@@ -51,6 +51,11 @@ use App\Http\Controllers\FeeManagementController;
 use App\Http\Controllers\CollegeFeeDemandController;
 use App\Http\Controllers\CollegeFeeInstallmentController;
 use App\Http\Controllers\CollegeFeeLateFineController;
+use App\Http\Controllers\CollegeFeePaymentController;
+use App\Http\Controllers\CollegePaymentGatewayController;
+use App\Http\Controllers\CollegeOnlinePaymentController;
+use App\Http\Controllers\CollegeOnlineFeePaymentController;
+use App\Http\Controllers\PaymentWebhookController;
 use App\Http\Controllers\CollegeFeeStudentBenefitController;
 use App\Http\Controllers\FeeScholarshipController;
 use App\Http\Controllers\PermissionController;
@@ -62,6 +67,7 @@ use App\Http\Controllers\UniversityController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserRoleController;
 use App\Http\Controllers\TestDataCleanupController;
+use App\Http\Controllers\GatewayTestOrderCleanupController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -77,7 +83,10 @@ Route::get('/apply/{slug}/application', [PublicAdmissionApplicationController::c
 Route::post('/apply/{slug}/application', [PublicAdmissionApplicationController::class, 'store'])->name('applicant.application.store');
 Route::get('/student', [StudentPortalController::class, 'index'])->middleware('auth')->name('student.portal');
 
-
+Route::post('payments/webhooks/razorpay', [PaymentWebhookController::class, 'razorpay'])->name('payments.webhooks.razorpay');
+Route::post('payments/webhooks/cashfree', [PaymentWebhookController::class, 'cashfree'])->name('payments.webhooks.cashfree');
+Route::post('payments/webhooks/payu', [PaymentWebhookController::class, 'payu'])->name('payments.webhooks.payu');
+Route::post('payments/payu/return', [CollegeOnlineFeePaymentController::class, 'payuReturn'])->name('payments.payu.return');
 
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
@@ -156,6 +165,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('admin/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     Route::get('admin/system-maintenance/test-data-cleanup', [TestDataCleanupController::class, 'index'])->name('test-data-cleanup.index');
     Route::delete('admin/system-maintenance/test-data-cleanup/full-reset', [TestDataCleanupController::class, 'fullReset'])->name('test-data-cleanup.full-reset');
+    Route::delete('admin/system-maintenance/test-data-cleanup/gateway-test-orders', GatewayTestOrderCleanupController::class)->name('test-data-cleanup.gateway-test-orders');
     Route::delete('admin/system-maintenance/test-data-cleanup/legacy-unlinked-regular-applications', [TestDataCleanupController::class, 'cleanupLegacyUnlinkedRegularApplications'])->name('test-data-cleanup.legacy-unlinked-regular-applications');
     Route::delete('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}', [TestDataCleanupController::class, 'destroyCurriculum'])->name('test-data-cleanup.curricula.destroy');
     Route::post('admin/system-maintenance/test-data-cleanup/curricula/{curriculum}/reset-approval', [TestDataCleanupController::class, 'resetCurriculumApproval'])->name('test-data-cleanup.curricula.reset-approval');
@@ -336,10 +346,26 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('college/{college}/fee-demands/{demand}/items/{item}/installments', [CollegeFeeInstallmentController::class, 'store'])->name('college-fee-installments.store');
     Route::get('college/{college}/fee-installments/bulk-preview', [CollegeFeeInstallmentController::class, 'bulkPreview'])->name('college-fee-installments.bulk-preview');
     Route::post('college/{college}/fee-installments/bulk', [CollegeFeeInstallmentController::class, 'bulkStore'])->name('college-fee-installments.bulk-store');
+    Route::get('college/{college}/payment-gateways', [CollegePaymentGatewayController::class, 'index'])->name('college-payment-gateways.index');
+    Route::post('college/{college}/payment-gateways', [CollegePaymentGatewayController::class, 'store'])->name('college-payment-gateways.store');
+    Route::patch('college/{college}/payment-gateways/{gateway}', [CollegePaymentGatewayController::class, 'update'])->name('college-payment-gateways.update');
+    Route::patch('college/{college}/payment-gateways/{gateway}/status', [CollegePaymentGatewayController::class, 'status'])->name('college-payment-gateways.status');
+    Route::post('college/{college}/payment-gateways/{gateway}/mappings', [CollegePaymentGatewayController::class, 'mapping'])->name('college-payment-gateways.mappings.store');
+    Route::post('college/{college}/payment-gateways/{gateway}/mappings/bulk', [CollegePaymentGatewayController::class, 'mappingsBulk'])->name('college-payment-gateways.mappings.bulk');
+    Route::post('college/{college}/payment-gateways/routing/bulk', [CollegePaymentGatewayController::class, 'routingBulk'])->name('college-payment-gateways.routing.bulk');
+    Route::post('college/{college}/payment-gateways/{gateway}/razorpay/test-order', [CollegeOnlinePaymentController::class, 'createRazorpayTestOrder'])->name('college-payment-gateways.razorpay.test-order');
+    Route::post('college/{college}/payment-gateways/{gateway}/cashfree/test-order', [CollegeOnlinePaymentController::class, 'createCashfreeTestOrder'])->name('college-payment-gateways.cashfree.test-order');
+    Route::post('college/{college}/payment-gateways/{gateway}/payu/test-api', [CollegeOnlinePaymentController::class, 'testPayUCredentials'])->name('college-payment-gateways.payu.test-api');
+    Route::get('college/{college}/fee-payments', [CollegeFeePaymentController::class, 'index'])->name('college-fee-payments.index');
+    Route::post('college/{college}/fee-payments', [CollegeFeePaymentController::class, 'store'])->name('college-fee-payments.store');
+    Route::post('college/{college}/fee-payments/online/initiate', [CollegeOnlineFeePaymentController::class, 'initiate'])->name('college-fee-payments.online.initiate');
+    Route::post('college/{college}/fee-payments/online/razorpay/verify', [CollegeOnlineFeePaymentController::class, 'verifyRazorpay'])->name('college-fee-payments.online.razorpay.verify');
+    Route::post('college/{college}/fee-payments/online/cashfree/verify', [CollegeOnlineFeePaymentController::class, 'verifyCashfree'])->name('college-fee-payments.online.cashfree.verify');
     Route::get('college/{college}/fee-late-fines', [CollegeFeeLateFineController::class, 'index'])->name('college-fee-late-fines.index');
     Route::post('college/{college}/fee-late-fines/rules', [CollegeFeeLateFineController::class, 'store'])->name('college-fee-late-fines.rules.store');
     Route::patch('college/{college}/fee-late-fines/rules/{rule}', [CollegeFeeLateFineController::class, 'update'])->name('college-fee-late-fines.rules.update');
     Route::patch('college/{college}/fee-late-fines/rules/{rule}/status', [CollegeFeeLateFineController::class, 'status'])->name('college-fee-late-fines.rules.status');
+    Route::delete('college/{college}/fee-late-fines/rules/{rule}', [CollegeFeeLateFineController::class, 'destroyRule'])->name('college-fee-late-fines.rules.destroy');
     Route::post('college/{college}/fee-late-fines/recalculate', [CollegeFeeLateFineController::class, 'recalculate'])->name('college-fee-late-fines.recalculate');
     Route::get('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'index'])->name('college-admission-selection-rules.index');
     Route::post('college/{college}/admission-selection-rules', [CollegeAdmissionSelectionRuleController::class, 'store'])->name('college-admission-selection-rules.store');

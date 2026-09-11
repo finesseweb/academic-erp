@@ -10,6 +10,7 @@ use App\Models\FeeDemand;
 use App\Services\AcademicPolicyResolverService;
 use App\Services\ApplicableFeeDemandService;
 use App\Services\FeeLateFineService;
+use App\Services\FeeDueGroupingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -27,7 +28,8 @@ class CollegeFeeDemandController extends Controller
         College $college,
         AcademicPolicyResolverService $policyResolver,
         ApplicableFeeDemandService $feeDemandService,
-        FeeLateFineService $lateFineService
+        FeeLateFineService $lateFineService,
+        FeeDueGroupingService $dueGroupingService
     ): Response {
         $this->auth($request, $college, 'college_fee_demand.view');
 
@@ -199,6 +201,7 @@ class CollegeFeeDemandController extends Controller
                     'sanctioned_amount' => $benefit->sanctioned_amount,
                     'decided_at' => $benefit->decided_at?->format('Y-m-d H:i'),
                 ])->values(),
+                'due_groups' => $dueGroupingService->forDemand($demand),
                 'items' => $demand->items->map(function ($item) use ($demand) {
                     $benefitAdjustment = $demand->studentBenefits
                         ->flatMap->items
@@ -207,7 +210,7 @@ class CollegeFeeDemandController extends Controller
 
                     return array_merge($item->only([
                         'id', 'owner_type', 'structure_name', 'fee_head_name', 'fee_head_code', 'purpose', 'charge_basis', 'amount',
-                        'is_mandatory', 'is_enrollment_clearance_required', 'installment_allowed', 'is_refundable',
+                        'is_mandatory', 'is_enrollment_clearance_required', 'installment_allowed', 'is_refundable', 'due_date',
                     ]), [
                         'benefit_adjustment_amount' => number_format($benefitAdjustment, 2, '.', ''),
                         'net_payable_amount' => number_format(max(0, (float) $item->amount - $benefitAdjustment), 2, '.', ''),
