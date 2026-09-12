@@ -799,6 +799,10 @@ class TestDataCleanupService
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
                 $this->collegeApplicationFeeRuleRows($universityId),
+            'fee_adjustments' =>
+                $this->feeAdjustmentRows($universityId),
+            'fee_payment_refunds' =>
+                $this->feePaymentRefundRows($universityId),
             'fee_payments' =>
                 $this->feePaymentRows($universityId),
             'gateway_test_orders' =>
@@ -1183,6 +1187,12 @@ class TestDataCleanupService
 
             // Posted test collections are leaf finance transactions. Remove allocations first,
             // then receipts/payments before installments, late fines, benefits and Fee Demands.
+            if (Schema::hasTable('fee_payment_refunds')) {
+                $refundIds=DB::table('fee_payment_refunds')->where('university_id',$universityId)->pluck('id');
+                $this->deleteWhereIn('fee_payment_refund_allocations','fee_payment_refund_id',$refundIds);
+                $this->deleteWhereIn('fee_payment_refunds','id',$refundIds);
+            }
+            if (Schema::hasTable('fee_adjustments')) DB::table('fee_adjustments')->where('university_id',$universityId)->delete();
             if (Schema::hasTable('fee_payments')) {
                 $paymentIds = DB::table('fee_payments')->where('university_id', $universityId)->pluck('id');
                 $this->deleteWhereIn('fee_payment_allocations', 'fee_payment_id', $paymentIds);
@@ -1777,6 +1787,10 @@ class TestDataCleanupService
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>
                 $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
+            'fee_adjustments' =>
+                $this->cleanupFeeAdjustment($id, $universityId, $actorId),
+            'fee_payment_refunds' =>
+                $this->cleanupFeePaymentRefund($id, $universityId, $actorId),
             'fee_payments' =>
                 $this->cleanupFeePayment($id, $universityId, $actorId),
             'gateway_test_orders' =>
@@ -2067,6 +2081,27 @@ class TestDataCleanupService
             ->count();
     }
 
+    private function feeAdjustmentRows(int $universityId): array
+    {
+        if (! Schema::hasTable('fee_adjustments')) return [];
+        return DB::table('fee_adjustments as x')->join('colleges as c','c.id','=','x.college_id')->where('x.university_id',$universityId)->orderByDesc('x.id')->get(['x.id','x.adjustment_no','x.direction','x.amount','x.status','c.name as college_name'])->map(fn($r)=>['id'=>(int)$r->id,'code'=>$r->adjustment_no,'name'=>$r->college_name.' · '.$r->direction.' '.number_format((float)$r->amount,2),'status'=>$r->status,'kind'=>'FEE_ADJUSTMENT','dependencies'=>[],'blocked'=>false,'blocking_references'=>[]])->values()->all();
+    }
+    private function cleanupFeeAdjustment(int $id,int $universityId,int $actorId): array
+    {
+        if(!Schema::hasTable('fee_adjustments'))abort(404);
+        return DB::transaction(function()use($id,$universityId,$actorId){$x=DB::table('fee_adjustments')->where('id',$id)->where('university_id',$universityId)->lockForUpdate()->first();if(!$x)abort(404);DB::table('fee_adjustments')->where('id',$id)->delete();app(\App\Services\FeeInstallmentAdjustmentService::class)->rebalanceForGenericAdjustment((int)$x->fee_demand_item_id,$actorId);app(\App\Services\FeeAdjustmentRefundService::class)->recalculateDemand((int)$x->fee_demand_id);$this->audit('TEST_FEE_ADJUSTMENT_CLEANED','fee_adjustment',$id,(array)$x,$actorId);return ['fee_adjustment_id'=>$id];});
+    }
+    private function feePaymentRefundRows(int $universityId): array
+    {
+        if(!Schema::hasTable('fee_payment_refunds'))return [];
+        return DB::table('fee_payment_refunds as r')->join('fee_payments as p','p.id','=','r.fee_payment_id')->join('colleges as c','c.id','=','r.college_id')->where('r.university_id',$universityId)->orderByDesc('r.id')->get(['r.id','r.refund_no','r.amount','r.status','p.receipt_no','c.name as college_name'])->map(fn($r)=>['id'=>(int)$r->id,'code'=>$r->refund_no,'name'=>$r->college_name.' · '.$r->receipt_no.' · '.number_format((float)$r->amount,2),'status'=>$r->status,'kind'=>'FEE_PAYMENT_REFUND','dependencies'=>[],'blocked'=>false,'blocking_references'=>[]])->values()->all();
+    }
+    private function cleanupFeePaymentRefund(int $id,int $universityId,int $actorId): array
+    {
+        if(!Schema::hasTable('fee_payment_refunds'))abort(404);
+        return DB::transaction(function()use($id,$universityId,$actorId){$r=DB::table('fee_payment_refunds')->where('id',$id)->where('university_id',$universityId)->lockForUpdate()->first();if(!$r)abort(404);$a=DB::table('fee_payment_refund_allocations')->where('fee_payment_refund_id',$id)->lockForUpdate()->get();foreach($a as $row)if($row->fee_installment_schedule_id)DB::table('fee_installment_schedules')->where('id',$row->fee_installment_schedule_id)->increment('paid_amount',(float)$row->amount,['updated_at'=>now()]);DB::table('fee_payment_refund_allocations')->where('fee_payment_refund_id',$id)->delete();DB::table('fee_payment_refunds')->where('id',$id)->delete();foreach($a->pluck('fee_demand_id')->unique() as $d)app(\App\Services\FeeAdjustmentRefundService::class)->recalculateDemand((int)$d);$this->audit('TEST_FEE_REFUND_CLEANED','fee_payment_refund',$id,['refund'=>(array)$r,'allocations'=>$a->toArray()],$actorId);return ['fee_payment_refund_id'=>$id,'allocations_deleted'=>$a->count()];});
+    }
+
     private function feePaymentRows(int $universityId): array
     {
         if (! Schema::hasTable('fee_payments')) return [];
@@ -2090,6 +2125,7 @@ class TestDataCleanupService
         return DB::transaction(function() use($id,$universityId,$actorId){
             $payment=DB::table('fee_payments')->where('id',$id)->where('university_id',$universityId)->where('status','POSTED')->lockForUpdate()->first();
             if(!$payment) abort(404);
+            if(Schema::hasTable('fee_payment_refunds') && DB::table('fee_payment_refunds')->where('fee_payment_id',$payment->id)->exists()) throw ValidationException::withMessages(['payment'=>'Clean the linked test refund first, then clean this payment.']);
             $allocations=DB::table('fee_payment_allocations')->where('fee_payment_id',$payment->id)->orderBy('sequence_no')->lockForUpdate()->get();
             $demandIds=$allocations->pluck('fee_demand_id')->unique()->values();
             foreach($allocations->where('source_type','INSTALLMENT') as $a){

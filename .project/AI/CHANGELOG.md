@@ -1,4 +1,13 @@
 
+## 2026-09-12 — ADR 190 payment-register scalability / alignment QA fix
+- Replaced the flat Posted Payments receipt table with one server-paginated row per Student/Admission and expandable receipt details.
+- Added Academic Session → Programme Offering → Search filtering; Programme Offering is dependent on the selected Session.
+- Search now covers student/application/admission identifiers plus Fee Demand No., Receipt No. and Payment Reference No.
+- Receipt-level Refund and full Receipt Reversal actions remain unchanged and are shown inside the expanded student row.
+- Standardized parent/nested table column widths, cell padding and numeric right alignment to prevent visual drift.
+- Added 25/50/100 student page sizes; no database migration or accounting-rule change.
+- Updated PAGE_SPEC and UI/UX guidelines so future high-volume transaction registers use grouped parent rows with server-side pagination.
+
 ## 2026-09-09 — ADR 169 Academic Period effective-year + occupied-date guard
 - Fixed shared DatePicker min/max parsing for ISO datetime boundaries by normalizing them to date-only before year/month calculation.
 - Academic Period Year selector now derives only from Academic Session ∩ Curriculum Effective From/To.
@@ -1354,3 +1363,44 @@ Changes:
 - Added missing DATABASE/TABLE_SPECS documentation for tables implemented in migrations.
 - Synchronized database documentation coverage with current Laravel schema.
 - Identified remaining module documentation areas for future enrichment.
+
+## 2026-09-12 — ADR 189 Student Fee Ledger
+- Added College Student Fee Ledger page and server-side `FeeLedgerService` projection.
+- Added `college_fee_ledger.view` permission and Super Admin / College Admin defaults.
+- Added Fee Management sidebar entry `Student Fee Ledger`.
+- Linked Payment Collection student rows directly to the ledger when the user has ledger permission.
+- Ledger debits: Fee Demand Items + ACTIVE Late Fine Charges + approved-Benefit cancellation reversals.
+- Ledger credits: APPROVED Student Benefit Item sanctioned amounts + POSTED Fee Payment Allocations + Fee Demand cancellation reversals.
+- Added deterministic running balance and session/student search with server pagination.
+- Online gateway transactions are not counted separately; verified online collections appear only after normal Fee Payment posting.
+- No ledger financial table was added; existing finance transaction tables remain authoritative.
+- Added ADR 189 and Student Fee Ledger PAGE_SPEC. Owner QA required.
+
+## 2026-09-12 — ADR 190 Generic Fee Adjustment / Payment Reversal / Refund
+- Added `fee_adjustments`, `fee_payment_refunds`, `fee_payment_refund_allocations` with full Table Specs.
+- Added College-scoped RBAC `college_fee_adjustment.view/post/reverse` and `college_fee_refund.post`.
+- Added Fee Management → Adjustments / Refunds page and routes.
+- Added controlled CREDIT/DEBIT manual adjustment posting and adjustment reversal.
+- Added full POSTED receipt reversal preserving original receipt/allocation history.
+- Added partial/full refund allocation restricted by immutable `fee_demand_items.is_refundable` snapshots.
+- Linked adjustments to ACTIVE installment rebalance; linked refund/reversal to exact installment paid restoration.
+- Extended Student Fee Ledger to show adjustments, adjustment reversals, payment reversals and refunds.
+- Extended payable grouping / late-fine outstanding calculations so refunds become payable again correctly.
+- Added Test Data Cleanup visibility and cleanup for Adjustments and Refunds; linked Payment cleanup is blocked until Refund children are cleaned.
+- Fee Clearance is now the next implementation after ADR 190 owner QA PASS.
+
+## 2026-09-12 — ADR 190 UI layout consistency fix
+- Removed the page-local `AppLayout` wrapper from `college-fee-adjustments/index.tsx`.
+- The page now relies on the single global Inertia `AppLayout` already applied by `resources/js/app.tsx`, matching the rest of the ERP.
+- Fixed the duplicate/overlapping top header and sidebar seen on Fee Adjustments / Reversal / Refund.
+- Aligned page content spacing with existing College Fee pages (`p-4 md:p-6`).
+- No database, RBAC, finance business-rule, route, or unrelated documentation changes.
+
+
+## 2026-09-12 — ADR 190 shared form-control consistency fix
+- Replaced page-specific/native Fee Adjustments controls with the ERP shared `Input`, `Select`, `Textarea`, `Button`, and `DatePicker` components.
+- Adjustment Date and Refund Date now use the shared theme-aware project DatePicker instead of browser-native date inputs.
+- Added visible labels and full-width/min-width-safe wrappers for long student/demand values.
+- Added a permanent Shared Form Control Standard to `UI_UX_GUIDELINES.md` so future new/modified pages do not introduce native selects/date inputs when project components already exist.
+- Updated the Fee Adjustments / Reversal / Refund page specification accordingly.
+- No database, route, RBAC, finance business-rule, ledger, refund/reversal calculation, or unrelated documentation changes.

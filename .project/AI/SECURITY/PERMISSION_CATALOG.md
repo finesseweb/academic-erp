@@ -359,3 +359,12 @@ Fee Structure item authoring is governed by the corresponding structure `update`
 - `college_fee_demand.view` — view confirmed-admission fee demands and immutable item snapshots.
 - `college_fee_demand.generate` — generate one applicable demand for an exact admission billing period.
 - `college_fee_demand.cancel` — cancel an unpaid/unadjusted demand with reason; College-delegable and sensitive.
+
+### Student Fee Ledger — 2026-09-12
+- `college_fee_ledger.view` — College-delegable read permission for the student financial ledger projection. Allows viewing Fee Demand, approved Benefit, active Late Fine and posted Payment Allocation history for admissions in the authorized College only. It grants no collection, adjustment, reversal or refund capability.
+
+## ADR 190 — Adjustment / Reversal / Refund (2026-09-12)
+- `college_fee_adjustment.view` — view College adjustment, receipt-reversal and refund registers.
+- `college_fee_adjustment.post` — sensitive College-delegable permission to post manual CREDIT/DEBIT adjustments.
+- `college_fee_adjustment.reverse` — sensitive College-delegable permission to reverse a manual adjustment or an entire POSTED receipt.
+- `college_fee_refund.post` — sensitive College-delegable permission to post refunds against refundable paid allocations only.

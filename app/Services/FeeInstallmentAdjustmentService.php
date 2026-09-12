@@ -115,13 +115,26 @@ class FeeInstallmentAdjustmentService
         }
     }
 
+    public function rebalanceForGenericAdjustment(int $demandItemId, int $actorId, ?string $ip = null): void
+    {
+        $item=DB::table('fee_demand_items')->where('id',$demandItemId)->first(); if(!$item)return;
+        $active=FeeInstallmentSchedule::query()->where('fee_demand_item_id',$demandItemId)->where('status','ACTIVE')->orderBy('installment_no')->lockForUpdate()->get();
+        if($active->isEmpty())return;
+        $before=$this->rows($active); $target=$this->netPayable($demandItemId,(float)$item->amount);
+        $this->persist($active,$this->proportional($active,$target));
+        $after=$this->rows(FeeInstallmentSchedule::query()->whereIn('id',$active->pluck('id'))->orderBy('installment_no')->get());
+        $this->audit($actorId,'FEE_INSTALLMENT_GENERIC_ADJUSTMENT',$demandItemId,$before,['net_payable'=>$target,'rows'=>$after],$ip);
+    }
+
     private function netPayable(int $demandItemId, float $gross): float
     {
         $benefit = (float) DB::table('fee_student_benefit_items as bi')
             ->join('fee_student_benefits as b','b.id','=','bi.fee_student_benefit_id')
             ->where('b.status','APPROVED')->where('bi.fee_demand_item_id',$demandItemId)
             ->sum('bi.sanctioned_amount');
-        return max(0, round($gross-$benefit,2));
+        $credit = \Schema::hasTable('fee_adjustments') ? (float) DB::table('fee_adjustments')->where('fee_demand_item_id',$demandItemId)->where('status','POSTED')->where('direction','CREDIT')->sum('amount') : 0.0;
+        $debit = \Schema::hasTable('fee_adjustments') ? (float) DB::table('fee_adjustments')->where('fee_demand_item_id',$demandItemId)->where('status','POSTED')->where('direction','DEBIT')->sum('amount') : 0.0;
+        return max(0, round($gross+$debit-$benefit-$credit,2));
     }
 
     private function proportional($rows, float $targetNet): array

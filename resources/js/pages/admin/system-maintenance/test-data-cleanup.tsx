@@ -120,6 +120,8 @@ type Props = {
         applicants: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
+        fee_adjustments: Entity[];
+        fee_payment_refunds: Entity[];
         fee_payments: Entity[];
         gateway_test_orders: Entity[];
         fee_late_fine_charges: Entity[];
@@ -165,6 +167,8 @@ type TabKey =
     | 'academic_policies'
     | 'college_admission_form_templates'
     | 'college_application_fee_rules'
+    | 'fee_adjustments'
+    | 'fee_payment_refunds'
     | 'fee_payments'
     | 'gateway_test_orders'
     | 'fee_late_fine_charges'
@@ -226,6 +230,8 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'applicants', label: 'Applicants' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
+    { key: 'fee_adjustments', label: 'Fee Adjustments' },
+    { key: 'fee_payment_refunds', label: 'Fee Refunds' },
     { key: 'fee_payments', label: 'Fee Payments / Receipts' },
     { key: 'gateway_test_orders', label: 'Gateway Test Orders' },
     { key: 'fee_late_fine_charges', label: 'Late Fine Charges' },
@@ -296,6 +302,8 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
     {
         label: 'Fee Management',
         keys: [
+            'fee_adjustments',
+            'fee_payment_refunds',
             'fee_payments',
             'gateway_test_orders',
             'fee_late_fine_charges',

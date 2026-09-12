@@ -517,3 +517,21 @@ key from every finance record:
 
 Calendar changes therefore govern new Fee Setup validation but do not silently
 rewrite existing Demands, Benefits, Installments, Late Fines, or Payments.
+
+## Student Fee Ledger projection — ADR 189
+`Admission -> Fee Demands -> Fee Demand Items` supplies principal debit rows.
+
+`Fee Demand -> APPROVED Student Benefit -> Benefit Items` supplies adjustment credit rows.
+
+`Fee Demand Item/Installment -> ACTIVE Late Fine Charge` supplies penalty debit rows.
+
+`Fee Payment -> Payment Allocations -> Demand Item / Installment / Late Fine` supplies collection credit rows.
+
+The Student Fee Ledger is a projection across these existing relationships. No `fee_ledgers` table exists or is required. `Admission::feeDemands()` is the canonical Eloquent parent relation used for scoped ledger/student discovery.
+
+## ADR 190 — Fee Adjustment / Refund relationships
+`FeeDemand -> FeeDemandItem -> FeeAdjustment`
+
+`FeePayment -> FeePaymentAllocation -> FeePaymentRefundAllocation <- FeePaymentRefund`
+
+Each Refund Allocation also snapshots direct FKs to Fee Demand, Fee Demand Item, optional Installment Schedule, and optional Late Fine Charge. This preserves provenance and allows exact balance restoration without rewriting the original payment allocation.

@@ -920,3 +920,23 @@ Online fee collection is now connected to the existing Payment Collection & Allo
 
 ### Webhook status
 Razorpay, Cashfree and PayU webhook handlers now share the verified-posting boundary for FEE_PAYMENT transactions. Runtime delivery/signature/duplicate QA is still pending and LIVE must not be enabled until it passes.
+
+## ADR 189 — Student Fee Ledger — IMPLEMENTED / OWNER QA REQUIRED
+The next Fees Phase milestone after Payment Collection/online-payment foundation is implemented as a read-only student financial projection.
+
+### Current behavior
+- New College route/page: `/college/{college}/fee-ledger`.
+- New College-delegable permission: `college_fee_ledger.view`.
+- Student register is session-filtered, searchable and server-paginated.
+- Ledger projects Fee Demand Items and ACTIVE Late Fine as debits; Fee Demand cancellation is preserved as a reversing credit.
+- APPROVED Benefit Item sanctioned amounts and POSTED Payment Allocations are credits; later cancellation of an approved Benefit is preserved as a reversing debit.
+- Running balance is computed from those source transactions; there is no new ledger/balance table.
+- Verified online payments appear only through the normal posted Fee Payment allocations created by ADR 188, preventing gateway/order double counting.
+- Payment Collection includes a permission-aware direct `Ledger` action for each student.
+- Fee Management sidebar includes `Student Fee Ledger`.
+
+### Next Fees Phase implementation after owner QA
+Generic Adjustment / Reversal / Refund, while ADR 188 webhook/public-HTTPS QA remains a separate prerequisite before LIVE online checkout.
+
+## ADR 190 — Generic Adjustment / Payment Reversal / Refund — IMPLEMENTED / OWNER QA REQUIRED — 2026-09-12
+The frozen Fee Phase correction workflow is implemented under Fee Management → Adjustments / Refunds. Manual CREDIT/DEBIT adjustments are item-scoped and auditable; complete receipt reversal restores original allocations without deleting history; partial/full refunds allocate only against originally refundable paid Fee Demand Item snapshots. Student Fee Ledger now emits the corresponding adjustment/reversal/refund history. New persistence: `fee_adjustments`, `fee_payment_refunds`, `fee_payment_refund_allocations`. New RBAC: `college_fee_adjustment.view/post/reverse`, `college_fee_refund.post`. Test Data Cleanup exposes Adjustment and Refund records independently and requires Refund cleanup before deleting a linked Payment. Fee Clearance remains NOT IMPLEMENTED and is the next Fee Phase item after owner QA PASS.

@@ -780,3 +780,37 @@ Provider connectivity parity is complete: Razorpay PASS, Cashfree PASS, PayU PAS
 12. Clean one online Fee Payment through Test Data Cleanup and confirm receipt/allocation/balance restoration plus removal of the linked online transaction.
 13. Keep webhook runtime QA pending until public HTTPS is available; then test valid signature, invalid signature, duplicate delivery/idempotency, and provider-success reconciliation for all three providers.
 14. Only after direct checkout + webhook QA PASS should LIVE checkout be considered.
+
+## Immediate QA — ADR 189 Student Fee Ledger
+Owner explicitly approved implementation of Student Fee Ledger on 2026-09-12 while ADR 188 remains TEST-only.
+
+1. Run `php artisan migrate`, `php artisan optimize:clear`, then rebuild frontend.
+2. Open Fee Management → Student Fee Ledger and confirm current Academic Session defaults correctly.
+3. Verify search by student/application/admission/demand and 25/50/100 server pagination.
+4. Open a student with only Fee Demand rows; Debit and Running Balance must equal the non-cancelled Demand Item total.
+5. Verify an APPROVED scholarship/concession/waiver appears as Credit by exact sanctioned item amount.
+6. Verify ACTIVE Late Fine appears as Debit and a paid Late Fine allocation appears as Credit.
+7. Verify offline partial/full Payment Allocations appear by receipt and Fee Head with deterministic running balance.
+8. Verify an ADR 188 TEST online payment appears only once through the resulting normal receipt allocations.
+9. Verify cancelled Demand shows original debit + cancellation credit; approved-then-cancelled Benefit shows original credit + cancellation debit; never-approved Benefit, superseded/reversed Fine revision and non-posted Payment do not affect current ledger liability.
+10. Verify Payment Collection → Ledger opens the correct Admission and Session.
+11. Verify a role without `college_fee_ledger.view` has no sidebar/direct action and receives 403 on direct URL.
+12. After owner QA PASS, the next Fees Phase implementation is Generic Adjustment / Reversal / Refund. Do not start Fee Clearance or Student Enrollment before that workflow is implemented and accepted.
+
+## Immediate QA — ADR 190 Generic Adjustment / Payment Reversal / Refund
+1. Run migrations, clear Laravel caches, and rebuild frontend.
+2. Open Fee Management → Adjustments / Refunds with a student having an OPEN/PARTIALLY_CLEARED demand.
+3. Post a CREDIT adjustment against one Fee Head; verify Demand `adjusted_amount` increases, Outstanding falls, and Ledger shows Credit Adjustment.
+4. Reverse that adjustment; verify Outstanding restores and Ledger preserves original credit plus reversal debit.
+5. Post a DEBIT adjustment; verify liability/Outstanding increases and Ledger shows a debit. Reverse it and verify restoration.
+6. Repeat adjustment on a Demand Item with ACTIVE installments; installment totals must rebalance without reducing any installment below already-paid amount.
+7. Take a POSTED offline receipt and reverse it completely; receipt becomes REVERSED, Demand paid/outstanding restores, installment paid values restore, and Ledger shows original payment plus equal Payment Reversal debit.
+8. Verify a reversed receipt cannot be reversed again.
+9. Create a payment spanning refundable and non-refundable Fee Heads. Refund only part of the refundable paid balance; non-refundable allocations must never be selected.
+10. Verify Refund raises Outstanding by refunded principal, restores refunded installment paid value, and Ledger shows a Refund debit against the original receipt.
+11. Attempt refund greater than displayed refundable balance; request must be rejected with no partial posting.
+12. Attempt full receipt reversal after a posted Refund; it must be blocked to avoid double restoration.
+13. RBAC: view/post/reverse/refund permissions must independently control access/actions and remain College-scoped.
+14. Test Data Cleanup: clean Refund first, verify balances restore; clean Adjustment; then clean Payment. A Payment with Refund children must be blocked until Refund cleanup.
+15. Reconcile Ledger closing principal position with Payment Collection / Demand Outstanding after each operation.
+16. After owner QA PASS, implement **Fee Clearance**. Do not start Student Enrollment before Fee Clearance is implemented and accepted.

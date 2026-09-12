@@ -37,7 +37,9 @@ class FeeDueGroupingService
             }
 
             if (! $item->due_date) continue;
-            $net = max(0, round((float) $item->amount - (float) ($benefitByItem[$item->id] ?? 0), 2));
+            $creditAdjustment = Schema::hasTable('fee_adjustments') ? (float) DB::table('fee_adjustments')->where('fee_demand_item_id',$item->id)->where('status','POSTED')->where('direction','CREDIT')->sum('amount') : 0.0;
+            $debitAdjustment = Schema::hasTable('fee_adjustments') ? (float) DB::table('fee_adjustments')->where('fee_demand_item_id',$item->id)->where('status','POSTED')->where('direction','DEBIT')->sum('amount') : 0.0;
+            $net = max(0, round((float) $item->amount + $debitAdjustment - (float) ($benefitByItem[$item->id] ?? 0) - $creditAdjustment, 2));
             $paid = $this->postedDemandItemPaid((int) $item->id);
             $open = max(0, round($net - $paid, 2));
             if ($open <= 0) continue;
@@ -60,12 +62,9 @@ class FeeDueGroupingService
     private function postedDemandItemPaid(int $itemId): float
     {
         if (! Schema::hasTable('fee_payment_allocations') || ! Schema::hasTable('fee_payments')) return 0.0;
-        return (float) DB::table('fee_payment_allocations as a')
-            ->join('fee_payments as p', 'p.id', '=', 'a.fee_payment_id')
-            ->where('a.fee_demand_item_id', $itemId)
-            ->where('a.source_type', 'DEMAND_ITEM')
-            ->where('p.status', 'POSTED')
-            ->sum('a.amount');
+        $paid=(float) DB::table('fee_payment_allocations as a')->join('fee_payments as p','p.id','=','a.fee_payment_id')->where('a.fee_demand_item_id',$itemId)->where('a.source_type','DEMAND_ITEM')->where('p.status','POSTED')->sum('a.amount');
+        $refunded=Schema::hasTable('fee_payment_refund_allocations') ? (float) DB::table('fee_payment_refund_allocations as ra')->join('fee_payment_refunds as r','r.id','=','ra.fee_payment_refund_id')->join('fee_payment_allocations as a','a.id','=','ra.fee_payment_allocation_id')->where('ra.fee_demand_item_id',$itemId)->where('a.source_type','DEMAND_ITEM')->where('r.status','POSTED')->sum('ra.amount') : 0.0;
+        return round($paid-$refunded,2);
     }
 
     private function row($item, string $dueDate, float $open, string $source, ?int $scheduleId = null, ?int $installmentNo = null): array

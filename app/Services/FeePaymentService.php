@@ -160,7 +160,8 @@ class FeePaymentService
                 $paid=(float)DB::table('fee_payment_allocations as a')->join('fee_payments as p','p.id','=','a.fee_payment_id')
                     ->where('a.fee_late_fine_charge_id',$charge->id)->where('a.source_type','LATE_FINE')->where('p.status','POSTED')->sum('a.amount');
             }
-            $open=max(0,round((float)$charge->fine_amount-$paid,2));
+            $refunded = Schema::hasTable('fee_payment_refund_allocations') ? (float) DB::table('fee_payment_refund_allocations as ra')->join('fee_payment_refunds as r','r.id','=','ra.fee_payment_refund_id')->where('ra.fee_late_fine_charge_id',$charge->id)->where('r.status','POSTED')->sum('ra.amount') : 0.0;
+            $open=max(0,round((float)$charge->fine_amount-$paid+$refunded,2));
             $totals[$charge->is_mandatory?'mandatory':'optional']+=$open;
         }
         $totals['mandatory']=round($totals['mandatory'],2);$totals['optional']=round($totals['optional'],2);$totals['total']=round($totals['mandatory']+$totals['optional'],2);
@@ -204,7 +205,8 @@ class FeePaymentService
                 if (! $fine->is_mandatory && ! $includeOptional) continue;
                 $already = (float) DB::table('fee_payment_allocations as a')->join('fee_payments as p','p.id','=','a.fee_payment_id')
                     ->where('a.fee_late_fine_charge_id',$fine->id)->where('a.source_type','LATE_FINE')->where('p.status','POSTED')->sum('a.amount');
-                $open=max(0,round((float)$fine->fine_amount-$already,2)); if($open<=0) continue;
+                $refunded = Schema::hasTable('fee_payment_refund_allocations') ? (float) DB::table('fee_payment_refund_allocations as ra')->join('fee_payment_refunds as r','r.id','=','ra.fee_payment_refund_id')->where('ra.fee_late_fine_charge_id',$fine->id)->where('r.status','POSTED')->sum('ra.amount') : 0.0;
+                $open=max(0,round((float)$fine->fine_amount-$already+$refunded,2)); if($open<=0) continue;
                 $rows->push(['source_type'=>'LATE_FINE','due_date'=>(string)$fine->due_date,'fee_demand_item_id'=>(int)$fine->fee_demand_item_id,
                     'fee_head_id'=>(int)$fine->fee_head_id,'fee_installment_schedule_id'=>(int)$fine->fee_installment_schedule_id,'fee_late_fine_charge_id'=>(int)$fine->id,
                     'is_mandatory'=>(bool)$fine->is_mandatory,'open_amount'=>$open,'priority'=>$fine->is_mandatory?20:40]);

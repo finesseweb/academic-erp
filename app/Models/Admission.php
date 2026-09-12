@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Admission extends Model
 {
@@ -75,5 +76,10 @@ class Admission extends Model
     public function selectionRule(): BelongsTo
     {
         return $this->belongsTo(CollegeAdmissionSelectionRule::class, 'college_admission_selection_rule_id');
+    }
+
+    public function feeDemands(): HasMany
+    {
+        return $this->hasMany(FeeDemand::class, 'admission_id');
     }
 }

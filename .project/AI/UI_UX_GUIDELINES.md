@@ -126,6 +126,14 @@ Requirements:
 - disable or protect submit while pending
 - preserve entered data after validation/server error when possible
 
+### Shared Form Control Standard
+- New and modified ERP forms must use the existing shared UI components instead of browser-native or page-specific styled controls whenever an equivalent exists.
+- Text, numeric, search and reference fields use shared `Input`; dropdowns use shared `Select` primitives; multiline text uses shared `Textarea`; actions use shared `Button`; date-only fields use shared `DatePicker`.
+- Do not introduce a native `<select>` or `<input type="date">` on a new/modified page merely for convenience when the project shared component already covers that control.
+- Every business form field must have a visible `Label`; placeholders supplement labels and never replace them.
+- Form controls must inherit project theme tokens, standard heights, border/focus/disabled/error states, responsive widths and keyboard behavior. Use `min-w-0` on grid/wrapper cells where long values may otherwise overflow.
+- Any intentional exception must be documented in the page specification with the accessibility or technical reason.
+
 ### Shared Date Picker Standard
 - Date fields must use the shared theme-aware `DatePicker` rather than inconsistent browser-native controls or page-specific calendars, unless a documented accessibility constraint requires a native control.
 - Provide direct month and year selection together with previous/next month navigation; never force users to traverse long date ranges one month at a time.
@@ -430,3 +438,16 @@ For downstream College Academic modules that can grow to many Program Offerings 
 Merit / Roster / Selection Rules is the reference implementation: `Program Offering → searchable Admission Seat Bucket`.
 Applications / Candidate Eligibility extends this pattern inside an Admission Cycle: `searchable Admission Cycle → searchable Program Offering → searchable Admission Seat Bucket`, with repeatable ordered Program Choices where the domain permits multiple preferences.
 
+
+### High-volume Student Transaction Registers — 2026-09-12
+For operational financial/history screens where one student can own many child transactions (receipts, refunds, adjustments, etc.):
+- prefer **one parent row per Student/Admission** with expandable child transactions instead of a long flat transaction table;
+- paginate the parent Student/Admission set server-side; child transactions for a returned parent stay together;
+- where academic context exists, use `Academic Session → Programme Offering → Search` as the primary filtering order;
+- changing Academic Session must reset dependent Programme Offering selection;
+- search should cover the identifiers operators actually use (Student Name, Application/Admission No., Demand No., Receipt/Reference No. as applicable);
+- keep money columns right-aligned and text/action columns deliberately aligned with consistent `px/py` cell spacing;
+- use explicit table `min-width` plus horizontal overflow on smaller screens rather than allowing columns to collapse or visually drift;
+- child-level financial actions remain attached to the child transaction even when the display is grouped by parent.
+
+The Fee Adjustments / Reversal / Refund Posted Payments register is the reference implementation.

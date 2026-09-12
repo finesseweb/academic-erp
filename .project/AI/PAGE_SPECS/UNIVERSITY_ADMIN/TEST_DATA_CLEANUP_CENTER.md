@@ -167,3 +167,6 @@ The cleanup center now includes `Admission Confirmation / Approval` (`admissions
 - Individual Batch cleanup is blocked by future `sections.batch_id` or `student_enrollments.batch_id` references.
 - Full Academic Reset deletes Batches before Intake / Program Offering parents to preserve RESTRICT-FK ordering.
 - Program Offering cleanup treats Batch rows as downstream blockers.
+
+## ADR 190 Fee correction cleanup — 2026-09-12
+Test Data Cleanup lists `fee_adjustments` and `fee_payment_refunds`. Cleaning a Refund restores its exact installment paid amounts and recalculates affected Demand balances. Cleaning an Adjustment recalculates its Demand. A Fee Payment with Refund children must not be deleted first; clean the Refund child before the Payment.

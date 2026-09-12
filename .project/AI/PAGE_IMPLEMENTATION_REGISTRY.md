@@ -213,3 +213,19 @@ On `next` / `next N` / `nextN`:
 - Internal entry route reused: `/college/{college}/admission-applications`.
 - Permission gates: `college_admission_form.view`, `college_admission_form.manage`, `college_admission_form.map`, `college_application_fee.manage`.
 - Resume after acceptance: Interview Scheduling / Evaluation QA -> Merit / Roster Generation.
+
+## Student Fee Ledger — 2026-09-12
+- PAGE_SPEC: `PAGE_SPECS/COLLEGE_FINANCE/STUDENT_FEE_LEDGER_PAGE.md`
+- Route: `/college/{college}/fee-ledger`
+- Page: `resources/js/pages/college-fee-ledger/index.tsx`
+- Permission: `college_fee_ledger.view`
+- Service: `FeeLedgerService`
+- Status: IMPLEMENTED / OWNER_QA_REQUIRED
+- Accounting model: read-only projection; no duplicate ledger transaction table.
+
+## ADR 190 — Fee Adjustments / Reversal / Refund
+- Page: `resources/js/pages/college-fee-adjustments/index.tsx`
+- Route: `/college/{college}/fee-adjustments`
+- Controller: `CollegeFeeAdjustmentController`
+- Service: `FeeAdjustmentRefundService`
+- Status: IMPLEMENTED / OWNER QA REQUIRED (2026-09-12)

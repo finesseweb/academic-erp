@@ -215,3 +215,12 @@ posting. Online transactions may be credential tests or fee-linked payments.
 Fee-linked provider success is verified before posting, linked through
 `online_payment_transactions.fee_payment_id`, and protected against duplicate
 posting. LIVE checkout is not enabled.
+
+### Student Fee Ledger projection — ADR 189 (2026-09-12)
+No new financial table is introduced. The Student Fee Ledger is rebuilt from `fee_demands`, `fee_demand_items`, `fee_student_benefits`, `fee_student_benefit_items`, `fee_late_fine_charges`, `fee_payments`, and `fee_payment_allocations`. Migration `2026_09_12_190000_register_student_fee_ledger_permission.php` only registers `college_fee_ledger.view` and default role grants.
+
+## ADR 190 financial correction tables — 2026-09-12
+- `fee_adjustments` — manual CREDIT/DEBIT liability corrections with immutable posting/reversal history.
+- `fee_payment_refunds` — refund header tied to one original Fee Payment.
+- `fee_payment_refund_allocations` — refund allocation tied to the exact original Payment Allocation and Demand accounting unit.
+See `DATABASE/TABLE_SPECS/fee_adjustments.md`, `fee_payment_refunds.md`, and `fee_payment_refund_allocations.md`.

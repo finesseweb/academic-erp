@@ -88,7 +88,10 @@ class CollegeFeePaymentController extends Controller
             'sessions'=>$sessions->map(fn($s)=>['id'=>$s->id,'name'=>$s->name,'code'=>$s->code,'is_current'=>(bool)$s->is_current])->values(),
             'students'=>$studentPage,'payments'=>$paymentRows,
             'filters'=>['session_id'=>$sessionId,'q'=>$q,'per_page'=>$perPage],
-            'can'=>['collect'=>$request->user()->hasCollegePermission('college_fee_payment.collect',$college->id)],
+            'can'=>[
+                'collect'=>$request->user()->hasCollegePermission('college_fee_payment.collect',$college->id),
+                'view_ledger'=>$request->user()->hasCollegePermission('college_fee_ledger.view',$college->id),
+            ],
         ]);
     }
 

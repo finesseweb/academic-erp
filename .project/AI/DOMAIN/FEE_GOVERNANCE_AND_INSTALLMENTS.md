@@ -76,3 +76,9 @@ on a mutable Calendar row forever.
 
 See ADRs 099-105, 107, 112, 115, 118, 130, 142-143, 158,
 160-164, and 170-175.
+
+## Student Fee Ledger — ADR 189
+The College Student Fee Ledger is a read-only projection and not a second accounting subsystem. Fee Demand Items and ACTIVE Late Fine create debit rows; APPROVED Benefit Item sanctioned amounts and POSTED Payment Allocations create credit rows. Existing Fee Demand cancellation is represented by a reversing credit, and an approved Benefit later cancelled is represented by a reversing debit so history remains visible. Online provider attempts/orders are never ledger money; they appear only after verified posting creates the normal Fee Payment/Allocation. The ledger must remain rebuildable from authoritative transactions so future Adjustment/Reversal/Refund can integrate by adding explicit authoritative transaction effects rather than rewriting historical rows.
+
+## ADR 190 — Post-demand financial corrections
+Generic manual adjustments never rewrite Fee Demand gross snapshots. CREDIT/DEBIT adjustments contribute to net adjusted liability and ACTIVE installment schedules are proportionally rebalanced with already-paid amounts as immutable floors. Payment reversal is a full receipt correction; Refund is a separate outgoing transaction and may consume only paid allocations whose Fee Demand Item snapshot is refundable. Both restore payable/outstanding state through the original allocation chain.

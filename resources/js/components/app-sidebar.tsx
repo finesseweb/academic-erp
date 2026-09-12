@@ -708,6 +708,20 @@ export function AppSidebar() {
                           directNavigation: true,
                       },
                       {
+                          title: 'Student Fee Ledger',
+                          href: `/college/${collegeId}/fee-ledger`,
+                          icon: ScrollText,
+                          permission: 'college_fee_ledger.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Adjustments / Refunds',
+                          href: `/college/${collegeId}/fee-adjustments`,
+                          icon: ScrollText,
+                          permission: 'college_fee_adjustment.view',
+                          directNavigation: true,
+                      },
+                      {
                           title: 'Late Fine / Penalty',
                           href: `/college/${collegeId}/fee-late-fines`,
                           icon: ScrollText,
