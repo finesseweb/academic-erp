@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { BadgeCheck, CircleX, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -40,8 +41,9 @@ function ConfirmDialog({collegeId,row}:{collegeId:number;row:Row}) {
 }
 
 function RevokeButton({collegeId,row}:{collegeId:number;row:Row}) {
-    const revoke=()=>{
-        const reason=window.prompt('Reason for revoking this Admission Confirmation:');
+    const appDialog=useAppDialog();
+    const revoke=async()=>{
+        const reason=await appDialog.prompt({title:'Revoke admission confirmation',description:'Enter the reason for revoking this Admission Confirmation.',placeholder:'Reason for revocation',confirmLabel:'Revoke admission',destructive:true,required:true});
         if(!reason?.trim()||!row.admission) return;
         router.patch(`/college/${collegeId}/admission-confirmations/${row.admission.id}/revoke`,{reason:reason.trim()},{preserveScroll:true});
     };

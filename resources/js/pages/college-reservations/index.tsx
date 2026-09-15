@@ -1,6 +1,7 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { Pencil, Plus, Power, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -98,7 +99,8 @@ function PlanStatusDialog({collegeId,plan}:{collegeId:number;plan:Plan}){
 }
 
 export default function CollegeReservations({college,plans,availableBuckets,categories,can}:Props){
-    const del=(plan:Plan,a:Allocation)=>{if(confirm('Remove this Reservation / Quota allocation?'))router.delete(`/college/${college.id}/reservations/${plan.id}/allocations/${a.id}`,{preserveScroll:true});};
+    const appDialog=useAppDialog();
+    const del=async(plan:Plan,a:Allocation)=>{const confirmed=await appDialog.confirm({title:'Remove reservation allocation?',description:'Remove this Reservation / Quota allocation?',confirmLabel:'Remove allocation',destructive:true});if(confirmed)router.delete(`/college/${college.id}/reservations/${plan.id}/allocations/${a.id}`,{preserveScroll:true});};
     return <><Head title={`${college.name} Reservation / Seat Distribution`}/><div className="space-y-6 p-4 md:p-6">
         <header className="flex flex-wrap items-end justify-between gap-3 border-b pb-5"><div><p className="text-sm font-medium text-primary">{college.code} · College Academic Setup</p><h1 className="text-3xl font-semibold">Reservation / Seat Distribution</h1><p className="max-w-3xl text-sm text-muted-foreground">Apply configurable University quota categories to effective Intake admission seat buckets.</p></div>{can.create&&college.status==='ACTIVE'&&<PlanForm collegeId={college.id} buckets={availableBuckets}/>}</header>
         {categories.length===0&&<Card><CardContent className="p-4 text-sm text-muted-foreground">No active Reservation / Quota categories exist. Configure the University category master first.</CardContent></Card>}

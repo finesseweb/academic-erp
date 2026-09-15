@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { CheckCircle2, Download, FileCheck2, FileWarning, ShieldCheck, XCircle } from 'lucide-react';
 import { useMemo } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -13,14 +14,15 @@ type Props = { college:{id:number;name:string;code:string;status:string}; rules:
 const badge=(status:string)=>status==='VERIFIED'?'text-emerald-700 border-emerald-300 bg-emerald-50':status==='DEFICIENT'||status==='REJECTED'?'text-destructive border-red-300 bg-red-50':status==='WAIVED'?'text-amber-700 border-amber-300 bg-amber-50':'text-muted-foreground';
 
 function CandidatePanel({collegeId,screen,can,direct}:{collegeId:number;screen:NonNullable<Screen>;can:Props['can'];direct:boolean}) {
-    const review=(doc:DocumentRow,status:'VERIFIED'|'REJECTED'|'WAIVED')=>{
+    const appDialog=useAppDialog();
+    const review=async(doc:DocumentRow,status:'VERIFIED'|'REJECTED'|'WAIVED')=>{
         let remarks:string|null=null;
-        if(status!=='VERIFIED') { remarks=window.prompt(status==='REJECTED'?'Reason for rejecting this document:':'Reason/authority for waiving this document:'); if(!remarks?.trim()) return; }
+        if(status!=='VERIFIED') { remarks=await appDialog.prompt({title:status==='REJECTED'?'Reject document':'Waive document',description:status==='REJECTED'?'Enter the reason for rejecting this document.':'Enter the reason or authority for waiving this document.',confirmLabel:status==='REJECTED'?'Reject document':'Waive document',destructive:status==='REJECTED',required:true}); if(!remarks?.trim()) return; }
         router.put(`/college/${collegeId}/admission-document-verification/documents/${doc.field_value_id}`,{status,remarks:remarks?.trim()??null},{preserveScroll:true});
     };
-    const finalize=(candidate:Candidate,status:'VERIFIED'|'DEFICIENT')=>{
+    const finalize=async(candidate:Candidate,status:'VERIFIED'|'DEFICIENT')=>{
         let notes:string|null=null;
-        if(status==='DEFICIENT') { notes=window.prompt('Describe the missing/incorrect documents or deficiency:'); if(!notes?.trim()) return; }
+        if(status==='DEFICIENT') { notes=await appDialog.prompt({title:'Mark document deficient',description:'Describe the missing/incorrect documents or deficiency.',placeholder:'Deficiency details',confirmLabel:'Mark deficient',required:true}); if(!notes?.trim()) return; }
         router.patch(`/college/${collegeId}/admission-document-verification/applications/${candidate.application_id}/finalize`,{status,notes:notes?.trim()??null},{preserveScroll:true});
     };
 

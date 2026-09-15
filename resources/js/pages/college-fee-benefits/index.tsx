@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, Layers3, Search, Users, XCircle } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,7 @@ type TreeDegree = { key:string; label:string; disciplines:TreeDiscipline[] };
 type TreeLevel = { key:string; label:string; degrees:TreeDegree[] };
 
 export default function Page({ college, benefits, bulk_schemes, register_filters, register_filter_options, register_pagination, can }:{ college:{id:number;name:string;code:string}; benefits:Benefit[]; bulk_schemes:BulkScheme[]; register_filters:RegisterFilters; register_filter_options:RegisterFilterOptions; register_pagination:RegisterPagination; can:{assign:boolean;approve:boolean;reject:boolean;cancel:boolean} }) {
+    const appDialog=useAppDialog();
     const [assignmentMode,setAssignmentMode]=useState<'individual'|'bulk'>('individual');
     const [query,setQuery]=useState('');
     const [demandOptions,setDemandOptions]=useState<DemandOption[]>([]);
@@ -216,13 +218,14 @@ export default function Page({ college, benefits, bulk_schemes, register_filters
         return [...grouped.values()];
     },[benefits]);
 
-    const cancel=(b:Benefit)=>{
+    const cancel=async(b:Benefit)=>{
         const n=decisionNotes[b.id]?.trim();
         if(!n)return;
         const message=b.status==='APPROVED'
             ? `Remove ${b.scheme_name} from ${b.candidate_name}? The sanctioned Fee Demand adjustment of ${money(b.sanctioned_amount)} will be reversed.`
             : `Remove ${b.scheme_name} from ${b.candidate_name}?`;
-        if(!window.confirm(message))return;
+        const confirmed=await appDialog.confirm({title:'Confirm action',description:message,confirmLabel:'Continue',destructive:true});
+        if(!confirmed)return;
         router.patch(`/college/${college.id}/fee-student-benefits/${b.id}/cancel`,{reason:n},{
             preserveScroll:true,
             onStart:()=>setRemovingId(b.id),

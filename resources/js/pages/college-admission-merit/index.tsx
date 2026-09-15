@@ -1,5 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import { CheckCircle2, ClipboardCheck, LockKeyhole, RefreshCw, Trophy } from 'lucide-react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -129,11 +130,13 @@ const snapshotDirection=(tie:TieSnapshot)=>{
 };
 
 export default function AdmissionMerit({college,rules,selectedRuleId,preview,can}:Props){
+    const appDialog=useAppDialog();
     const selected=rules.find(rule=>rule.id===selectedRuleId)??rules[0]??null;
     const choose=(id:number)=>router.get(`/college/${college.id}/admission-merit`,{rule_id:id},{preserveState:true,replace:true,preserveScroll:true});
-    const generate=()=>{
+    const generate=async()=>{
         if(!selected) return;
-        if(!window.confirm(`Generate and lock final Merit / Roster for ${selected.code} V${selected.version_no}? Scores and Interview results consumed by this roster will become downstream-locked.`)) return;
+        const confirmed=await appDialog.confirm({title:'Generate and lock final Merit / Roster?',description:`Generate and lock final Merit / Roster for ${selected.code} V${selected.version_no}? Scores and Interview results consumed by this roster will become downstream-locked.`,confirmLabel:'Generate and lock'});
+        if(!confirmed) return;
         router.post(`/college/${college.id}/admission-selection-rules/${selected.id}/merit-roster/generate`,{}, {preserveScroll:true});
     };
     const generateDisabled=!selected||selected.summary.generated||selected.summary.pending_count>0||selected.summary.qualified_count===0||selected.status==='INACTIVE';

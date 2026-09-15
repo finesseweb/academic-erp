@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { CheckCircle2, CircleX, RefreshCw, ShieldCheck, TicketCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -106,11 +107,12 @@ function AllocationDialog({collegeId,row,capacity,candidateCategoryOptions,direc
 }
 
 function CancelButton({collegeId,row}:{collegeId:number;row:Row}) {
+    const appDialog=useAppDialog();
     const [processing,setProcessing]=useState(false);
     const blockedByConfirmedAdmission=row.allocation?.admission_status==='CONFIRMED';
-    const cancel=()=>{
+    const cancel=async()=>{
         if(processing||blockedByConfirmedAdmission) return;
-        const reason=window.prompt('Reason for cancelling this seat allocation:');
+        const reason=await appDialog.prompt({title:'Cancel seat allocation',description:'Enter the reason for cancelling this seat allocation.',placeholder:'Cancellation reason',confirmLabel:'Cancel allocation',destructive:true,required:true});
         if(!reason?.trim()) return;
         setProcessing(true);
         router.patch(`/college/${collegeId}/admission-seat-allocations/${row.allocation?.id}/cancel`,{reason:reason.trim()},{

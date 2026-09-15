@@ -15,6 +15,7 @@ import {
     X,
 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -82,6 +83,7 @@ export default function CurriculumTerms({
     structureEditable,
     cloneTargets,
 }: Props) {
+    const appDialog = useAppDialog();
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<Term | null>(null);
     const [cloningTerm, setCloningTerm] = useState<Term | null>(null);
@@ -231,8 +233,14 @@ export default function CurriculumTerms({
         );
     };
 
-    const deleteTerm = (term: Term) => {
-        if (!window.confirm(`Delete ${term.name}? Its Slots and Course Mappings will also be deleted. This cannot be undone.`)) return;
+    const deleteTerm = async (term: Term) => {
+        const confirmed = await appDialog.confirm({
+            title: 'Delete term?',
+            description: `Delete ${term.name}? Its Slots and Course Mappings will also be deleted. This cannot be undone.`,
+            confirmLabel: 'Delete term',
+            destructive: true,
+        });
+        if (!confirmed) return;
         router.delete(`/admin/curricula/${curriculum.id}/structure/terms/${term.id}`, { preserveScroll: true });
     };
 

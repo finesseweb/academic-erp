@@ -11,6 +11,7 @@ import {
     X,
 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -120,6 +121,7 @@ export default function CurriculumCourseMappings({
     permissions,
     structureEditable,
 }: Props) {
+    const appDialog = useAppDialog();
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<Mapping | null>(null);
     const form = useForm({
@@ -230,8 +232,14 @@ export default function CurriculumCourseMappings({
         );
     };
 
-    const deleteMapping = (mapping: Mapping) => {
-        if (!window.confirm(`Delete ${mapping.course_name}? This mapping will be permanently removed.`)) return;
+    const deleteMapping = async (mapping: Mapping) => {
+        const confirmed = await appDialog.confirm({
+            title: 'Delete course mapping?',
+            description: `Delete ${mapping.course_name}? This mapping will be permanently removed.`,
+            confirmLabel: 'Delete mapping',
+            destructive: true,
+        });
+        if (!confirmed) return;
         router.delete(`/admin/curricula/${curriculum.id}/structure/terms/${term.id}/slots/${slot.id}/course-mappings/${mapping.id}`, { preserveScroll: true });
     };
 

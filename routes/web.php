@@ -52,6 +52,8 @@ use App\Http\Controllers\CollegeFeeDemandController;
 use App\Http\Controllers\CollegeFeeInstallmentController;
 use App\Http\Controllers\CollegeFeeLateFineController;
 use App\Http\Controllers\CollegeFeePaymentController;
+use App\Http\Controllers\CollegeFeeAdjustmentController;
+use App\Http\Controllers\CollegeFeeLedgerController;
 use App\Http\Controllers\CollegePaymentGatewayController;
 use App\Http\Controllers\CollegeOnlinePaymentController;
 use App\Http\Controllers\CollegeOnlineFeePaymentController;
@@ -356,8 +358,15 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('college/{college}/payment-gateways/{gateway}/razorpay/test-order', [CollegeOnlinePaymentController::class, 'createRazorpayTestOrder'])->name('college-payment-gateways.razorpay.test-order');
     Route::post('college/{college}/payment-gateways/{gateway}/cashfree/test-order', [CollegeOnlinePaymentController::class, 'createCashfreeTestOrder'])->name('college-payment-gateways.cashfree.test-order');
     Route::post('college/{college}/payment-gateways/{gateway}/payu/test-api', [CollegeOnlinePaymentController::class, 'testPayUCredentials'])->name('college-payment-gateways.payu.test-api');
+    Route::get('college/{college}/fee-ledger', [CollegeFeeLedgerController::class, 'index'])->name('college-fee-ledger.index');
     Route::get('college/{college}/fee-payments', [CollegeFeePaymentController::class, 'index'])->name('college-fee-payments.index');
     Route::post('college/{college}/fee-payments', [CollegeFeePaymentController::class, 'store'])->name('college-fee-payments.store');
+    Route::get('college/{college}/fee-adjustments', [CollegeFeeAdjustmentController::class, 'index'])->name('college-fee-adjustments.index');
+    Route::post('college/{college}/fee-adjustments', [CollegeFeeAdjustmentController::class, 'store'])->name('college-fee-adjustments.store');
+    Route::post('college/{college}/fee-adjustments/{adjustment}/reverse', [CollegeFeeAdjustmentController::class, 'reverseAdjustment'])->name('college-fee-adjustments.reverse');
+    Route::post('college/{college}/fee-payments/{payment}/reverse', [CollegeFeeAdjustmentController::class, 'reversePayment'])->name('college-fee-payments.reverse');
+    Route::post('college/{college}/fee-payments/{payment}/refund', [CollegeFeeAdjustmentController::class, 'refund'])->name('college-fee-payments.refund');
+
     Route::post('college/{college}/fee-payments/online/initiate', [CollegeOnlineFeePaymentController::class, 'initiate'])->name('college-fee-payments.online.initiate');
     Route::post('college/{college}/fee-payments/online/razorpay/verify', [CollegeOnlineFeePaymentController::class, 'verifyRazorpay'])->name('college-fee-payments.online.razorpay.verify');
     Route::post('college/{college}/fee-payments/online/cashfree/verify', [CollegeOnlineFeePaymentController::class, 'verifyCashfree'])->name('college-fee-payments.online.cashfree.verify');
