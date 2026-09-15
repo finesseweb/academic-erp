@@ -1,6 +1,7 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { FileCog, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -24,14 +25,17 @@ const selectClass='h-10 w-full rounded-md border bg-background px-3 text-sm shad
 
 function DeleteAction({url,label='Delete',iconOnly=false,destructive=false,confirmMessage}:{url:string;label?:string;iconOnly?:boolean;destructive?:boolean;confirmMessage:string}){
  const [processing,setProcessing]=useState(false);
- const submit=()=>{
-  if(processing||!window.confirm(confirmMessage)) return;
+ const appDialog=useAppDialog();
+ const submit=async()=>{
+  if(processing) return;
+  const confirmed=await appDialog.confirm({title:'Confirm delete',description:confirmMessage,confirmLabel:label,destructive:true});
+  if(!confirmed) return;
   setProcessing(true);
   router.delete(url,{
    preserveScroll:true,
    onError:(errors)=>{
     const message=Object.values(errors??{})[0];
-    if(message) window.alert(String(message));
+    if(message) void appDialog.alert({title:'Unable to delete',description:String(message)});
    },
    onFinish:()=>setProcessing(false),
   });

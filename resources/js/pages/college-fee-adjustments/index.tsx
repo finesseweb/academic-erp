@@ -1,5 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEvent, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, ReceiptText, RotateCcw, Search, Undo2 } from 'lucide-react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
@@ -116,6 +118,13 @@ const niceDate = (value?: string | null) => {
           });
 };
 
+const localToday = () => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+        date.getDate(),
+    ).padStart(2, '0')}`;
+};
+
 export default function Index({
     college,
     sessions,
@@ -127,6 +136,7 @@ export default function Index({
     refunds,
     can,
 }: Props) {
+    const appDialog = useAppDialog();
     const [q, setQ] = useState(filters.q || '');
     const [sessionId, setSessionId] = useState(String(filters.session_id || ''));
     const [offeringId, setOfferingId] = useState(String(filters.offering_id || '0'));
@@ -142,7 +152,7 @@ export default function Index({
     const adj = useForm({
         demand_id: demandId,
         fee_demand_item_id: selected?.items[0]?.id || 0,
-        adjustment_date: new Date().toISOString().slice(0, 10),
+        adjustment_date: localToday(),
         direction: 'CREDIT',
         amount: '',
         reason_code: 'CORRECTION',
@@ -151,7 +161,7 @@ export default function Index({
 
     const [refundPayment, setRefundPayment] = useState<Receipt | null>(null);
     const refund = useForm({
-        refund_date: new Date().toISOString().slice(0, 10),
+        refund_date: localToday(),
         amount: '',
         refund_mode: 'BANK_TRANSFER',
         reference_no: '',
@@ -202,26 +212,45 @@ export default function Index({
         adj.setData('fee_demand_item_id', demand?.items[0]?.id || 0);
     };
 
-    const reverseAdj = (id: number) => {
-        const reason = window.prompt('Reason for reversing this adjustment?');
+    const reverseAdj = async (id: number) => {
+        const reason = await appDialog.prompt({
+            title: 'Reverse adjustment',
+            description: 'Enter the reason for reversing this adjustment.',
+            placeholder: 'Reason for reversal',
+            confirmLabel: 'Reverse adjustment',
+            confirmIcon: <RotateCcw className="size-4" aria-hidden="true" />,
+            destructive: true,
+            required: true,
+        });
         if (reason && reason.trim().length >= 5) {
             router.post(`/college/${college.id}/fee-adjustments/${id}/reverse`, {
-                reason,
+                reason: reason.trim(),
             });
         }
     };
 
-    const reversePay = (id: number) => {
-        const reason = window.prompt(
-            'Reason for reversing this entire receipt? This restores all allocations.',
-        );
-        if (
-            reason &&
-            reason.trim().length >= 5 &&
-            window.confirm('Reverse the complete payment receipt?')
-        ) {
+    const reversePay = async (id: number) => {
+        const reason = await appDialog.prompt({
+            title: 'Reverse payment receipt',
+            description: 'Enter the reason for reversing this entire receipt. All payment allocations will be restored.',
+            placeholder: 'Reason for reversal',
+            confirmLabel: 'Continue',
+            confirmIcon: <RotateCcw className="size-4" aria-hidden="true" />,
+            destructive: true,
+            required: true,
+        });
+        if (!reason || reason.trim().length < 5) return;
+
+        const confirmed = await appDialog.confirm({
+            title: 'Reverse complete receipt?',
+            description: 'This will reverse the complete payment receipt and restore all of its allocations.',
+            confirmLabel: 'Reverse receipt',
+            confirmIcon: <RotateCcw className="size-4" aria-hidden="true" />,
+            destructive: true,
+        });
+        if (confirmed) {
             router.post(`/college/${college.id}/fee-payments/${id}/reverse`, {
-                reason,
+                reason: reason.trim(),
             });
         }
     };
@@ -296,6 +325,7 @@ export default function Index({
 
                     <div className="flex items-end">
                         <Button type="button" variant="outline" onClick={() => filter()}>
+                            <Search className="size-4" aria-hidden="true" />
                             Search
                         </Button>
                     </div>
@@ -303,7 +333,7 @@ export default function Index({
 
                 {can.post && (
                     <form onSubmit={submitAdj} className="space-y-4 rounded-lg border p-4">
-                        <h2 className="font-semibold">Post Manual Adjustment</h2>
+                        <h2 className="flex items-center gap-2 font-semibold"><ReceiptText className="size-4" aria-hidden="true" />Post Manual Adjustment</h2>
                         <div className="grid gap-4 md:grid-cols-3">
                             <div className="min-w-0 space-y-1.5">
                                 <Label>Student / Fee Demand</Label>
@@ -348,6 +378,7 @@ export default function Index({
                                     name="adjustment_date"
                                     value={adj.data.adjustment_date}
                                     onValueChange={(value) => adj.setData('adjustment_date', value)}
+                                    max={localToday()}
                                     invalid={Boolean(adj.errors.adjustment_date)}
                                 />
                             </div>
@@ -405,6 +436,7 @@ export default function Index({
                         </div>
 
                         <Button type="submit" disabled={adj.processing || !selected}>
+                            <ReceiptText className="size-4" aria-hidden="true" />
                             {adj.processing ? 'Posting…' : 'Post Adjustment'}
                         </Button>
                         {Object.values(adj.errors).map((error, index) => (
@@ -418,7 +450,7 @@ export default function Index({
                 <section className="space-y-3">
                     <div className="flex flex-wrap items-end justify-between gap-3">
                         <div>
-                            <h2 className="font-semibold">Posted Payments — Reversal / Refund</h2>
+                            <h2 className="flex items-center gap-2 font-semibold"><RotateCcw className="size-4" aria-hidden="true" />Posted Payments — Reversal / Refund</h2>
                             <p className="text-sm text-muted-foreground">
                                 One row per student. Expand a student to work with individual receipts.
                             </p>
@@ -539,7 +571,7 @@ export default function Index({
                 {refundPayment && (
                     <form onSubmit={submitRefund} className="space-y-4 rounded-lg border p-4">
                         <div>
-                            <h2 className="font-semibold">Refund {refundPayment.receipt_no}</h2>
+                            <h2 className="flex items-center gap-2 font-semibold"><Undo2 className="size-4" aria-hidden="true" />Refund {refundPayment.receipt_no}</h2>
                             <p className="text-sm text-muted-foreground">
                                 Maximum refundable paid balance: {money(refundPayment.refundable_balance)}. Non-refundable Fee Heads are automatically excluded.
                             </p>
@@ -608,6 +640,7 @@ export default function Index({
 
                         <div className="flex flex-wrap gap-2">
                             <Button type="submit" disabled={refund.processing}>
+                                <Undo2 className="size-4" aria-hidden="true" />
                                 {refund.processing ? 'Posting…' : 'Post Refund'}
                             </Button>
                             <Button type="button" variant="outline" onClick={() => setRefundPayment(null)}>
@@ -655,6 +688,7 @@ export default function Index({
                                                     variant="outline"
                                                     onClick={() => reverseAdj(adjustment.id)}
                                                 >
+                                                    <RotateCcw className="size-4" aria-hidden="true" />
                                                     Reverse
                                                 </Button>
                                             )}
@@ -667,7 +701,7 @@ export default function Index({
                 </section>
 
                 <section className="space-y-2">
-                    <h2 className="font-semibold">Refund Register</h2>
+                    <h2 className="flex items-center gap-2 font-semibold"><Undo2 className="size-4" aria-hidden="true" />Refund Register</h2>
                     <div className="overflow-x-auto rounded-md border">
                         <table className="w-full min-w-[760px] text-sm">
                             <thead className="border-b bg-muted/30">
@@ -713,7 +747,7 @@ function FragmentRows({
     canRefund: boolean;
     canReverse: boolean;
     onRefund: (payment: Receipt) => void;
-    onReverse: (id: number) => void;
+    onReverse: (id: number) => void | Promise<void>;
 }) {
     return (
         <>
@@ -741,6 +775,7 @@ function FragmentRows({
                 </td>
                 <td className="px-3 py-3">
                     <Button type="button" size="sm" variant="outline" onClick={onToggle}>
+                        {open ? <ChevronUp className="size-4" aria-hidden="true" /> : <ChevronDown className="size-4" aria-hidden="true" />}
                         {open ? 'Hide' : 'View'} {student.receipt_count}
                     </Button>
                 </td>
@@ -791,6 +826,7 @@ function FragmentRows({
                                                             variant="outline"
                                                             onClick={() => onRefund(payment)}
                                                         >
+                                                            <Undo2 className="size-4" aria-hidden="true" />
                                                             Refund
                                                         </Button>
                                                     )}
@@ -801,6 +837,7 @@ function FragmentRows({
                                                             variant="outline"
                                                             onClick={() => onReverse(payment.id)}
                                                         >
+                                                            <RotateCcw className="size-4" aria-hidden="true" />
                                                             Reverse receipt
                                                         </Button>
                                                     )}

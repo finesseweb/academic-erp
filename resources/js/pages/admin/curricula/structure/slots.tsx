@@ -13,6 +13,7 @@ import {
     X,
 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -107,6 +108,7 @@ export default function CurriculumSlots({
     structureEditable,
     cloneTargets,
 }: Props) {
+    const appDialog = useAppDialog();
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<Slot | null>(null);
     const [cloningSlot, setCloningSlot] = useState<Slot | null>(null);
@@ -249,8 +251,14 @@ export default function CurriculumSlots({
         );
     };
 
-    const deleteSlot = (slot: Slot) => {
-        if (!window.confirm(`Delete ${slot.name}? Its Course Mappings will also be deleted. This cannot be undone.`)) return;
+    const deleteSlot = async (slot: Slot) => {
+        const confirmed = await appDialog.confirm({
+            title: 'Delete slot?',
+            description: `Delete ${slot.name}? Its Course Mappings will also be deleted. This cannot be undone.`,
+            confirmLabel: 'Delete slot',
+            destructive: true,
+        });
+        if (!confirmed) return;
         router.delete(`/admin/curricula/${curriculum.id}/structure/terms/${term.id}/slots/${slot.id}`, { preserveScroll: true });
     };
 

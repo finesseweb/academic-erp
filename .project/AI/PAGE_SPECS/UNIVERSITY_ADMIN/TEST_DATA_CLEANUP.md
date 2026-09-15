@@ -164,3 +164,36 @@ because `academic-policies/{id}` also structurally matches the generic two-segme
 ### Clean Chain behavior
 
 If the selected Academic Policy belongs to an amendment/version chain, Clean Chain removes the complete test chain only when the dependency preview reports no downstream operational references. Approval request stages and requests are removed before policy configuration and version records.
+
+
+## Fee Management cleanup dependency contract — ADR 190 / ADR 194
+Finance cleanup is dependency-aware and must preserve operational accounting invariants while test records are removed.
+
+### Fee Payment visibility
+The Fee Payments / Receipts cleanup section must list both:
+- `POSTED` Fee Payments; and
+- `REVERSED` Fee Payments that still retain their original allocation audit rows.
+
+A reversed receipt is not operationally payable/refundable again, but it must remain cleanup-reachable because its retained `fee_payment_allocations` can still reference Installment Schedules and Fee Demand Items.
+
+### Required cleanup order
+For a payment chain:
+1. clean linked Fee Refund records first;
+2. clean the Fee Payment / Receipt (POSTED or REVERSED);
+3. clean the now-unreferenced Installment Schedule when required;
+4. clean the Fee Demand only after its remaining finance children/dependencies are clear.
+
+### Installment paid-value rule
+- Cleaning a POSTED payment removes its contribution from installment `paid_amount`.
+- Cleaning a REVERSED payment must **not** remove that contribution again because the controlled reversal already restored the installment paid value.
+
+The tool must never force an operator to use direct SQL to escape a dependency dead-end. If an allocation blocks cleanup, the owning finance record must remain visible and cleanable in the correct dependency order.
+
+## TEST online fee-payment dependency
+A Fee Demand may have a TEST online checkout transaction even when no receipt was posted. Such rows are real FK dependencies and must be cleaned before the Fee Demand.
+
+- Unposted TEST `FEE_PAYMENT` transactions are shown in **Gateway Test Orders**.
+- Fee Demand deletion must be blocked with an application validation message while any `online_payment_transactions.fee_demand_id` reference remains.
+- Never expose a raw foreign-key / SQL exception to the user for this dependency.
+- If the online transaction already posted a Fee Payment, clean the linked Refund (if any) and Fee Payment / Receipt instead; payment cleanup owns deletion of its posted online transaction.
+

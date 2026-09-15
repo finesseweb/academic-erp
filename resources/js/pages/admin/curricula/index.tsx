@@ -2,6 +2,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import { BookOpenCheck, CircleX, Copy, GitBranch, Pencil, Plus, RotateCcw, Search, Send, Settings2, Trash2, MoreHorizontal, X } from 'lucide-react';
 import { FormEvent, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -115,6 +116,7 @@ export default function CurriculumIndex({
     approvalWorkflows,
     permissions,
 }: Props) {
+    const appDialog = useAppDialog();
     const [editing, setEditing] = useState<Curriculum | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [cloning, setCloning] = useState<Curriculum | null>(null);
@@ -299,14 +301,20 @@ export default function CurriculumIndex({
     };
 
 
-    const deleteCurriculum = (item: Curriculum) => {
+    const deleteCurriculum = async (item: Curriculum) => {
         if (item.lifecycle_status !== 'DRAFT') {
             return;
         }
 
-        const confirmation = window.prompt(
-            `This permanently deletes "${item.name}" and its complete Terms, Slots and Course Mappings.\n\nType the Curriculum code ${item.code} to confirm.`,
-        );
+        const confirmation = await appDialog.prompt({
+            title: 'Permanently delete curriculum?',
+            description: `This permanently deletes "${item.name}" and its complete Terms, Slots and Course Mappings.\n\nType the Curriculum code ${item.code} to confirm.`,
+            placeholder: item.code,
+            confirmLabel: 'Delete curriculum',
+            destructive: true,
+            multiline: false,
+            required: true,
+        });
 
         if (confirmation !== item.code) {
             return;
@@ -317,8 +325,13 @@ export default function CurriculumIndex({
         });
     };
 
-    const retire = (item: Curriculum) => {
-        if (!confirm(`Retire curriculum "${item.name}"? This will make the curriculum read-only.`)) return;
+    const retire = async (item: Curriculum) => {
+        const confirmed = await appDialog.confirm({
+            title: 'Retire curriculum?',
+            description: `Retire curriculum "${item.name}"? This will make the curriculum read-only.`,
+            confirmLabel: 'Retire curriculum',
+        });
+        if (!confirmed) return;
 
         router.patch(
             `/admin/curricula/${item.id}/retire`,
@@ -327,8 +340,13 @@ export default function CurriculumIndex({
         );
     };
 
-    const restore = (item: Curriculum) => {
-        if (!confirm(`Restore curriculum "${item.name}" to its status before retirement?`)) return;
+    const restore = async (item: Curriculum) => {
+        const confirmed = await appDialog.confirm({
+            title: 'Restore curriculum?',
+            description: `Restore curriculum "${item.name}" to its status before retirement?`,
+            confirmLabel: 'Restore curriculum',
+        });
+        if (!confirmed) return;
 
         router.patch(
             `/admin/curricula/${item.id}/restore`,

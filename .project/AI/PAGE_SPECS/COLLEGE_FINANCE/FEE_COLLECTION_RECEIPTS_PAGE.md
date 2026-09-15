@@ -43,3 +43,9 @@ REST for collection. Optional notification event later if justified.
 - `fee_payment_allocations` retain Demand, Demand Item, optional Installment/Late Fine, source type, due date, mandatory flag, and sequence.
 - Offline posting and verified TEST online checkout both use `FeePaymentService`; the Calendar Academic Period is not re-resolved at payment time.
 - Implemented status: `IMPLEMENTED / OWNER_QA_REQUIRED`; refunds/reversals remain separate future workflow.
+
+## Adjustment-aware installment availability — QA hardened 2026-09-14
+Due Groups are a collection projection, not an independent liability source. For installment-enabled Fee Heads, the total principal exposed for collection must never exceed the authoritative Fee Head open principal after benefits, POSTED adjustments, POSTED payments, reversals, and refunds. A stale/historical installment schedule must therefore be defensively capped rather than allowing collection above the Fee Demand balance.
+
+## Installment due-state rule
+Fee Collection displays the recalculated installment outstanding from the stable original schedule basis. Due dates classify amounts as overdue/current/upcoming only. They must not alter installment allocation proportions or silently transfer an expired installment's remaining principal into a later installment.

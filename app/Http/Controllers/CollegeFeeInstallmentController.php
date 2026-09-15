@@ -192,7 +192,8 @@ class CollegeFeeInstallmentController extends Controller
                 DB::table('fee_late_fine_charges')->whereIn('fee_installment_schedule_id',$activeSchedules->pluck('id'))->where('status','ACTIVE')->update(['status'=>'REVERSED','superseded_at'=>now(),'updated_at'=>now()]);
             }
             FeeInstallmentSchedule::where('fee_demand_item_id',$item->id)->where('status','ACTIVE')->update(['status'=>'CANCELLED','cancelled_by'=>$request->user()->id,'cancelled_at'=>now(),'cancellation_reason'=>'Replaced before collection via '.$mode,'updated_at'=>now()]);
-            $created=[];foreach($rows->values() as $i=>$row)$created[]=FeeInstallmentSchedule::create(['fee_demand_id'=>$demand->id,'fee_demand_item_id'=>$item->id,'installment_no'=>$i+1,'amount'=>$row['amount'],'due_date'=>$row['due_date'],'status'=>'ACTIVE','created_by'=>$request->user()->id])->toArray();
+            $scheduleTotal=max((float)$rows->sum(fn($row)=>(float)$row['amount']),0.01);
+            $created=[];foreach($rows->values() as $i=>$row)$created[]=FeeInstallmentSchedule::create(['fee_demand_id'=>$demand->id,'fee_demand_item_id'=>$item->id,'installment_no'=>$i+1,'amount'=>$row['amount'],'allocation_percentage'=>round(((float)$row['amount']/$scheduleTotal)*100,4),'source_mode'=>$mode,'due_date'=>$row['due_date'],'status'=>'ACTIVE','created_by'=>$request->user()->id])->toArray();
             DB::table('audit_logs')->insert(['actor_user_id'=>$request->user()->id,'event'=>$mode==='BULK'?'FEE_INSTALLMENT_BULK_SCHEDULE_SET':'FEE_INSTALLMENT_SCHEDULE_SET','resource_type'=>'fee_demand_item','resource_id'=>$item->id,'before'=>json_encode($before),'after'=>json_encode(['mode'=>$mode,'installments'=>$created]),'ip_address'=>$request->ip(),'created_at'=>now()]);
         });
     }

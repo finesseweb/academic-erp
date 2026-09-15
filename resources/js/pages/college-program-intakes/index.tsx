@@ -8,6 +8,7 @@ import {
     UsersRound,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -682,17 +683,18 @@ export default function CollegeProgramIntakes({
     disciplines,
     can,
 }: Props) {
-    const deleteAllocation = (
+    const appDialog = useAppDialog();
+    const deleteAllocation = async (
         intake: Intake,
         allocation: Allocation,
     ) => {
-        if (
-            !window.confirm(
-                'Remove this test/setup seat allocation? This is allowed only while the Intake is inactive.',
-            )
-        ) {
-            return;
-        }
+        const confirmed = await appDialog.confirm({
+            title: 'Remove seat allocation?',
+            description: 'Remove this test/setup seat allocation? This is allowed only while the Intake is inactive.',
+            confirmLabel: 'Remove allocation',
+            destructive: true,
+        });
+        if (!confirmed) return;
 
         router.delete(
             `/college/${college.id}/intakes/${intake.id}/allocations/${allocation.id}`,

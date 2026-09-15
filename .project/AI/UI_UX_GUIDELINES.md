@@ -43,12 +43,15 @@ Use one consistent icon family throughout the application. Prefer the icon set a
 
 Rules:
 - use icons to reinforce meaning, not decorate randomly
-- buttons with common actions should have appropriate icons when useful: Add, Edit, Delete, Save, Search, Filter, Export, Download, Upload, Refresh, View, More, Back, Close
+- user-facing action buttons on new pages and materially modified workflows must include an appropriate semantic icon wherever the action has a recognizable visual meaning; this is the default, not an optional polish step
+- common actions must use stable, consistent icons across modules: Add, Edit, Delete, Save, Search, Filter, Export, Download, Upload, Refresh, View/Expand, Back, Close, Approve, Reject, Reverse, Refund, Cancel and similar workflow actions
+- financially sensitive actions such as Refund, Payment Reversal and Adjustment Reversal must always pair visible text with an appropriate semantic icon; do not use ambiguous icon-only destructive/financial controls
 - success/warning/error/info messages must use matching semantic icons
 - sidebar module items must use stable icons and must not change icon meaning between pages
 - icon-only buttons require tooltip and accessible label
 - destructive icons/actions must use destructive semantic styling
-- icon size/alignment must be consistent
+- icon size/alignment must be consistent; standard action-button icons should normally use `size-4` unless the shared component specifies otherwise
+- prefer icon + visible text for primary workflow actions so the interface remains clear and premium without sacrificing accessibility
 - do not mix unrelated icon families unless formally approved
 
 ## 5. Loading Experience — Mandatory

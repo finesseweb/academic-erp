@@ -68,6 +68,12 @@ No AI agent or developer may violate this constitution without an explicit appro
 - Custom themes may define approved design tokens only. Raw CSS, HTML or JavaScript from theme creators is prohibited.
 - Theme changes must never bypass accessibility, authorization or tenant-scope rules.
 
+### Theme-Native Dialog Rule — Mandatory
+- Browser-native `window.prompt`, `window.confirm`, `window.alert` and equivalent bare browser dialogs are prohibited in ERP business UI.
+- User-facing prompt, confirmation and blocking alert interactions must use the reusable theme-native application dialog layer documented by ADR 191.
+- Destructive actions must use explicit destructive styling/action labels.
+- This is a standing rule for all future pages and workflows; do not reintroduce browser-native dialogs.
+
 
 ## Common Academic Approval Engine Constitution — Mandatory
 The ERP uses one reusable Academic Approval engine for approval-enabled academic and operational modules. Curriculum and Academic Policy are the first integrated subject types; future modules that require approval MUST integrate with this common engine instead of creating an isolated approval subsystem.
@@ -162,3 +168,6 @@ This includes Current Academic Session defaults, status/eligibility filtering, d
 All authentication entry/exit behavior MUST follow `.project/AI/AUTH_NAVIGATION_CONTRACT.md`.
 
 Successful logout must explicitly redirect to the named `login` route and must not rely on the application root/home route.
+
+## Semantic Action Icons — Mandatory UI Rule
+All new pages and materially modified ERP workflows MUST follow the semantic action-icon standard in `UI_UX_GUIDELINES.md` and ADR 192. Use Lucide React consistently. Recognizable user actions should use a stable meaningful icon with visible text where practical; Refund, Payment Reversal and Adjustment Reversal must always use icon + visible text. Do not introduce arbitrary icon families or text-only financial/destructive actions when an established semantic icon exists.

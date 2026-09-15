@@ -226,7 +226,7 @@ class FeeLedgerService
                 ->orderBy('p.payment_date')->orderBy('p.id')->orderBy('a.sequence_no')
                 ->get([
                     'a.id','a.fee_payment_id','a.fee_demand_id','a.fee_demand_item_id','a.fee_installment_schedule_id','a.fee_late_fine_charge_id',
-                    'a.source_type','a.due_date','a.amount','a.sequence_no','p.receipt_no','p.payment_date','p.payment_mode','p.reference_no','p.status as payment_status','p.reversed_at','p.reversal_reason',
+                    'a.source_type','a.due_date','a.amount','a.sequence_no','p.receipt_no','p.payment_date','p.created_at as payment_created_at','p.payment_mode','p.reference_no','p.status as payment_status','p.reversed_at','p.reversal_reason',
                     'di.fee_head_name','di.fee_head_code',
                 ]);
 
@@ -238,7 +238,7 @@ class FeeLedgerService
                 };
                 $entries->push($this->entry(
                     date: $this->dateOnly($allocation->payment_date),
-                    sortAt: $this->sortAt($allocation->payment_date, 40, $allocation->id, (int) $allocation->sequence_no),
+                    sortAt: $this->sortAtEvent($allocation->payment_date, $allocation->payment_created_at, 40, $allocation->id, (int) $allocation->sequence_no),
                     type: 'PAYMENT',
                     label: $source,
                     reference: $allocation->receipt_no,
@@ -259,7 +259,7 @@ class FeeLedgerService
                 ));
                 if ($allocation->payment_status === 'REVERSED' && $allocation->reversed_at) {
                     $entries->push($this->entry(
-                        date: $this->dateOnly($allocation->reversed_at), sortAt: $this->sortAt($allocation->reversed_at, 60, $allocation->id, (int)$allocation->sequence_no),
+                        date: $this->dateOnly($allocation->reversed_at), sortAt: $this->sortAtEvent($allocation->reversed_at, $allocation->reversed_at, 60, $allocation->id, (int)$allocation->sequence_no),
                         type: 'REVERSAL', label: 'Payment Reversal', reference: $allocation->receipt_no,
                         description: $allocation->fee_head_name.' · receipt reversed', debit: (float)$allocation->amount, credit: 0,
                         demandId: (int)$allocation->fee_demand_id, demandItemId: (int)$allocation->fee_demand_item_id, dueDate: $this->dateOnly($allocation->due_date),
@@ -271,13 +271,13 @@ class FeeLedgerService
             if (\Schema::hasTable('fee_adjustments')) {
                 $adjustments=DB::table('fee_adjustments as x')->join('fee_demand_items as di','di.id','=','x.fee_demand_item_id')->whereIn('x.fee_demand_id',$demandIds)->whereIn('x.status',['POSTED','REVERSED'])->orderBy('x.adjustment_date')->orderBy('x.id')->get(['x.*','di.fee_head_name','di.fee_head_code']);
                 foreach($adjustments as $x){
-                    $entries->push($this->entry(date:$this->dateOnly($x->adjustment_date),sortAt:$this->sortAt($x->adjustment_date,35,$x->id),type:'ADJUSTMENT',label:$x->direction==='CREDIT'?'Credit Adjustment':'Debit Adjustment',reference:$x->adjustment_no,description:$x->fee_head_name.' · '.$x->reason,debit:$x->direction==='DEBIT'?(float)$x->amount:0,credit:$x->direction==='CREDIT'?(float)$x->amount:0,demandId:(int)$x->fee_demand_id,demandItemId:(int)$x->fee_demand_item_id,dueDate:null,meta:['fee_head_code'=>$x->fee_head_code,'reason_code'=>$x->reason_code]));
-                    if($x->status==='REVERSED'&&$x->reversed_at)$entries->push($this->entry(date:$this->dateOnly($x->reversed_at),sortAt:$this->sortAt($x->reversed_at,60,$x->id),type:'REVERSAL',label:'Adjustment Reversal',reference:$x->adjustment_no,description:$x->fee_head_name.' · '.$x->reversal_reason,debit:$x->direction==='CREDIT'?(float)$x->amount:0,credit:$x->direction==='DEBIT'?(float)$x->amount:0,demandId:(int)$x->fee_demand_id,demandItemId:(int)$x->fee_demand_item_id,dueDate:null,meta:['fee_head_code'=>$x->fee_head_code]));
+                    $entries->push($this->entry(date:$this->dateOnly($x->adjustment_date),sortAt:$this->sortAtEvent($x->adjustment_date,$x->created_at,35,$x->id),type:'ADJUSTMENT',label:$x->direction==='CREDIT'?'Credit Adjustment':'Debit Adjustment',reference:$x->adjustment_no,description:$x->fee_head_name.' · '.$x->reason,debit:$x->direction==='DEBIT'?(float)$x->amount:0,credit:$x->direction==='CREDIT'?(float)$x->amount:0,demandId:(int)$x->fee_demand_id,demandItemId:(int)$x->fee_demand_item_id,dueDate:null,meta:['fee_head_code'=>$x->fee_head_code,'reason_code'=>$x->reason_code]));
+                    if($x->status==='REVERSED'&&$x->reversed_at)$entries->push($this->entry(date:$this->dateOnly($x->reversed_at),sortAt:$this->sortAtEvent($x->reversed_at,$x->reversed_at,60,$x->id),type:'REVERSAL',label:'Adjustment Reversal',reference:$x->adjustment_no,description:$x->fee_head_name.' · '.$x->reversal_reason,debit:$x->direction==='CREDIT'?(float)$x->amount:0,credit:$x->direction==='DEBIT'?(float)$x->amount:0,demandId:(int)$x->fee_demand_id,demandItemId:(int)$x->fee_demand_item_id,dueDate:null,meta:['fee_head_code'=>$x->fee_head_code]));
                 }
             }
             if (\Schema::hasTable('fee_payment_refunds')) {
-                $refunds=DB::table('fee_payment_refund_allocations as ra')->join('fee_payment_refunds as r','r.id','=','ra.fee_payment_refund_id')->join('fee_payment_allocations as a','a.id','=','ra.fee_payment_allocation_id')->join('fee_demand_items as di','di.id','=','ra.fee_demand_item_id')->join('fee_payments as p','p.id','=','r.fee_payment_id')->whereIn('ra.fee_demand_id',$demandIds)->where('r.status','POSTED')->orderBy('r.refund_date')->orderBy('r.id')->orderBy('ra.sequence_no')->get(['ra.*','r.refund_no','r.refund_date','r.refund_mode','r.reference_no as refund_reference','r.reason','p.receipt_no','a.source_type','di.fee_head_name','di.fee_head_code']);
-                foreach($refunds as $r)$entries->push($this->entry(date:$this->dateOnly($r->refund_date),sortAt:$this->sortAt($r->refund_date,55,$r->id,(int)$r->sequence_no),type:'REFUND',label:'Payment Refund',reference:$r->refund_no,description:$r->fee_head_name.' · against '.$r->receipt_no,debit:(float)$r->amount,credit:0,demandId:(int)$r->fee_demand_id,demandItemId:(int)$r->fee_demand_item_id,dueDate:null,meta:['fee_head_code'=>$r->fee_head_code,'refund_mode'=>$r->refund_mode,'refund_reference'=>$r->refund_reference,'reason'=>$r->reason]));
+                $refunds=DB::table('fee_payment_refund_allocations as ra')->join('fee_payment_refunds as r','r.id','=','ra.fee_payment_refund_id')->join('fee_payment_allocations as a','a.id','=','ra.fee_payment_allocation_id')->join('fee_demand_items as di','di.id','=','ra.fee_demand_item_id')->join('fee_payments as p','p.id','=','r.fee_payment_id')->whereIn('ra.fee_demand_id',$demandIds)->where('r.status','POSTED')->orderBy('r.refund_date')->orderBy('r.id')->orderBy('ra.sequence_no')->get(['ra.*','r.refund_no','r.refund_date','r.created_at as refund_created_at','r.refund_mode','r.reference_no as refund_reference','r.reason','p.receipt_no','a.source_type','di.fee_head_name','di.fee_head_code']);
+                foreach($refunds as $r)$entries->push($this->entry(date:$this->dateOnly($r->refund_date),sortAt:$this->sortAtEvent($r->refund_date,$r->refund_created_at,55,$r->id,(int)$r->sequence_no),type:'REFUND',label:'Payment Refund',reference:$r->refund_no,description:$r->fee_head_name.' · against '.$r->receipt_no,debit:(float)$r->amount,credit:0,demandId:(int)$r->fee_demand_id,demandItemId:(int)$r->fee_demand_item_id,dueDate:null,meta:['fee_head_code'=>$r->fee_head_code,'refund_mode'=>$r->refund_mode,'refund_reference'=>$r->refund_reference,'reason'=>$r->reason]));
             }
         }
 
@@ -374,6 +374,28 @@ class FeeLedgerService
     {
         if ($value === null || $value === '') return now()->toDateString();
         return substr((string) $value, 0, 10);
+    }
+
+    /**
+     * Build a deterministic ledger sort key for transactions whose business date
+     * may contain no time component. The event timestamp preserves the real
+     * posting sequence for multiple adjustments/payments/refunds/reversals on
+     * the same calendar date. Priority/id/sequence remain stable fallbacks.
+     */
+    private function sortAtEvent(mixed $businessDate, mixed $eventAt, int $priority, int $id, int $sequence = 0): string
+    {
+        $date = $this->dateOnly($businessDate);
+        $time = '12:00:00.000000';
+
+        if ($eventAt !== null && $eventAt !== '') {
+            try {
+                $time = \Illuminate\Support\Carbon::parse($eventAt)->format('H:i:s.u');
+            } catch (\Throwable) {
+                // Keep the deterministic noon fallback for legacy/incomplete rows.
+            }
+        }
+
+        return $date.'|'.$time.'|'.str_pad((string) $priority, 3, '0', STR_PAD_LEFT).'|'.str_pad((string) $id, 12, '0', STR_PAD_LEFT).'|'.str_pad((string) $sequence, 5, '0', STR_PAD_LEFT);
     }
 
     private function sortAt(mixed $value, int $priority, int $id, int $sequence = 0): string

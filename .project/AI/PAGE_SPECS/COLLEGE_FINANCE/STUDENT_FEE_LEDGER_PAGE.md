@@ -84,3 +84,11 @@ Entry columns:
 
 ## Deferred
 Adjustment/Reversal/Refund, Fee Clearance, ledger export/print and Student Portal fee statement.
+
+## Same-day chronology contract — 2026-09-14 QA hardening
+- The displayed ledger date is the transaction's authoritative business/effective date.
+- When multiple transactions share that date, the ledger MUST preserve their real posting lifecycle order so each row's Running Balance represents the balance immediately after that event.
+- For date-only Adjustment, Payment and Refund business dates, use the persisted posting `created_at` timestamp as the same-day ordering tie-breaker.
+- Reversal events use their persisted `reversed_at` timestamp.
+- Stable priority / record ID / allocation sequence may be used only as deterministic fallback/tie-breakers; transaction type priority must not reorder genuinely posted same-day events.
+- Example: CREDIT Adjustment -> its Reversal -> later DEBIT Adjustment on one date must calculate/display balances in that same lifecycle sequence.

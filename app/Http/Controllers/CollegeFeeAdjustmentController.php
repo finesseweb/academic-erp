@@ -64,6 +64,10 @@ class CollegeFeeAdjustmentController extends Controller
             ])
             ->where('college_id', $college->id)
             ->where('status', '!=', 'CANCELLED')
+            // ADR 190 QA: manual adjustments are only offered against a demand that
+            // still has liability. Fully settled demands remain available in the
+            // separate receipt Reversal / Refund register.
+            ->where('outstanding_amount', '>', 0)
             ->when($sessionId > 0, fn ($query) => $query->where('academic_session_id', $sessionId))
             ->when($offeringId > 0, fn ($query) => $query->where('college_program_offering_id', $offeringId))
             ->when($q !== '', function ($query) use ($q) {
@@ -79,7 +83,24 @@ class CollegeFeeAdjustmentController extends Controller
             ->orderByDesc('id')
             ->limit(100)
             ->get()
-            ->map(fn ($demand) => [
+            ->map(function ($demand) {
+                $eligibleItems = $demand->items
+                    ->map(function ($item) {
+                        $open = $this->itemAdjustableOpen((int) $item->id);
+
+                        return [
+                            'id' => $item->id,
+                            'fee_head_name' => $item->fee_head_name,
+                            'fee_head_code' => $item->fee_head_code,
+                            'amount' => $item->amount,
+                            'is_refundable' => (bool) $item->is_refundable,
+                            'adjustable_outstanding' => number_format($open, 2, '.', ''),
+                        ];
+                    })
+                    ->filter(fn ($item) => (float) $item['adjustable_outstanding'] > 0)
+                    ->values();
+
+                return [
                 'id' => $demand->id,
                 'demand_no' => $demand->demand_no,
                 'admission_no' => $demand->admission?->admission_no,
@@ -90,14 +111,13 @@ class CollegeFeeAdjustmentController extends Controller
                 'paid_amount' => $demand->paid_amount,
                 'adjusted_amount' => $demand->adjusted_amount,
                 'outstanding_amount' => $demand->outstanding_amount,
-                'items' => $demand->items->map(fn ($item) => [
-                    'id' => $item->id,
-                    'fee_head_name' => $item->fee_head_name,
-                    'fee_head_code' => $item->fee_head_code,
-                    'amount' => $item->amount,
-                    'is_refundable' => (bool) $item->is_refundable,
-                ])->values(),
-            ]);
+                'items' => $eligibleItems,
+            ];
+            })
+            // Defensive: a demand with no remaining adjustable Fee Head should not
+            // be selectable even if a stale aggregate outstanding value exists.
+            ->filter(fn ($demand) => $demand['items']->isNotEmpty())
+            ->values();
 
         /*
          * ADR 190 UI scalability follow-up:
@@ -273,13 +293,28 @@ class CollegeFeeAdjustmentController extends Controller
         $data = $request->validate([
             'demand_id' => ['required', 'integer', Rule::exists('fee_demands', 'id')->where(fn ($query) => $query->where('college_id', $college->id)->where('status', '!=', 'CANCELLED'))],
             'fee_demand_item_id' => ['required', 'integer'],
-            'adjustment_date' => ['required', 'date'],
+            'adjustment_date' => ['required', 'date', 'before_or_equal:today'],
             'direction' => ['required', Rule::in(['CREDIT', 'DEBIT'])],
             'amount' => ['required', 'numeric', 'gt:0'],
             'reason_code' => ['required', Rule::in(['CORRECTION', 'ROUNDING', 'APPROVED_RELIEF', 'OTHER'])],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
         ]);
-        $adjustment = $service->postAdjustment($college, FeeDemand::findOrFail($data['demand_id']), $data, $request->user()->id, $request->ip());
+        $demand = FeeDemand::query()
+            ->whereKey($data['demand_id'])
+            ->where('college_id', $college->id)
+            ->where('status', '!=', 'CANCELLED')
+            ->where('outstanding_amount', '>', 0)
+            ->first();
+
+        if (! $demand) {
+            return back()->withErrors(['demand_id' => 'Only Fee Demands with an outstanding balance can be adjusted.']);
+        }
+
+        if ($this->itemAdjustableOpen((int) $data['fee_demand_item_id']) <= 0) {
+            return back()->withErrors(['fee_demand_item_id' => 'This Fee Head has no remaining adjustable liability.']);
+        }
+
+        $adjustment = $service->postAdjustment($college, $demand, $data, $request->user()->id, $request->ip());
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Adjustment posted: '.$adjustment->adjustment_no]);
     }
@@ -315,6 +350,42 @@ class CollegeFeeAdjustmentController extends Controller
         $refund = $service->refundPayment($college, $payment, $data, $request->user()->id, $request->ip());
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Refund posted: '.$refund->refund_no]);
+    }
+
+    /**
+     * Current principal liability for one Fee Demand Item.
+     * Mirrors the authoritative ADR 190 service calculation so the selector never
+     * offers a Fee Head that cannot legally receive a manual adjustment.
+     */
+    private function itemAdjustableOpen(int $itemId): float
+    {
+        $item = DB::table('fee_demand_items')->where('id', $itemId)->first();
+        if (! $item) {
+            return 0;
+        }
+
+        $benefit = (float) DB::table('fee_student_benefit_items as benefit_item')
+            ->join('fee_student_benefits as benefit', 'benefit.id', '=', 'benefit_item.fee_student_benefit_id')
+            ->where('benefit_item.fee_demand_item_id', $itemId)
+            ->where('benefit.status', 'APPROVED')
+            ->sum('benefit_item.sanctioned_amount');
+        $credit = (float) DB::table('fee_adjustments')->where('fee_demand_item_id', $itemId)->where('status', 'POSTED')->where('direction', 'CREDIT')->sum('amount');
+        $debit = (float) DB::table('fee_adjustments')->where('fee_demand_item_id', $itemId)->where('status', 'POSTED')->where('direction', 'DEBIT')->sum('amount');
+        $paid = (float) DB::table('fee_payment_allocations as allocation')
+            ->join('fee_payments as payment', 'payment.id', '=', 'allocation.fee_payment_id')
+            ->where('allocation.fee_demand_item_id', $itemId)
+            ->where('payment.status', 'POSTED')
+            ->whereIn('allocation.source_type', ['DEMAND_ITEM', 'INSTALLMENT'])
+            ->sum('allocation.amount');
+        $refunded = (float) DB::table('fee_payment_refund_allocations as refund_allocation')
+            ->join('fee_payment_refunds as refund', 'refund.id', '=', 'refund_allocation.fee_payment_refund_id')
+            ->join('fee_payment_allocations as allocation', 'allocation.id', '=', 'refund_allocation.fee_payment_allocation_id')
+            ->where('refund_allocation.fee_demand_item_id', $itemId)
+            ->where('refund.status', 'POSTED')
+            ->whereIn('allocation.source_type', ['DEMAND_ITEM', 'INSTALLMENT'])
+            ->sum('refund_allocation.amount');
+
+        return max(round((float) $item->amount + $debit - $benefit - $credit - $paid + $refunded, 2), 0);
     }
 
     private function auth(Request $request, College $college, string $permission): void

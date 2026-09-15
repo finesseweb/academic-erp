@@ -1,5 +1,6 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
+import { useAppDialog } from '@/components/app-dialog-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +31,7 @@ const apiPost=async(url:string,body:Record<string,unknown>)=>{
 const loadScript=(src:string)=>new Promise<void>((resolve,reject)=>{if(document.querySelector(`script[src="${src}"]`)){resolve();return;}const el=document.createElement('script');el.src=src;el.async=true;el.onload=()=>resolve();el.onerror=()=>reject(new Error('Payment checkout script could not be loaded.'));document.body.appendChild(el);});
 
 function CollectDialog({collegeId,demand,studentName,canCollect}:{collegeId:number;demand:Demand;studentName:string;canCollect:boolean}){
+ const appDialog=useAppDialog();
  const [open,setOpen]=useState(false); const [includeOptional,setIncludeOptional]=useState(false); const [includeFine,setIncludeFine]=useState(true); const [includeFuture,setIncludeFuture]=useState(false); const [onlineProcessing,setOnlineProcessing]=useState(false); const [onlineError,setOnlineError]=useState('');
  const form=useForm({demand_id:String(demand.id),amount:demand.collectable_default,payment_date:new Date().toISOString().slice(0,10),payment_mode:'CASH',reference_no:'',include_optional:false,include_late_fine:true,include_future:false,notes:''});
  const principalAvailable=useMemo(()=>demand.due_groups.filter(g=>includeFuture||g.due_date<=form.data.payment_date).reduce((sum,g)=>sum+Number(g.mandatory_due)+(includeOptional?Number(g.optional_due):0),0),[demand,includeFuture,includeOptional,form.data.payment_date]);
@@ -50,7 +52,7 @@ function CollectDialog({collegeId,demand,studentName,canCollect}:{collegeId:numb
     await loadScript('https://checkout.razorpay.com/v1/checkout.js');
     const Razorpay=(window as any).Razorpay;if(!Razorpay)throw new Error('Razorpay Checkout did not load.');
     const instance=new Razorpay({...started.checkout,handler:async(response:any)=>{
-      try{const verified=await apiPost(`/college/${collegeId}/fee-payments/online/razorpay/verify`,{transaction_id:started.transaction_id,...response});setOpen(false);router.reload({only:['students','payments']});window.setTimeout(()=>alert(`Payment posted. Receipt ${verified.receipt_no}`),50);}catch(e){setOnlineError(e instanceof Error?e.message:String(e));}finally{setOnlineProcessing(false);}
+      try{const verified=await apiPost(`/college/${collegeId}/fee-payments/online/razorpay/verify`,{transaction_id:started.transaction_id,...response});setOpen(false);router.reload({only:['students','payments']});window.setTimeout(()=>void appDialog.alert({title:'Payment posted',description:`Receipt ${verified.receipt_no}`}),50);}catch(e){setOnlineError(e instanceof Error?e.message:String(e));}finally{setOnlineProcessing(false);}
     },modal:{ondismiss:()=>setOnlineProcessing(false)}});
     instance.open();return;
    }
@@ -58,7 +60,7 @@ function CollectDialog({collegeId,demand,studentName,canCollect}:{collegeId:numb
     await loadScript('https://sdk.cashfree.com/js/v3/cashfree.js');
     const factory=(window as any).Cashfree;if(!factory)throw new Error('Cashfree Checkout did not load.');
     const cashfree=factory({mode:'sandbox'});await cashfree.checkout({paymentSessionId:started.checkout.payment_session_id,redirectTarget:'_modal'});
-    const verified=await apiPost(`/college/${collegeId}/fee-payments/online/cashfree/verify`,{transaction_id:started.transaction_id});setOpen(false);router.reload({only:['students','payments']});window.setTimeout(()=>alert(`Payment posted. Receipt ${verified.receipt_no}`),50);return;
+    const verified=await apiPost(`/college/${collegeId}/fee-payments/online/cashfree/verify`,{transaction_id:started.transaction_id});setOpen(false);router.reload({only:['students','payments']});window.setTimeout(()=>void appDialog.alert({title:'Payment posted',description:`Receipt ${verified.receipt_no}`}),50);return;
    }
    if(started.provider==='PAYU'){
     const payuForm=document.createElement('form');payuForm.method='POST';payuForm.action=started.checkout.action;

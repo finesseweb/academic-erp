@@ -1994,13 +1994,22 @@ class TestDataCleanupService
             ->leftJoin('colleges as c', 'c.id', '=', 'opt.college_id')
             ->leftJoin('college_payment_gateways as cpg', 'cpg.id', '=', 'opt.college_payment_gateway_id')
             ->where('opt.university_id', $universityId)
-            ->whereIn('opt.purpose', ['CREDENTIAL_TEST_ORDER', 'CREDENTIAL_TEST_API'])
+            ->where(function ($query) {
+                $query->whereIn('opt.purpose', ['CREDENTIAL_TEST_ORDER', 'CREDENTIAL_TEST_API'])
+                    ->orWhere(function ($feePaymentQuery) {
+                        $feePaymentQuery->where('opt.purpose', 'FEE_PAYMENT')
+                            ->where('opt.environment', 'TEST')
+                            ->whereNull('opt.fee_payment_id');
+                    });
+            })
             ->orderByDesc('opt.id')
             ->get([
                 'opt.id',
                 'opt.reference_no',
                 'opt.provider',
                 'opt.environment',
+                'opt.purpose',
+                'opt.fee_demand_id',
                 'opt.amount',
                 'opt.currency',
                 'opt.provider_order_id',
@@ -2012,10 +2021,12 @@ class TestDataCleanupService
             ->map(fn ($row) => [
                 'id' => (int) $row->id,
                 'code' => (string) $row->reference_no,
-                'name' => trim(($row->gateway_name ?: $row->provider).' · '.($row->college_name ?: 'College').' · '.number_format((float) $row->amount, 2).' '.($row->currency ?: 'INR')),
+                'name' => trim(($row->purpose === 'FEE_PAYMENT' ? 'Online Fee Payment · ' : '').($row->gateway_name ?: $row->provider).' · '.($row->college_name ?: 'College').' · '.number_format((float) $row->amount, 2).' '.($row->currency ?: 'INR')),
                 'status' => $row->status,
                 'kind' => 'GATEWAY_TEST_ORDER',
                 'dependencies' => [
+                    'purpose' => $row->purpose,
+                    'fee_demand_id' => $row->fee_demand_id ? (int) $row->fee_demand_id : null,
                     'provider' => $row->provider,
                     'environment' => $row->environment,
                     'provider_order_id' => $row->provider_order_id,
@@ -2041,7 +2052,14 @@ class TestDataCleanupService
             $transaction = DB::table('online_payment_transactions')
                 ->where('id', $id)
                 ->where('university_id', $universityId)
-                ->whereIn('purpose', ['CREDENTIAL_TEST_ORDER', 'CREDENTIAL_TEST_API'])
+                ->where(function ($query) {
+                    $query->whereIn('purpose', ['CREDENTIAL_TEST_ORDER', 'CREDENTIAL_TEST_API'])
+                        ->orWhere(function ($feePaymentQuery) {
+                            $feePaymentQuery->where('purpose', 'FEE_PAYMENT')
+                                ->where('environment', 'TEST')
+                                ->whereNull('fee_payment_id');
+                        });
+                })
                 ->lockForUpdate()
                 ->first();
 
@@ -2109,12 +2127,12 @@ class TestDataCleanupService
             ->join('colleges as c','c.id','=','p.college_id')
             ->join('admissions as ad','ad.id','=','p.admission_id')
             ->leftJoin('college_admission_applications as a','a.id','=','ad.college_admission_application_id')
-            ->where('p.university_id',$universityId)->where('p.status','POSTED')->orderByDesc('p.id')
-            ->get(['p.id','p.receipt_no','p.payment_date','p.amount','p.payment_mode','p.reference_no','c.name as college_name','ad.admission_no','a.candidate_name'])
+            ->where('p.university_id',$universityId)->whereIn('p.status',['POSTED','REVERSED'])->orderByDesc('p.id')
+            ->get(['p.id','p.receipt_no','p.payment_date','p.amount','p.payment_mode','p.reference_no','p.status','c.name as college_name','ad.admission_no','a.candidate_name'])
             ->map(function($r){
                 $alloc=$this->countIfExists('fee_payment_allocations','fee_payment_id',(int)$r->id);
                 return ['id'=>(int)$r->id,'code'=>$r->receipt_no,'name'=>($r->candidate_name?:$r->admission_no).' · '.$r->college_name.' · '.number_format((float)$r->amount,2),
-                    'status'=>'POSTED','kind'=>'FEE_PAYMENT','dependencies'=>['allocations'=>$alloc,'mode'=>$r->payment_mode],
+                    'status'=>$r->status,'kind'=>'FEE_PAYMENT','dependencies'=>['allocations'=>$alloc,'mode'=>$r->payment_mode],
                     'blocked'=>false,'blocking_references'=>[]];
             })->values()->all();
     }
@@ -2123,15 +2141,21 @@ class TestDataCleanupService
     {
         if (! Schema::hasTable('fee_payments')) abort(404);
         return DB::transaction(function() use($id,$universityId,$actorId){
-            $payment=DB::table('fee_payments')->where('id',$id)->where('university_id',$universityId)->where('status','POSTED')->lockForUpdate()->first();
+            $payment=DB::table('fee_payments')->where('id',$id)->where('university_id',$universityId)->whereIn('status',['POSTED','REVERSED'])->lockForUpdate()->first();
             if(!$payment) abort(404);
             if(Schema::hasTable('fee_payment_refunds') && DB::table('fee_payment_refunds')->where('fee_payment_id',$payment->id)->exists()) throw ValidationException::withMessages(['payment'=>'Clean the linked test refund first, then clean this payment.']);
             $allocations=DB::table('fee_payment_allocations')->where('fee_payment_id',$payment->id)->orderBy('sequence_no')->lockForUpdate()->get();
             $demandIds=$allocations->pluck('fee_demand_id')->unique()->values();
-            foreach($allocations->where('source_type','INSTALLMENT') as $a){
-                if($a->fee_installment_schedule_id){
-                    $schedule=DB::table('fee_installment_schedules')->where('id',$a->fee_installment_schedule_id)->lockForUpdate()->first();
-                    if($schedule) DB::table('fee_installment_schedules')->where('id',$schedule->id)->update(['paid_amount'=>max(0,round((float)$schedule->paid_amount-(float)$a->amount,2)),'updated_at'=>now()]);
+            // A POSTED receipt still contributes to installment paid_amount, so permanent
+            // test cleanup must remove that contribution. A REVERSED receipt has already had
+            // its installment paid_amount restored by the controlled reversal workflow; doing
+            // it again here would double-decrement the schedule.
+            if ($payment->status === 'POSTED') {
+                foreach($allocations->where('source_type','INSTALLMENT') as $a){
+                    if($a->fee_installment_schedule_id){
+                        $schedule=DB::table('fee_installment_schedules')->where('id',$a->fee_installment_schedule_id)->lockForUpdate()->first();
+                        if($schedule) DB::table('fee_installment_schedules')->where('id',$schedule->id)->update(['paid_amount'=>max(0,round((float)$schedule->paid_amount-(float)$a->amount,2)),'updated_at'=>now()]);
+                    }
                 }
             }
             $onlineTransactions = Schema::hasTable('online_payment_transactions')
@@ -2368,6 +2392,7 @@ class TestDataCleanupService
             ['fee_late_fine_charges', 'fee_demand_id'],
             ['fee_installment_schedules', 'fee_demand_id'],
             ['fee_refunds', 'fee_demand_id'],
+            ['online_payment_transactions', 'fee_demand_id'],
         ] as [$table, $column]) {
             $financialRefs = array_merge($financialRefs, $this->downstreamReferences($record->id, [[$table, $column]]));
         }
@@ -2382,7 +2407,7 @@ class TestDataCleanupService
 
         if (count($financialRefs) > 0) {
             throw ValidationException::withMessages([
-                'record' => 'This Fee Demand has payment/adjustment or downstream financial activity and cannot be removed by Test Data Cleanup. Reverse/clean the dependent financial test records first.',
+                'record' => 'This Fee Demand still has dependent financial test records. Clean Refunds/Adjustments/Payments first and, if shown, clean the linked TEST online payment transaction under Gateway Test Orders before deleting this demand.',
             ]);
         }
 

@@ -36,7 +36,7 @@ class FeeAdjustmentRefundService
             ]);
             $this->installments->rebalanceForGenericAdjustment((int)$item->id,$actorId,$ip);
             $this->recalculateDemand($locked->id);
-            $this->audit($actorId,'FEE_ADJUSTMENT_POSTED','fee_adjustment',$adj->id,['adjustment_no'=>$adj->adjustment_no,'direction'=>$direction,'amount'=>$amount],$ip);
+            $this->audit($college,$actorId,'FEE_ADJUSTMENT_POSTED','fee_adjustment',$adj->id,['adjustment_no'=>$adj->adjustment_no,'direction'=>$direction,'amount'=>$amount],$ip);
             return $adj;
         });
     }
@@ -44,13 +44,13 @@ class FeeAdjustmentRefundService
     public function reverseAdjustment(College $college, FeeAdjustment $adjustment, string $reason, int $actorId, ?string $ip=null): FeeAdjustment
     {
         abort_unless((int)$adjustment->college_id===(int)$college->id,404);
-        return DB::transaction(function() use($adjustment,$reason,$actorId,$ip){
+        return DB::transaction(function() use($college,$adjustment,$reason,$actorId,$ip){
             $locked=FeeAdjustment::query()->whereKey($adjustment->id)->lockForUpdate()->firstOrFail();
             if($locked->status!=='POSTED') throw ValidationException::withMessages(['adjustment'=>'Only a POSTED adjustment can be reversed.']);
             $locked->update(['status'=>'REVERSED','reversed_at'=>now(),'reversed_by'=>$actorId,'reversal_reason'=>trim($reason)]);
             $this->installments->rebalanceForGenericAdjustment((int)$locked->fee_demand_item_id,$actorId,$ip);
             $this->recalculateDemand((int)$locked->fee_demand_id);
-            $this->audit($actorId,'FEE_ADJUSTMENT_REVERSED','fee_adjustment',$locked->id,['reason'=>$reason],$ip);
+            $this->audit($college,$actorId,'FEE_ADJUSTMENT_REVERSED','fee_adjustment',$locked->id,['adjustment_no'=>$locked->adjustment_no,'direction'=>$locked->direction,'amount'=>$locked->amount,'reason'=>trim($reason)],$ip);
             return $locked->fresh();
         });
     }
@@ -58,7 +58,7 @@ class FeeAdjustmentRefundService
     public function reversePayment(College $college, FeePayment $payment, string $reason, int $actorId, ?string $ip=null): FeePayment
     {
         abort_unless((int)$payment->college_id===(int)$college->id,404);
-        return DB::transaction(function() use($payment,$reason,$actorId,$ip){
+        return DB::transaction(function() use($college,$payment,$reason,$actorId,$ip){
             $locked=FeePayment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
             if($locked->status!=='POSTED') throw ValidationException::withMessages(['payment'=>'Only a POSTED payment can be reversed.']);
             if(DB::table('fee_payment_refunds')->where('fee_payment_id',$locked->id)->where('status','POSTED')->exists())
@@ -68,7 +68,7 @@ class FeeAdjustmentRefundService
                 DB::table('fee_installment_schedules')->where('id',$a->fee_installment_schedule_id)->decrement('paid_amount',(float)$a->amount,['updated_at'=>now()]);
             $locked->update(['status'=>'REVERSED','reversed_at'=>now(),'reversed_by'=>$actorId,'reversal_reason'=>trim($reason)]);
             foreach($allocs->pluck('fee_demand_id')->unique() as $id) $this->recalculateDemand((int)$id);
-            $this->audit($actorId,'FEE_PAYMENT_REVERSED','fee_payment',$locked->id,['receipt_no'=>$locked->receipt_no,'amount'=>$locked->amount,'reason'=>$reason],$ip);
+            $this->audit($college,$actorId,'FEE_PAYMENT_REVERSED','fee_payment',$locked->id,['receipt_no'=>$locked->receipt_no,'amount'=>$locked->amount,'reason'=>trim($reason)],$ip);
             return $locked->fresh();
         });
     }
@@ -84,8 +84,10 @@ class FeeAdjustmentRefundService
                 ->where('a.fee_payment_id',$locked->id)->where('i.is_refundable',1)->orderByDesc('a.sequence_no')->lockForUpdate()
                 ->get(['a.*','i.is_refundable']);
             $already=DB::table('fee_payment_refund_allocations as ra')->join('fee_payment_refunds as r','r.id','=','ra.fee_payment_refund_id')
-                ->where('r.fee_payment_id',$locked->id)->where('r.status','POSTED')->groupBy('ra.fee_payment_allocation_id')
-                ->pluck(DB::raw('SUM(ra.amount)'),'ra.fee_payment_allocation_id');
+                ->where('r.fee_payment_id',$locked->id)->where('r.status','POSTED')
+                ->groupBy('ra.fee_payment_allocation_id')
+                ->selectRaw('ra.fee_payment_allocation_id, SUM(ra.amount) AS refunded_amount')
+                ->pluck('refunded_amount','ra.fee_payment_allocation_id');
             $available=round((float)$allocs->sum(fn($a)=>max((float)$a->amount-(float)($already[$a->id]??0),0)),2);
             if($amount>$available+0.009) throw ValidationException::withMessages(['amount'=>'Refund exceeds refundable paid balance of '.number_format($available,2,'.','').'. Non-refundable Fee Heads are excluded.']);
             $refund=FeePaymentRefund::create([
@@ -105,7 +107,11 @@ class FeeAdjustmentRefundService
             }
             if($remaining>0.009) throw ValidationException::withMessages(['amount'=>'Refund could not be fully allocated. Nothing was posted.']);
             foreach(array_unique($demandIds) as $id)$this->recalculateDemand($id);
-            $this->audit($actorId,'FEE_PAYMENT_REFUNDED','fee_payment_refund',$refund->id,['refund_no'=>$refund->refund_no,'receipt_no'=>$locked->receipt_no,'amount'=>$amount],$ip);
+            $this->audit($college,$actorId,'FEE_PAYMENT_REFUNDED','fee_payment_refund',$refund->id,[
+                'refund_no'=>$refund->refund_no,'fee_payment_id'=>$locked->id,'receipt_no'=>$locked->receipt_no,
+                'amount'=>$amount,'refund_mode'=>$refund->refund_mode,'reference_no'=>$refund->reference_no,'reason'=>$refund->reason,
+                'refundable_balance_before'=>$available,'refundable_balance_after'=>round($available-$amount,2),
+            ],$ip);
             return $refund->fresh('allocations');
         });
     }
@@ -135,5 +141,5 @@ class FeeAdjustmentRefundService
         return max(round((float)$item->amount+$debit-$benefit-$credit-$paid+$refund,2),0);
     }
     private function nextNo(string $prefix,int $collegeId,string $table,string $column): string { $base=$prefix.'-'.str_pad((string)$collegeId,4,'0',STR_PAD_LEFT).'-'.now()->format('Ymd').'-';$last=DB::table($table)->where($column,'like',$base.'%')->lockForUpdate()->orderByDesc('id')->value($column);$n=$last?(int)substr($last,-5)+1:1;return $base.str_pad((string)$n,5,'0',STR_PAD_LEFT); }
-    private function audit(int $actor,string $event,string $type,int $id,array $after,?string $ip): void { DB::table('audit_logs')->insert(['actor_user_id'=>$actor,'event'=>$event,'resource_type'=>$type,'resource_id'=>$id,'before'=>null,'after'=>json_encode($after),'ip_address'=>$ip,'created_at'=>now()]); }
+    private function audit(College $college,int $actor,string $event,string $type,int $id,array $after,?string $ip): void { DB::table('audit_logs')->insert(['actor_user_id'=>$actor,'event'=>$event,'resource_type'=>$type,'resource_id'=>$id,'scope_type'=>'COLLEGE','scope_reference'=>'college:'.$college->id,'before'=>null,'after'=>json_encode($after),'ip_address'=>$ip,'created_at'=>now()]); }
 }

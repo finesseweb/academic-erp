@@ -48,6 +48,7 @@ Do not introduce a global state library without a real cross-application need.
 ## Design System
 Mandatory: read and follow `UI_UX_GUIDELINES.md` and `THEMING/THEME_SYSTEM.md` before UI implementation.
 Use shared components, semantic tokens and a single icon system.
+Semantic action icons are mandatory on new pages and materially modified workflows wherever the action has a recognizable visual meaning; follow `UI_UX_GUIDELINES.md` for stable icon/action mappings.
 Professional loading, skeleton, toast/message, dialog, error and empty states are mandatory.
 
 ## Page Consistency

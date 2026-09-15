@@ -68,3 +68,9 @@ REST only.
 - An installment schedule redistributes the remaining item amount into auditable installment amounts/due dates; it does not change the academic period or source liability.
 - Benefit approval may proportionally reconcile untouched installment schedules under the documented adjustment policy.
 - Implemented status: demand-item installment execution is `IMPLEMENTED / OWNER_QA_REQUIRED`; reusable plan/version/rescheduling features in the earlier specification remain future scope.
+
+## Stable allocation + paid-floor invariant — QA hardened 2026-09-14
+New schedules persist their original allocation percentage and source mode. Later benefit/adjustment rebalancing should use that stable distribution as the proportional basis. Rebalancing must always satisfy both invariants: schedule total = current Fee Head net liability, and each installment amount >= already-paid amount. If a proportional share breaches a paid floor, fix that installment at its paid amount and redistribute the remaining liability across the remaining schedule rows.
+
+## Stable allocation basis
+The schedule's original installment proportions are persistent business data. Adjustment and reversal workflows may change the effective installment amounts, but they must always recalculate from the original proportions and never from previously adjusted amounts. Paid principal is an immutable floor. A passed due date does not remove an installment or move its liability; it only makes the remaining balance overdue.

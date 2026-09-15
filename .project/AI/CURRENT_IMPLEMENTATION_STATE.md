@@ -938,5 +938,124 @@ The next Fees Phase milestone after Payment Collection/online-payment foundation
 ### Next Fees Phase implementation after owner QA
 Generic Adjustment / Reversal / Refund, while ADR 188 webhook/public-HTTPS QA remains a separate prerequisite before LIVE online checkout.
 
-## ADR 190 — Generic Adjustment / Payment Reversal / Refund — IMPLEMENTED / OWNER QA REQUIRED — 2026-09-12
+## ADR 190 — Generic Adjustment / Payment Reversal / Refund — IMPLEMENTED / OWNER QA PASS / CLOSED — 2026-09-15
 The frozen Fee Phase correction workflow is implemented under Fee Management → Adjustments / Refunds. Manual CREDIT/DEBIT adjustments are item-scoped and auditable; complete receipt reversal restores original allocations without deleting history; partial/full refunds allocate only against originally refundable paid Fee Demand Item snapshots. Student Fee Ledger now emits the corresponding adjustment/reversal/refund history. New persistence: `fee_adjustments`, `fee_payment_refunds`, `fee_payment_refund_allocations`. New RBAC: `college_fee_adjustment.view/post/reverse`, `college_fee_refund.post`. Test Data Cleanup exposes Adjustment and Refund records independently and requires Refund cleanup before deleting a linked Payment. Fee Clearance remains NOT IMPLEMENTED and is the next Fee Phase item after owner QA PASS.
+
+### ADR 190 Owner QA patch — Student Fee Ledger transaction badge — 2026-09-14
+- QA 1 Manual CREDIT Adjustment accounting verified: ₹100 CREDIT was POSTED, `Approved Adjustments` became ₹100 and Outstanding became ₹19,900 from ₹20,000.
+- QA found a presentation defect: the ledger row was incorrectly badged `Payment` although backend `FeeLedgerService` emitted `type = ADJUSTMENT`, `label = Credit Adjustment`.
+- Patched `resources/js/pages/college-fee-ledger/index.tsx` to recognize `ADJUSTMENT` and `REFUND`, render specific Adjustment/Reversal labels, and remove the unsafe `Payment` fallback for ADR 190 transaction classes.
+- Database/schema, RBAC, routes and accounting calculations are unchanged.
+- Status: IMPLEMENTED / OWNER RE-TEST REQUIRED. QA 1 is not closed until the ledger shows `Credit Adjustment` for the existing test row.
+
+
+### ADR 190 Owner QA progress — 2026-09-14
+- QA 1 Manual CREDIT Adjustment: PASS after re-test. ₹100 CREDIT reduced Outstanding ₹20,000 → ₹19,900 and the Student Fee Ledger now renders `Credit Adjustment` correctly.
+- QA 2 Adjustment Reversal: authoritative finance behavior PASS so far. Reversal reset Approved Adjustments to ₹0 and restored Outstanding to ₹20,000.
+- QA 2 exposed a transaction-date integrity defect in the test path: the source adjustment could be future-dated (observed 2026-09-16) and then reversed at the real server date (2026-09-14), producing a chronologically valid-but-business-invalid temporary ledger balance of ₹20,100 before the future source transaction.
+- Patch implemented: Manual Adjustment now rejects future dates in both UI (`DatePicker max = local today`) and backend (`before_or_equal:today`). Existing bad QA rows are intentionally not rewritten.
+- QA 2 remains OWNER RE-TEST REQUIRED using cleaned/recreated non-future-dated test data. ADR 190 overall status remains IMPLEMENTED / OWNER QA REQUIRED; Fee Clearance must not start yet.
+
+## ADR 191 — Theme-Native Application Dialog Standard — IMPLEMENTED — 2026-09-14
+- Added global reusable `AppDialogProvider` and `useAppDialog()` for themed Prompt / Confirm / Alert interactions.
+- Mounted the provider in `resources/js/app.tsx` so all React business pages can consume the same modal system.
+- Replaced the currently detected browser-native `window.prompt`, `window.confirm`, `window.alert`, bare `confirm()` and bare `alert()` business-page interactions with ERP-themed dialogs.
+- The current Fee Adjustment reversal reason now opens in the ERP theme instead of the browser/localhost prompt box.
+- Existing routes, RBAC, accounting, persistence and domain behavior are unchanged; this is a cross-project UI/UX standardization.
+- Standing rule: future ERP frontend work must not introduce browser-native JS dialogs. Use the reusable application dialog layer or the existing toast/flash system as appropriate.
+
+## ADR 192 — Semantic Action Icon Standard — ACCEPTED / CURRENT QA SURFACE IMPLEMENTED — 2026-09-14
+The ERP now treats meaningful action icons as a mandatory UI consistency rule for all new pages and materially modified workflows. Lucide React remains the single icon family. Important actions should normally use icon + visible text, and financially sensitive Refund/Reversal actions must always do so. The Fee Adjustments / Reversal / Refund page has been aligned: Search, Post Adjustment, receipt expand/collapse, Refund, Adjustment Reversal and Payment Reversal now use semantic icons. The shared application-dialog provider supports an optional confirm-action icon so reversal prompts/confirmations preserve the same interaction meaning. Legacy pages are migrated when materially touched or through an explicitly approved consistency pass rather than through an unsafe blanket rewrite.
+
+### ADR 190 Owner QA — same-day ledger chronology — 2026-09-14
+- Manual DEBIT Adjustment authoritative Fee Demand accounting PASS (`20,000 + 100 = 20,100`).
+- Same-day ledger chronology defect found during verification was fixed in `FeeLedgerService` by using posting/reversal timestamps as tie-breakers while retaining the business date as the displayed date.
+
+### ADR 190 Owner QA — installment paid-floor reconciliation — 2026-09-14
+- QA 5 found a real installment reconciliation defect after cumulative CREDIT adjustments on a partially paid installment schedule.
+- Authoritative Fee Demand accounting remained correct: ₹22,000 gross − ₹12,000 approved CREDIT adjustments − ₹5,000 posted payment = ₹5,000 outstanding.
+- The old proportional rebalance floored the first installment at its ₹5,000 paid amount but failed to redistribute the resulting ₹1,000 excess away from the later installment, causing Due Groups to expose ₹6,000 while the demand correctly showed ₹5,000.
+- `FeeInstallmentAdjustmentService` now enforces both invariants: active installment amounts total the exact adjusted Fee Head liability, and no installment amount can fall below already-paid principal.
+- New schedules store stable allocation percentages; `FeeDueGroupingService` also defensively caps installment collection/display to the authoritative Fee Head open amount.
+- Status: code fix complete; **QA 5 OWNER RE-TEST REQUIRED**. ADR 190 remains `IMPLEMENTED / OWNER QA REQUIRED`.
+
+### ADR 190 / ADR 193 Owner QA — stable installment basis after adjustment reversal — 2026-09-14
+- QA 5 confirmed authoritative liability totals but exposed allocation drift when reversing a prior CREDIT on a legacy schedule whose `allocation_percentage` was NULL.
+- The rebalance service now uses the original schedule allocation basis for both adjustments and reversals. New schedules already persist percentages; legacy schedules recover the original split from audit history and lazily persist it.
+- Paid principal remains an immutable floor.
+- Installment due dates now remain strictly a due-state concern: expired dates classify remaining balances as overdue but do not reallocate liability to later installments.
+- Example under QA: original ₹10,000 + ₹10,000 schedule, ₹5,000 paid on #1, liability restored to ₹12,000 must render effective ₹6,000 + ₹6,000, hence ₹1,000 + ₹6,000 outstanding.
+- Status: IMPLEMENTED / OWNER RE-TEST REQUIRED. QA 5 remains open until the reversal screen re-renders the expected ₹1,000 + ₹6,000 split and total ₹9,000 including the ₹2,000 Library Fee.
+
+
+### ADR 190 Owner QA consolidated status — 2026-09-14
+The current Generic Adjustment / Payment Reversal / Refund QA run has progressed as follows:
+
+- QA 1 Manual CREDIT Adjustment — **PASS**.
+- QA 2 Reverse CREDIT Adjustment — **PASS**.
+- QA 3 Manual DEBIT Adjustment — **PASS**.
+- QA 4 Reverse DEBIT Adjustment — **PASS**.
+- QA 5 Installment adjustment, cumulative CREDIT, paid-floor protection, exact reconciliation and stable original allocation basis on reversal — **PASS after fixes**.
+- QA 6 Full Payment Reversal, installment restoration and second-reversal prevention — **PASS**.
+- QA 7 Partial Refund accounting / ledger — **PASS**.
+- QA 8 Over-refund protection — **PASS**.
+- QA 9 Full receipt reversal after a posted partial Refund — **PASS (blocked as required)**.
+- Fully non-refundable receipt behavior — **PASS so far**: receipt with Refundable ₹0 exposes no Refund action.
+- Fully refundable receipt behavior — **PASS so far**: partial Refund reduces remaining refundable balance correctly.
+
+Still open before ADR 190 can be marked fully QA PASS:
+1. **Mixed-allocation single receipt QA** — one receipt must contain both refundable and non-refundable Fee Head allocations; only the refundable allocation may be refunded.
+2. **RBAC QA** — independently verify `college_fee_adjustment.view`, `college_fee_adjustment.post`, `college_fee_adjustment.reverse`, and `college_fee_refund.post`.
+3. **College scope QA** — a College user must not view or mutate another College's demands/receipts/adjustments/refunds.
+4. **Test Data Cleanup dependency QA** — re-test after ADR 194: Refund -> POSTED/REVERSED Payment -> Installment Schedule -> Fee Demand, including the exact reversed-payment case that previously became unreachable.
+5. **Final reconciliation spot-check** — confirm Fee Demand outstanding, Fee Collection Due Groups and Student Fee Ledger closing balance agree after the remaining mixed-refund/cleanup tests.
+
+Fee Clearance remains **NOT IMPLEMENTED** and must not start until the ADR 190 owner-QA gate is closed.
+
+### ADR 194 — Reversed Fee Payment cleanup visibility — IMPLEMENTED / OWNER RE-TEST REQUIRED — 2026-09-14
+Owner QA found that a REVERSED Fee Payment retained its audit allocations (correctly) but Test Data Cleanup listed only POSTED payments. The related Installment Schedule therefore remained blocked by a payment allocation that the cleanup UI could not reach. Test Data Cleanup now lists and cleans both POSTED and REVERSED Fee Payments. REVERSED payment cleanup does not decrement installment `paid_amount` a second time because controlled reversal already restored it. Refund-first dependency protection remains unchanged.
+
+### QA follow-up — TEST online fee transaction cleanup (2026-09-14)
+Implemented fix for a Test Data Cleanup edge case where a Fee Demand remained referenced by an unposted TEST online fee transaction and deletion surfaced a database FK error. The cleanup service now pre-detects the dependency, exposes the unposted TEST fee transaction under Gateway Test Orders, and requires it to be cleaned before the Fee Demand. **Owner QA required for this edge case.**
+
+ADR 190 overall QA still has these open areas after this fix: mixed refundable/non-refundable single-receipt QA; RBAC permission QA; College scope QA; this TEST-online-transaction cleanup re-test; and final cross-screen reconciliation spot-check.
+
+
+
+## ADR 190 / 196 — Finance QA status update (2026-09-15)
+- **PASS:** mixed refundable/non-refundable single-receipt allocation. QA receipt ₹22,000 correctly exposed only ₹2,000 refundable (₹20,000 non-refundable Tuition + ₹2,000 refundable Library).
+- **PASS:** first ₹500 mixed-receipt refund restored only Library Fee liability; Fee Demand and Due Groups showed ₹500 outstanding and did not reopen Tuition.
+- **PASS:** ADR 194 reversed-payment Test Data Cleanup dependency re-test; owner confirmed the cleanup path now works.
+- **DEFECT FIXED / OWNER RE-TEST REQUIRED:** second/subsequent refund previously crashed with `Undefined property: stdClass::$amount`; ADR 196 makes the original refundable allocation amount explicit and preserves cumulative refund subtraction.
+- **AUDIT QA REQUIRED:** verify that the second refund performed by another authorized staff user in the same College is recorded in the existing College-scoped Audit Log with the correct actor and finance context.
+- **REMAINING ADR 190 GATES:** ADR 196 second-refund re-test; delegated-staff audit verification; four finance RBAC permissions; cross-College isolation; ADR 195 online-payment cleanup re-test if not separately confirmed; final Fee Demand / Due Groups / Student Fee Ledger reconciliation.
+- Fee Clearance remains not implemented / blocked behind completion of this QA gate.
+
+
+### ADR 190 / 196 owner re-test confirmation — 2026-09-15
+- **PASS:** second/subsequent partial refund after ADR 196 hotfix. Owner confirmed the repeat-refund path now works correctly and no longer raises `Undefined property: stdClass::$amount`.
+- **PASS:** finance RBAC with another staff user of the same College. Owner confirmed delegated-staff access/action behavior is working for the ADR 190 QA surface. This closes the ADR 190 RBAC QA gate for `college_fee_adjustment.view`, `college_fee_adjustment.post`, `college_fee_adjustment.reverse`, and `college_fee_refund.post`.
+- **PASS:** Test Data Cleanup owner re-test. The previously blocked reversed-payment cleanup path remains confirmed working; owner also confirms the current test-clean flow passes.
+- **Still open:** delegated-staff College Audit Log evidence/verification unless separately confirmed; cross-College isolation; ADR 195 unposted TEST online-payment cleanup edge if not separately confirmed; final Fee Demand / Due Groups / Student Fee Ledger reconciliation spot-check.
+- Fee Clearance remains blocked until the remaining ADR 190 owner-QA gates are closed.
+
+
+## ADR 190 FINAL OWNER QA CLOSURE — 2026-09-15
+**Status: IMPLEMENTED / OWNER QA PASS / CLOSED.**
+
+The owner has now confirmed the remaining ADR 190 gates in the live QA flow. The earlier `OWNER QA REQUIRED`, `OWNER RE-TEST REQUIRED`, `AUDIT QA REQUIRED`, and `Still open` statements above are retained only as historical progress notes and are superseded by this closure record.
+
+Final confirmed gates:
+- Manual CREDIT/DEBIT adjustment posting and reversal — **PASS**.
+- Installment paid-floor, exact liability reconciliation and stable original allocation basis — **PASS**.
+- Full Payment Reversal and second-reversal prevention — **PASS**.
+- Partial/full Refund, over-refund protection and reversal-after-refund blocking — **PASS**.
+- Fully refundable, fully non-refundable and mixed refundable/non-refundable single-receipt behavior — **PASS**.
+- Second/subsequent cumulative refund after ADR 196 — **PASS**.
+- ADR 190 College finance RBAC for delegated staff — **PASS**.
+- Delegated-staff College Audit Log recording / actor and College-scope visibility — **PASS**.
+- College-scope isolation / cross-College denial — **PASS**.
+- Test Data Cleanup, including ADR 194 reversed-payment dependency and ADR 195 unposted TEST online-payment dependency path — **PASS**.
+- Final Fee Demand / Fee Collection Due Groups / Student Fee Ledger reconciliation spot-check — **PASS**.
+
+**Phase consequence:** the ADR 190 correction/refund/reversal QA gate is closed. Fee Clearance is no longer blocked by ADR 190 and is the next Fee Phase implementation. This closure does not mark Fee Clearance itself implemented.
