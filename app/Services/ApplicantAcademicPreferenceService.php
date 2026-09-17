@@ -311,6 +311,7 @@ class ApplicantAcademicPreferenceService
                 $candidates->push([
                     'source_key' => $sourceKey,
                     'source_name' => $sample['source_discipline_name'] ?? 'Common / Interdisciplinary',
+                    'source_code' => $sample['source_discipline_code'] ?? 'COMMON',
                     'by_slot' => $bySlot,
                 ]);
             }
@@ -326,6 +327,160 @@ class ApplicantAcademicPreferenceService
         return $mapping['source_discipline_id']
             ? 'discipline:'.(int) $mapping['source_discipline_id']
             : 'common';
+    }
+
+    public function importSchema(CollegeAdmissionCycle $cycle): array
+    {
+        $options = $this->options($cycle);
+        $targets = [
+            ['key' => 'discipline_code', 'label' => 'Discipline Code', 'group' => 'Academic Context', 'required' => count($options['disciplines'] ?? []) > 0],
+            ['key' => 'specialization_code', 'label' => 'Specialization Code', 'group' => 'Academic Context'],
+        ];
+
+        $choiceSlots = collect();
+        foreach ($options['terms'] ?? [] as $term) {
+            foreach ($term['slots'] ?? [] as $slot) {
+                if (($slot['selection_mode'] ?? '') === 'CHOICE' && ! empty($slot['mappings'])) {
+                    $choiceSlots->push(['term' => $term, 'slot' => $slot, 'mappings' => collect($slot['mappings'])]);
+                }
+            }
+        }
+
+        foreach ($choiceSlots->groupBy(fn ($row) => (string) ($row['slot']['category_name'] ?? 'Choice / Elective')) as $categoryName => $rows) {
+            $packages = $this->sourcePackageCandidates($rows);
+
+            // Keep exact Admission Form package semantics: when one Offered From / Common
+            // option completely satisfies the category, import asks for that package once
+            // and resolves all of its curriculum papers internally.
+            if ($packages->isNotEmpty()) {
+                $targets[] = [
+                    'key' => 'academic_package:'.substr(sha1($categoryName), 0, 12),
+                    'label' => $categoryName,
+                    'group' => 'Academic Context',
+                    'academic_choice' => true,
+                    'required' => true,
+                    'mode' => 'PACKAGE',
+                    'hint' => 'Use one configured academic option code/name; linked curriculum papers are resolved internally.',
+                    'category_name' => $categoryName,
+                    'slot_ids' => $rows->pluck('slot.id')->map(fn ($id) => (int) $id)->values()->all(),
+                    'packages' => $packages->values()->all(),
+                ];
+                continue;
+            }
+
+            // Non-package choices are selected by the applicant-facing Offered From option,
+            // never by exposing the internal Curriculum Course Code. Each Offered From option
+            // must resolve deterministically to one active Curriculum Course Mapping in the slot.
+            // The mapping ID/course remain internal and are what Admission + Import persist.
+            foreach ($rows as $row) {
+                $slot = $row['slot'];
+                $slotId = (int) $slot['id'];
+                $min = max(0, (int) ($slot['min_selection'] ?? 1));
+                $max = max($min, (int) ($slot['max_selection'] ?? $min));
+                $offeredFrom = collect($slot['mappings'] ?? [])->groupBy(fn ($mapping) => $this->sourceKey($mapping))->map(function ($mappings) {
+                    $first = $mappings->first();
+                    return [
+                        'source_key' => $this->sourceKey($first),
+                        'source_name' => $first['source_discipline_name'] ?? 'Common / Interdisciplinary',
+                        'source_code' => $first['source_discipline_code'] ?? 'COMMON',
+                        'mapping_ids' => $mappings->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+                        'deterministic' => $mappings->count() === 1,
+                    ];
+                })->values();
+
+                for ($position = 1; $position <= $max; $position++) {
+                    $targets[] = [
+                        'key' => "academic_offered_from:{$slotId}:{$position}",
+                        'label' => $categoryName.' — Offered From Choice '.$position,
+                        'group' => 'Academic Context',
+                        'academic_choice' => true,
+                        'required' => $position <= $min,
+                        'mode' => 'OFFERED_FROM',
+                        'hint' => 'Use the configured Offered From code/name (for example HISTORY, HINDI or COMMON). The linked Curriculum Course is resolved and saved internally.',
+                        'category_name' => $categoryName,
+                        'slot_id' => $slotId,
+                        'choice_position' => $position,
+                        'offered_from_options' => $offeredFrom->all(),
+                    ];
+                }
+            }
+        }
+
+        return ['curriculum' => $options['curriculum'] ?? null, 'targets' => $targets];
+    }
+
+    public function resolveImportValues(CollegeAdmissionCycle $cycle, array $values): array
+    {
+        $options = $this->options($cycle);
+        $schema = $this->importSchema($cycle);
+        $disciplineCode = strtoupper(trim((string) ($values['discipline_code'] ?? '')));
+        $discipline = collect($options['disciplines'] ?? [])->first(fn ($d) => strtoupper((string) ($d['code'] ?? '')) === $disciplineCode);
+        if (($options['disciplines'] ?? []) && ! $discipline) {
+            throw ValidationException::withMessages(['academic_preference.discipline_id' => 'Discipline Code must match a Discipline available in this Programme Offering.']);
+        }
+
+        $specializationCode = strtoupper(trim((string) ($values['specialization_code'] ?? '')));
+        $specialization = null;
+        if ($specializationCode !== '') {
+            $specialization = collect($discipline['specializations'] ?? [])->first(fn ($s) => strtoupper((string) ($s['code'] ?? '')) === $specializationCode);
+            if (! $specialization) throw ValidationException::withMessages(['academic_preference.specialization_id' => 'Specialization Code is not available under the selected Discipline.']);
+        }
+
+        $courseChoices = [];
+        $seenCourseMappings = [];
+        $allSlots = collect($options['terms'] ?? [])->flatMap(fn ($t) => $t['slots'] ?? []);
+
+        foreach ($schema['targets'] as $target) {
+            if (empty($target['academic_choice'])) continue;
+            $raw = trim((string) ($values[$target['key']] ?? ''));
+            if ($raw === '') continue;
+
+            if (($target['mode'] ?? '') === 'PACKAGE') {
+                $wanted = strtoupper($raw);
+                $package = collect($target['packages'] ?? [])->first(fn ($p) => strtoupper((string) ($p['source_code'] ?? '')) === $wanted || strtoupper((string) ($p['source_name'] ?? '')) === $wanted);
+                if (! $package) throw ValidationException::withMessages(['academic_preference.course_choices' => "{$target['label']} must match one configured curriculum academic option code/name."]);
+                foreach (($package['by_slot'] ?? []) as $slotId => $ids) {
+                    foreach (array_map('intval', $ids) as $mappingId) {
+                        if (isset($seenCourseMappings[$mappingId])) throw ValidationException::withMessages(['academic_preference.course_choices' => "{$target['label']} contains a duplicate Curriculum Course selection."]);
+                        $seenCourseMappings[$mappingId] = true;
+                        $courseChoices[(int) $slotId][] = $mappingId;
+                    }
+                }
+                continue;
+            }
+
+            $slotId = (int) ($target['slot_id'] ?? 0);
+            $slot = $allSlots->firstWhere('id', $slotId);
+            if (! $slot) throw ValidationException::withMessages(['academic_preference.course_choices' => "{$target['label']} no longer matches the selected Curriculum."]);
+
+            $wanted = strtoupper($raw);
+            $offeredFrom = collect($target['offered_from_options'] ?? [])->first(function ($option) use ($wanted) {
+                return strtoupper(trim((string) ($option['source_code'] ?? ''))) === $wanted
+                    || strtoupper(trim((string) ($option['source_name'] ?? ''))) === $wanted;
+            });
+            if (! $offeredFrom) {
+                throw ValidationException::withMessages(['academic_preference.course_choices' => "{$target['label']} must match an Offered From option available in this Curriculum category."]);
+            }
+            if (empty($offeredFrom['deterministic']) || count($offeredFrom['mapping_ids'] ?? []) !== 1) {
+                throw ValidationException::withMessages(['academic_preference.course_choices' => "{$target['label']} is ambiguous in the Curriculum: this Offered From option must map to exactly one course for applicant selection."]);
+            }
+            $mappingId = (int) $offeredFrom['mapping_ids'][0];
+            $mapping = collect($slot['mappings'] ?? [])->first(fn ($m) => (int) ($m['id'] ?? 0) === $mappingId);
+            if (! $mapping) {
+                throw ValidationException::withMessages(['academic_preference.course_choices' => "{$target['label']} no longer resolves to an active Curriculum Course Mapping."]);
+            }
+            if (isset($seenCourseMappings[$mappingId])) {
+                throw ValidationException::withMessages(['academic_preference.course_choices' => "{$target['label']} duplicates another selected Curriculum Course."]);
+            }
+            $seenCourseMappings[$mappingId] = true;
+            $courseChoices[$slotId][] = $mappingId;
+        }
+
+        return $this->resolve($cycle, [
+            'discipline_id' => $discipline['id'] ?? null,
+            'specialization_id' => $specialization['id'] ?? null,
+            'course_choices' => $courseChoices,
+        ]);
     }
 
     public function persist(CollegeAdmissionApplication $application, array $resolved): void

@@ -7,4 +7,5 @@ class ApplicantProfile extends Model {
  protected $casts=['date_of_birth'=>'date','student_enabled_at'=>'datetime'];
  public function user(): BelongsTo { return $this->belongsTo(User::class); }
  public function college(): BelongsTo { return $this->belongsTo(College::class); }
+ public function student(): BelongsTo { return $this->belongsTo(Student::class); }
 }

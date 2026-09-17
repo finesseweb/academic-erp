@@ -1,5 +1,6 @@
 import { createInertiaApp } from '@inertiajs/react';
 import { AppDialogProvider } from '@/components/app-dialog-provider';
+import { AppLoadingProvider } from '@/components/app-loading-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -30,10 +31,12 @@ createInertiaApp({
     withApp(app) {
         return (
             <TooltipProvider delayDuration={0}>
-                <AppDialogProvider>
-                    {app}
-                    <Toaster />
-                </AppDialogProvider>
+                <AppLoadingProvider>
+                    <AppDialogProvider>
+                        {app}
+                        <Toaster />
+                    </AppDialogProvider>
+                </AppLoadingProvider>
             </TooltipProvider>
         );
     },

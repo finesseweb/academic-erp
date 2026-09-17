@@ -454,3 +454,36 @@ For operational financial/history screens where one student can own many child t
 - child-level financial actions remain attached to the child transaction even when the display is grouped by parent.
 
 The Fee Adjustments / Reversal / Refund Posted Payments register is the reference implementation.
+
+## 20. Contextual Filtering for High-Volume Operational Screens — Mandatory
+When a register can grow materially, filtering must follow the existing domain hierarchy and narrow records server-side before rendering.
+
+Rules:
+- Use the smallest meaningful parent-to-child filter chain already defined by the domain (for example Academic Session → Programme Offering on pre-enrollment finance registers).
+- Dependent filters must expose only options valid for the selected parent scope; stale child selections must be cleared and revalidated by Laravel.
+- Changing a parent filter should refresh dependent options and data when that produces a clearer, lower-volume workflow; show the standard loading state during that refresh.
+- Do not load an unbounded master list into React merely to filter it client-side. Large or growing option sets must be scoped server-side and may use searchable/async selection when volume justifies it.
+- Preserve applicable filters across search, pagination and detail navigation.
+- Do not add filters mechanically. Each filter must correspond to a real domain relationship and materially improve discovery, scope clarity or performance.
+- Batch/section/term filters are introduced only when the lifecycle stage and page purpose make those relationships authoritative.
+
+### Shared Application Loading Infrastructure — Mandatory
+- Loading feedback is application infrastructure, equivalent to the shared Toast and Application Dialog systems; pages must not invent independent spinner behavior when the shared loading layer covers the request.
+- `AppLoadingProvider` is mounted once in the Inertia application shell and observes Inertia visits globally. Standard Inertia navigation, GET filtering, pagination, detail refresh and reload operations therefore receive consistent theme-native loading feedback automatically.
+- The global Inertia loading presentation must be visually obvious in the main work area, not only a small corner indicator. While a visit is pending, use the shared centered theme-native Spinner treatment with a restrained translucent backdrop so users cannot mistake a network wait for an unresponsive page.
+- `useAppLoading().setNextLoadingLabel(...)` may be called immediately before a known Inertia visit to provide contextual copy such as `Loading student fee ledger…` or `Loading programme offerings…`. If a page does not provide contextual copy, the provider must still show the safe project-wide fallback `Loading data…`; therefore existing pages remain covered without bespoke loading code.
+- Contextual loading copy describes the resource being fetched, not implementation detail. Prefer `Loading student fee ledger…`, `Loading applications…`, or `Loading programme offerings…`; avoid raw route names, HTTP terminology, or vague custom animations.
+- Pages that need contextual treatment may consume `useAppLoading()` and use the same global state for a table/card overlay, disabled filters, or another scoped presentation. Do not register duplicate `router.on('start'/'finish')` handlers or duplicate page-local loading booleans for the same Inertia request.
+- Mutation controls remain context-specific: Inertia `Form` / `useForm` `processing` should drive the submitting button's spinner, disabled state and pending label. The global indicator complements this behavior; it does not replace precise action feedback.
+- Non-Inertia asynchronous work (remote autocomplete, uploads, background API calls, exports, long-running jobs) must use the appropriate shared Spinner/progress/skeleton component and its own request state because it is not observable by the Inertia visit bridge.
+- Preserve useful existing table/card content during safe background refresh; use a scoped translucent loading overlay when blocking interaction is necessary. Initial empty data loads should prefer skeletons that resemble the final content.
+- Every loading state must terminate on success, validation failure, server failure or cancellation, must prevent unsafe duplicate actions, and must expose an accessible status (`role=status` / appropriate live text).
+- Do not add a loader merely for decoration. Add it wherever network/navigation/processing latency can otherwise make the ERP appear frozen.
+
+## Workflow-Ordered Sidebar and Semantic Icon Rule (2026-09-16)
+- Sidebar children for an operational domain MUST be ordered by the user's normal business workflow, not by implementation date or the order features were added.
+- Configuration/setup entries come before generated transactions; transaction processing comes before review/correction; derived final gates/outcomes come last when they consume the preceding records.
+- Each sidebar item MUST use an existing theme-approved Lucide icon whose meaning matches the feature. Reusing one generic icon across unrelated actions is not acceptable when a clear semantic icon already exists.
+- New modules MUST be inserted into their correct workflow position rather than appended automatically to the bottom.
+- Fee Management reference order: Fee Setup → Scholarship / Benefits → Payment Gateways → Fee Demands → Student Benefits → Payment Collection → Student Fee Ledger → Adjustments / Refunds → Late Fine / Penalty → Fee Clearance.
+- Fee Clearance remains the final Fee Management gate because its result is derived from the authoritative financial history that precedes it and is consumed by downstream Enrollment.

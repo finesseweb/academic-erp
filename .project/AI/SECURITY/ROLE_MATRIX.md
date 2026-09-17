@@ -59,3 +59,18 @@ College Calendar permissions are College-scoped and delegable through the normal
 - University roles with Fee Structure create/update permissions choose `MANDATORY` or `OPTIONAL` College Applicability on University-owned structures.
 - College roles require `college_fee_structure.adopt` to Adopt / Stop Using an OPTIONAL University Fee Structure in their exact College scope.
 - MANDATORY University Fee Structures are read-only and automatically effective for matching Colleges; no College permission may override or opt them out.
+
+## ADR 197 — Fee Clearance default grants (2026-09-16)
+- `SUPER_ADMIN`: `college_fee_clearance.view`
+- `COLLEGE_ADMIN`: `college_fee_clearance.view`
+- Custom College roles: may receive `college_fee_clearance.view` through the existing College-delegable permission-assignment flow.
+
+The permission is read-only and non-sensitive. It does not grant any financial mutation capability.
+
+### Student Enrollment — ENR-1
+- `SUPER_ADMIN`: `college_student_enrollment.view`
+- `COLLEGE_ADMIN`: `college_student_enrollment.view`
+- Custom College roles: may receive `college_student_enrollment.view` through the existing College-delegable permission assignment flow.
+
+### ENR-2 default protected grants
+- `college_student_enrollment.enroll`: SUPER_ADMIN = granted; COLLEGE_ADMIN = granted. Other College staff require explicit delegated permission and remain College-scoped.

@@ -795,6 +795,8 @@ class TestDataCleanupService
             'users' => $this->accessUserRows($universityId, auth()->id() ?? 0),
             'roles' => $this->accessRoleRows($universityId),
             'applicants' => $this->applicantRows($universityId),
+            'students' => $this->studentRows($universityId),
+            'student_identity_assignments' => $this->studentIdentityAssignmentRows($universityId),
             'college_admission_form_templates' =>
                 $this->collegeAdmissionFormTemplateRows($universityId),
             'college_application_fee_rules' =>
@@ -1258,6 +1260,31 @@ class TestDataCleanupService
                 $this->deleteWhereIn('fee_demand_items', 'fee_demand_id', $feeDemandIds);
                 $this->deleteWhereIn('fee_demands', 'id', $feeDemandIds);
 
+                // ENR-0 foundation is downstream of Admission/Application. Keep reset child-first
+                // even before ENR-2 exposes Student creation in normal UI.
+                $studentIds = Schema::hasTable('students')
+                    ? DB::table('students')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
+                    : collect();
+                $this->deleteWhereIn('student_profile_values', 'student_id', $studentIds);
+                $this->deleteWhereIn('student_enrollments', 'student_id', $studentIds);
+                if (Schema::hasTable('applicant_profiles') && Schema::hasColumn('applicant_profiles', 'student_id') && $studentIds->isNotEmpty()) {
+                    DB::table('applicant_profiles')->whereIn('student_id', $studentIds)->update([
+                        'student_id' => null,
+                        'student_enabled_at' => null,
+                        'lifecycle_status' => 'APPLICANT',
+                    ]);
+                }
+                $this->deleteWhereIn('students', 'id', $studentIds);
+
+                // ENR-3 identity infrastructure is test/configuration data scoped to the College.
+                // Full Academic Test Reset may rewind it only because the downstream Student/Enrollment
+                // identities for this University were removed above in the same controlled reset.
+                if (Schema::hasTable('student_identity_sequences')) {
+                    DB::table('student_identity_sequences')->whereIn('college_id', $collegeIds)->delete();
+                }
+                if (Schema::hasTable('student_identity_settings')) {
+                    DB::table('student_identity_settings')->whereIn('college_id', $collegeIds)->delete();
+                }
 
                 $this->deleteWhereIn('admissions', 'college_admission_application_id', $applicationIds);
                 $this->deleteWhereIn('college_admission_seat_allocation_horizontal_categories', 'college_admission_seat_allocation_id', $seatAllocationIds);
@@ -1783,6 +1810,10 @@ class TestDataCleanupService
                 $this->cleanupAccessRole($id, $universityId, $actorId),
             'applicants' =>
                 $this->cleanupApplicant($id, $universityId, $actorId),
+            'students' =>
+                $this->cleanupStudent($id, $universityId, $actorId),
+            'student_identity_assignments' =>
+                $this->cleanupStudentIdentityAssignment($id, $universityId, $actorId),
             'college_admission_form_templates' =>
                 $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
             'college_application_fee_rules' =>
@@ -3950,6 +3981,274 @@ class TestDataCleanupService
                 $result,
                 $actorId
             );
+            return $result;
+        });
+    }
+
+
+    private function studentIdentityAssignmentRows(int $universityId): array
+    {
+        if (! Schema::hasTable('students') || ! Schema::hasTable('student_enrollments') || ! Schema::hasTable('colleges')) {
+            return [];
+        }
+
+        return DB::table('student_enrollments as se')
+            ->join('students as s', 's.id', '=', 'se.student_id')
+            ->join('colleges as c', 'c.id', '=', 's.college_id')
+            ->where('c.university_id', $universityId)
+            ->where(function ($query) {
+                $query->whereNotNull('s.student_uid')
+                    ->orWhereNotNull('s.university_roll_no')
+                    ->orWhereNotNull('se.class_roll_no');
+            })
+            ->orderByDesc('se.id')
+            ->get([
+                'se.id as id', 'se.student_id', 'se.class_roll_no',
+                's.full_name', 's.student_uid', 's.university_roll_no',
+                'c.name as college_name',
+            ])
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'code' => $row->student_uid ?: ('ENROLLMENT-'.$row->id),
+                'name' => $row->full_name.' · '.$row->college_name,
+                'status' => 'ASSIGNED',
+                'kind' => 'STUDENT_IDENTITY_ASSIGNMENT',
+                'dependencies' => [
+                    'student_uid' => $row->student_uid ? 1 : 0,
+                    'university_roll' => $row->university_roll_no ? 1 : 0,
+                    'class_roll' => $row->class_roll_no ? 1 : 0,
+                ],
+                'blocked' => false,
+                'blocking_references' => [],
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function cleanupStudentIdentityAssignment(int $enrollmentId, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('students') || ! Schema::hasTable('student_enrollments') || ! Schema::hasTable('colleges')) {
+            abort(404);
+        }
+
+        $record = DB::table('student_enrollments as se')
+            ->join('students as s', 's.id', '=', 'se.student_id')
+            ->join('colleges as c', 'c.id', '=', 's.college_id')
+            ->where('se.id', $enrollmentId)
+            ->where('c.university_id', $universityId)
+            ->select([
+                'se.id as enrollment_id', 'se.student_id', 'se.class_roll_no',
+                's.full_name', 's.student_uid', 's.university_roll_no',
+                'c.id as college_id', 'c.name as college_name',
+            ])
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            DB::table('student_enrollments')->where('id', $record->enrollment_id)->update([
+                'class_roll_no' => null,
+                'updated_at' => now(),
+            ]);
+            DB::table('students')->where('id', $record->student_id)->update([
+                'student_uid' => null,
+                'university_roll_no' => null,
+                'updated_by' => $actorId,
+                'updated_at' => now(),
+            ]);
+
+            // Never rewind student_identity_sequences: even QA-issued institutional
+            // numbers stay non-reusable, matching production identity semantics.
+            $result = [
+                'student_id' => (int) $record->student_id,
+                'enrollment_id' => (int) $record->enrollment_id,
+                'cleared' => [
+                    'student_uid' => $record->student_uid,
+                    'university_roll_no' => $record->university_roll_no,
+                    'class_roll_no' => $record->class_roll_no,
+                ],
+                'student_preserved' => true,
+                'enrollment_preserved' => true,
+                'identity_sequences_rewound' => false,
+            ];
+            $this->audit('TEST_STUDENT_IDENTITY_CLEANED', 'test_data_cleanup', $record->enrollment_id, $result, $actorId);
+            return $result;
+        });
+    }
+
+    private function studentRows(int $universityId): array
+    {
+        if (! Schema::hasTable('students') || ! Schema::hasTable('colleges')) {
+            return [];
+        }
+
+        return DB::table('students as s')
+            ->join('colleges as c', 'c.id', '=', 's.college_id')
+            ->leftJoin('admissions as a', 'a.id', '=', 's.admission_id')
+            ->where('c.university_id', $universityId)
+            ->orderByDesc('s.id')
+            ->get([
+                's.id', 's.full_name', 's.student_uid', 's.university_roll_no',
+                's.status', 's.user_id', 's.admission_id',
+                's.college_admission_application_id',
+                'c.name as college_name', 'c.code as college_code',
+                'a.admission_no',
+            ])
+            ->map(function ($row) {
+                $enrollmentCount = $this->countIfExists('student_enrollments', 'student_id', $row->id);
+                $profileValueCount = $this->countIfExists('student_profile_values', 'student_id', $row->id);
+
+                return [
+                    'id' => (int) $row->id,
+                    'code' => $row->student_uid ?: ($row->admission_no ?: 'STUDENT-'.$row->id),
+                    'name' => $row->full_name.' · '.$row->college_name,
+                    'status' => $row->status,
+                    'kind' => 'STUDENT',
+                    'dependencies' => [
+                        'enrollments' => $enrollmentCount,
+                        'profile_values' => $profileValueCount,
+                        'university_roll' => $row->university_roll_no ? 1 : 0,
+                    ],
+                    // Student cleanup owns these ENR children, so they do not block cleanup.
+                    'blocked' => false,
+                    'blocking_references' => [],
+                    'college_name' => $row->college_name,
+                    'admission_no' => $row->admission_no,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupStudent(int $studentId, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('students') || ! Schema::hasTable('colleges')) {
+            abort(404);
+        }
+
+        $record = DB::table('students as s')
+            ->join('colleges as c', 'c.id', '=', 's.college_id')
+            ->leftJoin('admissions as a', 'a.id', '=', 's.admission_id')
+            ->where('s.id', $studentId)
+            ->where('c.university_id', $universityId)
+            ->select([
+                's.id', 's.full_name', 's.student_uid', 's.university_roll_no',
+                's.user_id', 's.admission_id', 's.college_admission_application_id',
+                'c.id as college_id', 'c.name as college_name', 'a.admission_no',
+            ])
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            // Capture ENR-3 scopes before deleting the Enrollment rows. Targeted Student
+            // cleanup may reset only sequence scopes that become completely empty after
+            // this Student is removed; retained institutional identities are never reused.
+            $identityEnrollments = Schema::hasTable('student_enrollments')
+                ? DB::table('student_enrollments')
+                    ->where('student_id', $record->id)
+                    ->get(['id', 'college_id', 'class_roll_no', 'class_roll_scope_key'])
+                : collect();
+
+            $counts = [
+                'profile_values' => $this->countIfExists('student_profile_values', 'student_id', $record->id),
+                'enrollments' => $this->countIfExists('student_enrollments', 'student_id', $record->id),
+                'applicant_profiles_restored' => 0,
+            ];
+
+            $this->deleteWhereIn('student_profile_values', 'student_id', collect([$record->id]));
+            $this->deleteWhereIn('student_enrollments', 'student_id', collect([$record->id]));
+
+            if (Schema::hasTable('applicant_profiles') && Schema::hasColumn('applicant_profiles', 'student_id')) {
+                $profiles = DB::table('applicant_profiles')->where('student_id', $record->id)->get(['id', 'user_id']);
+                $counts['applicant_profiles_restored'] = $profiles->count();
+
+                DB::table('applicant_profiles')
+                    ->where('student_id', $record->id)
+                    ->update([
+                        'student_id' => null,
+                        'student_enabled_at' => null,
+                        'lifecycle_status' => 'APPLICANT',
+                        'updated_at' => now(),
+                    ]);
+
+                $userIds = $profiles->pluck('user_id')->filter()->values();
+                if ($userIds->isNotEmpty() && Schema::hasTable('users')) {
+                    DB::table('users')
+                        ->whereIn('id', $userIds)
+                        ->where('account_type', 'STUDENT')
+                        ->update([
+                            'account_type' => 'APPLICANT',
+                            'updated_at' => now(),
+                        ]);
+                }
+            }
+
+            DB::table('students')->where('id', $record->id)->delete();
+
+            $resetSequences = [];
+            if (Schema::hasTable('student_identity_sequences')) {
+                // Student UID / University Roll are College-wide. In disposable Test Data
+                // Cleanup, restart at 1 only when no retained Student in the College still
+                // owns that identity type. This is not used by production lifecycle actions.
+                if (! DB::table('students')->where('college_id', $record->college_id)->whereNotNull('student_uid')->exists()) {
+                    $deleted = DB::table('student_identity_sequences')
+                        ->where('college_id', $record->college_id)
+                        ->where('identity_type', 'STUDENT_UID')
+                        ->where('scope_key', 'COLLEGE')
+                        ->delete();
+                    if ($deleted) $resetSequences[] = 'STUDENT_UID:COLLEGE';
+                }
+
+                if (! DB::table('students')->where('college_id', $record->college_id)->whereNotNull('university_roll_no')->exists()) {
+                    $deleted = DB::table('student_identity_sequences')
+                        ->where('college_id', $record->college_id)
+                        ->where('identity_type', 'UNIVERSITY_ROLL')
+                        ->where('scope_key', 'COLLEGE')
+                        ->delete();
+                    if ($deleted) $resetSequences[] = 'UNIVERSITY_ROLL:COLLEGE';
+                }
+
+                // Class Roll is scope-aware (Programme Offering or Discipline). Reset only
+                // the exact scopes that were owned by this Student and now have no retained
+                // assigned Class Roll. Other offerings/disciplines continue uninterrupted.
+                $scopeKeys = $identityEnrollments
+                    ->pluck('class_roll_scope_key')
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                foreach ($scopeKeys as $scopeKey) {
+                    $hasRetainedClassRoll = DB::table('student_enrollments')
+                        ->where('college_id', $record->college_id)
+                        ->where('class_roll_scope_key', $scopeKey)
+                        ->whereNotNull('class_roll_no')
+                        ->exists();
+
+                    if (! $hasRetainedClassRoll) {
+                        $deleted = DB::table('student_identity_sequences')
+                            ->where('college_id', $record->college_id)
+                            ->where('identity_type', 'CLASS_ROLL')
+                            ->where('scope_key', $scopeKey)
+                            ->delete();
+                        if ($deleted) $resetSequences[] = 'CLASS_ROLL:'.$scopeKey;
+                    }
+                }
+            }
+
+            $result = [
+                'student' => (array) $record,
+                'deleted' => $counts,
+                'identity_sequence_scopes_reset' => $resetSequences,
+                'identity_sequences_rewound' => count($resetSequences) > 0,
+                'sequence_reset_policy' => 'TEST_CLEANUP_EMPTY_SCOPE_ONLY',
+            ];
+            $this->audit('TEST_STUDENT_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+
             return $result;
         });
     }

@@ -535,3 +535,43 @@ The Student Fee Ledger is a projection across these existing relationships. No `
 `FeePayment -> FeePaymentAllocation -> FeePaymentRefundAllocation <- FeePaymentRefund`
 
 Each Refund Allocation also snapshots direct FKs to Fee Demand, Fee Demand Item, optional Installment Schedule, and optional Late Fine Charge. This preserves provenance and allows exact balance restoration without rewriting the original payment allocation.
+
+## ADR 197 — Fee Clearance derived relationship (2026-09-16)
+Fee Clearance introduces **no new physical foreign-key relationship**.
+
+Logical projection path:
+`College Admission -> Fee Demand -> enrollment-clearance-required Fee Demand Items -> Benefits / Payment Allocations / Adjustments / Reversals / Refunds -> derived Fee Clearance -> Student Enrollment gate`.
+
+The permission-registration migration uses the already-documented authorization relationships `permissions -> role_permissions <- roles`; it adds rows only and does not alter those relationships.
+
+## Student Enrollment Foundation — ADR 199
+`users (0..1) -> students.user_id` (one reusable portal identity; imported Students may initially have none)
+
+`college_admission_applications (0..1) -> students.college_admission_application_id`
+
+`admissions (0..1) -> students.admission_id`
+
+`students (1) -> (0..N) student_enrollments`
+
+`college_program_offerings (1) -> (0..N) student_enrollments`
+
+`batches (0..1) -> student_enrollments.batch_id`
+
+`sections (0..1) -> student_enrollments.section_id`
+
+`students (1) -> (0..N) student_profile_values`
+
+`college_admission_form_fields (0..1) -> student_profile_values.source_application_field_id`
+
+`students (0..1) -> applicant_profiles.student_id`
+
+Programme Offering carries Academic Session. Student identity therefore remains stable while Enrollment carries the session/programme context. Batch/Section hierarchy consistency is a service-level validation requirement in later enrollment/assignment milestones, not merely an FK check.
+
+## ENR-3 / ADR 203
+`colleges 1—1 student_identity_settings`; `colleges 1—N student_identity_sequences`. Permanent Student UID/University Roll live on `students`; enrollment-specific Class Roll lives on `student_enrollments`. Exam Roll is outside ENR-3.
+
+### ENR-3.3 Class Roll scope
+`student_identity_settings.class_roll_scope` selects Programme Offering or Discipline sequencing. Discipline scope is derived through `student_enrollments.admission_id → admissions → college_admission_applications → academic preference → discipline_id`; no duplicate discipline ownership is added to Student/Enrollment.
+
+### ENR-4 Discipline normalization
+`academic_disciplines (0..1) -> student_enrollments.discipline_id`. For new ADMISSION enrollments this snapshots the already-authoritative Application Academic Preference Discipline; for IMPORT enrollments it is resolved from mapped `discipline_code`. Student Identity consumes Enrollment Discipline first, with legacy Admission preference fallback for pre-ENR-4 rows.

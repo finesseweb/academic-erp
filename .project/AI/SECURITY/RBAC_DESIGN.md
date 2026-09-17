@@ -137,3 +137,9 @@ Finance permissions also obey University-vs-College governance in `../DOMAIN/FEE
 When a new module becomes part of an existing protected administrator's responsibility, the module's mandatory permissions must be synchronized into that protected role by a forward migration. Do not rely on the Role Permission UI to mutate protected system roles.
 
 For College Academic Setup, `COLLEGE_ADMIN` must automatically receive the mandatory permissions for each implemented College-level module while those permissions may separately remain delegable to College-owned custom roles where appropriate.
+
+## Student Management permission tree (ENR-3.6)
+Role-permission presentation must group both resources under the business module `Student Management`:
+- Student Enrollment: View / Enroll
+- Student Identity: View / Manage
+View and mutation permissions are intentionally separate. A route must enforce its own resource permission; Student Identity must not borrow Student Enrollment View for page access.

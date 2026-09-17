@@ -1059,3 +1059,125 @@ Final confirmed gates:
 - Final Fee Demand / Fee Collection Due Groups / Student Fee Ledger reconciliation spot-check — **PASS**.
 
 **Phase consequence:** the ADR 190 correction/refund/reversal QA gate is closed. Fee Clearance is no longer blocked by ADR 190 and is the next Fee Phase implementation. This closure does not mark Fee Clearance itself implemented.
+
+## 2026-09-16 — Fee Clearance (ADR 197)
+**Status: IMPLEMENTED / OWNER QA REQUIRED**
+
+Fee Management now includes a College-scoped Fee Clearance register/detail page. Clearance is an authoritative read-only projection for CONFIRMED Admissions: only active/non-cancelled Fee Demand Items whose snapshot is `is_enrollment_clearance_required = true` participate. Current item liability is derived from the Student Fee Ledger financial history rather than a duplicate stored clearance balance. States are PENDING, CLEARED and NOT_REQUIRED; CLEARED and NOT_REQUIRED expose an open Enrollment gate. Refunds, reversals and debit adjustments automatically re-open the gate when they restore required-item liability. Permission: `college_fee_clearance.view`. No Student Enrollment behavior is implemented yet.
+
+**Next gate:** owner QA must pass ADR 197 before Student Enrollment / Student Lifecycle implementation begins.
+
+## 2026-09-16 — Fee Clearance premium UI / scalable filtering refinement
+Fee Clearance now follows the frozen UI standards: shared themed Select controls, Lucide semantic icons, visible Inertia loading state with duplicate-action protection, and server-side Academic Session → Programme Offering dependent filtering. Programme Offering is scoped by College + selected Session and preserved through search/pagination/detail requests. No database migration or accounting-rule change is introduced by this refinement. Owner QA remains required.
+
+## 2026-09-16 — ADR 198 Shared Application Loading Infrastructure — IMPLEMENTED / OWNER QA REQUIRED
+- Added application-level `AppLoadingProvider` around the Inertia app, parallel to the existing shared Toast and App Dialog infrastructure.
+- Standard Inertia navigation/filter/pagination/reload requests now receive automatic theme-native loading feedback project-wide.
+- Added `useAppLoading()` for pages that need contextual table/card/filter blocking while sharing the same authoritative Inertia request state.
+- Fee Clearance migrated from page-local router start/finish callbacks to the shared loading infrastructure; its existing table overlay and duplicate-action protection now consume the global state.
+- Form/mutation buttons continue to use Inertia `processing`; non-Inertia async operations remain responsible for shared contextual Spinner/Skeleton/progress states.
+- No database change.
+
+
+### 2026-09-16 — Shared loading UI refinement (ADR 198)
+- Global Inertia loading is now visibly centered in the work area with the canonical Spinner and a restrained blocking backdrop.
+- Existing Inertia pages receive the generic loading state automatically; materially touched pages can provide contextual resource labels without registering local router lifecycle handlers.
+- Student Fee Ledger and Fee Clearance use contextual shared loading labels.
+- Database impact: NONE.
+
+### 2026-09-16 — Fee Management navigation refinement
+College Fee Management sidebar presentation is workflow ordered: Fee Setup → Scholarship / Benefits → Payment Gateways → Fee Demands → Student Benefits → Payment Collection → Student Fee Ledger → Adjustments / Refunds → Late Fine / Penalty → Fee Clearance. Each entry uses a semantic theme-native Lucide icon. Fee Clearance remains the final derived financial gate before downstream Enrollment. This is navigation/UI only; no database or authorization behavior changed.
+
+## 2026-09-16 — Student Enrollment ENR-0 / ADR 199
+Status: **IMPLEMENTED / OWNER QA REQUIRED**.
+
+- Fee Clearance is Owner-QA accepted and the Student Enrollment branch is now eligible.
+- Added the stable `students` master, `student_enrollments` academic-membership table and `student_profile_values` dynamic-profile snapshot table.
+- Completed `applicant_profiles.student_id -> students.id` FK promised by ADR 034.
+- Added Admission Form field mapping metadata (`APPLICATION_ONLY|STUDENT_PROFILE` + optional profile key); no existing dynamic field is auto-promoted.
+- Student identity remains separate from session/programme placement. ENR-3 owns UID/roll-number generation; ENR-4 owns CSV import UI/workflow.
+- No Student Enrollment page/action is implemented in ENR-0.
+- Next eligible milestone after Owner QA PASS: **ENR-1 Enrollment Eligibility Queue**.
+
+## 2026-09-16 — Fee Clearance owner QA closure
+Owner confirmed Fee Clearance end-to-end behavior: required liability PENDING -> CLEARED after settlement; receipt reversal and eligible refund re-open required liability and return clearance to PENDING/BLOCKED; non-clearance-required unpaid heads do not block enrollment. Programme Offering filtering, shared loading behavior and Fee Management navigation refinements were also accepted. ADR 197 is **OWNER QA PASS / CLOSED**.
+
+## 2026-09-16 — ENR-0 Owner QA closure / ENR-1 Enrollment Eligibility Queue
+**ENR-0 / ADR 199: OWNER QA PASS / CLOSED.** Owner verified migration execution/status, all three foundation tables, nullable `applicant_profiles.student_id` FK, Application Form Builder regression, historical Application regression, and existing Admission regression. ENR-0 is closed.
+
+**ENR-1: IMPLEMENTED / OWNER QA REQUIRED.** Added College-scoped Student Enrollment eligibility queue at `/college/{college}/student-enrollments`. It lists only CONFIRMED Admissions in the selected Academic Session / Programme Offering, consumes `FeeClearanceService` as the sole financial gate, and derives `READY`, `BLOCKED`, or `ENROLLED` without creating/updating Student or Enrollment records. Permission: `college_student_enrollment.view`. ENR-2 remains blocked until ENR-1 Owner QA PASS.
+
+## Student Enrollment checkpoint — 2026-09-16 / ENR-2
+- ENR-0 / ADR 199: IMPLEMENTED / OWNER QA PASS / CLOSED.
+- ENR-1 / ADR 200: IMPLEMENTED / OWNER QA PASS / CLOSED.
+- ENR-2 / ADR 201: IMPLEMENTED / OWNER QA REQUIRED.
+- READY rows can now be enrolled through the canonical transaction; server rechecks Fee Clearance and College/Admission scope before mutation.
+- ENR-3 Student Identity is BLOCKED until ENR-2 Owner QA PASS.
+
+### ENR-2 QA refinement — 2026-09-16
+Enrollment confirmation now displays Discipline using the existing Application Academic Preference relationship. This is a presentation/read-model refinement only; no database change.
+
+## ENR-2 corrective completion — ADR 202 (2026-09-16)
+- Dynamic Application Form fields now expose **Data Usage** in University and College-owned field Add/Edit dialogs.
+- Existing/historical fields remain `APPLICATION_ONLY` unless explicitly changed. For newly created dynamic fields, the Form Builder defaults Data Usage to `STUDENT_PROFILE`; administrators may choose `APPLICATION_ONLY` for admission-specific answers.
+- Policy changes are prospective for Student creation: existing `student_profile_values` are not backfilled or rewritten.
+- No database structural change/migration in ADR 202; it exposes the ENR-0 columns already present on `college_admission_form_fields`.
+- ENR2-11 QA is pending before ENR-2 closure.
+
+### ENR-3 Student Identity — 2026-09-17
+IMPLEMENTED / OWNER QA REQUIRED (ADR 203). Student UID and University Roll are Student-owned; Class Roll is Enrollment-owned; Exam Roll remains Examination-owned. College-specific formats and lock-protected sequences are implemented. Existing ENR-2 enrollments can be assigned from Student Identity; future enrollment assignment uses the same transactional service. ENR-4 remains blocked until ENR-3 Owner QA PASS.
+
+### ENR-3 QA cleanup support — 2026-09-17
+ENR-3 is still IMPLEMENTED / OWNER QA REQUIRED. The existing Full Academic Test Reset is ENR-3-aware and removes identity settings/sequences only after affected Student lifecycle test rows are removed. Targeted Student identity cleanup preserves sequence advancement and never reuses consumed numbers. See `.project/AI/QA/ENR3_TEST_DATA_CLEANUP.md`.
+
+- ENR-3.3 implemented: Class Roll sequence scope is configurable per College as Programme Offering (default) or Discipline; existing Class Rolls remain immutable.
+
+### ENR-3.4 correction (2026-09-17)
+- Student Enrollment no longer auto-assigns institutional identity.
+- Student Identity Assign is the authoritative/manual issuance action.
+- Test Data Cleanup includes identity-only cleanup preserving Student + Enrollment and never rewinding sequences.
+- QA pending owner verification.
+
+## ENR-3 closure / ENR-4 implementation — 2026-09-17
+- **ENR-3 / ADR 203: OWNER QA PASS / CLOSED.** Owner verified manual identity assignment, configurable Class Roll scope, Discipline UI, safe test sequence-reset semantics, Student Management RBAC View/Manage alignment and Identity audit events.
+- **ENR-4 / ADR 204: IMPLEMENTED / OWNER QA REQUIRED.** Student Management now includes College-scoped CSV Student Import / Migration: template → upload → Session/Programme Offering → mapping → validation/preview → confirmed transactional import.
+- IMPORT provenance writes the same `students` and `student_enrollments` architecture; no fake Admission/Application/Fee records are created. Blank identity remains Pending.
+- ENR-4 adds nullable `student_enrollments.discipline_id` so imported students can participate in Discipline filtering and Discipline-scoped Class Roll identity rules. No new domain table.
+
+### ENR-4.2 Student Import dynamic profile mapping — 2026-09-17
+IMPLEMENTED / OWNER QA PENDING. Student Import now derives offering-applicable Admission Form fields marked STUDENT_PROFILE, supports searchable one-to-one CSV column mapping, and persists imported values to student_profile_values. No schema change.
+
+## ENR-4.3 — current QA state (2026-09-17)
+Drag-and-plug mapping and Programme Offering-scoped saved mapping/template infrastructure are implemented. Migration `2026_09_17_140000_create_student_import_mappings.php` is pending Owner environment execution/QA. ENR-4 remains OWNER QA IN PROGRESS; do not mark ADR 204 closed until save/load/template and final import regression pass.
+
+### 2026-09-17 — ENR-4.4 Curriculum-linked import (ADR 204)
+Student Import academic context now follows the same Programme Offering → Curriculum resolution used by Admission Forms. Discipline, Specialization and curriculum Choice categories are validated through `ApplicantAcademicPreferenceService`; mandatory courses resolve automatically. Enrollment now carries Curriculum/Discipline/Specialization and resolved enrollment-course links for both Admission and Import routes. Mapping UI uses accordions with Core Student open by default. OWNER QA PENDING.
+
+### ENR-4.4.1 — Migration Recovery + DB Documentation Hardening — OWNER QA PENDING
+- Corrects MySQL error 1059 from an overlong generated FK name in ENR-4.4.
+- Uses explicit short FK names and restart-safe existence checks for known partial DDL.
+- DB impact documentation now records schema ownership, relationships, constraints/indexes and recovery behavior.
+- ADR 205 makes DB documentation completeness a permanent milestone closure gate.
+
+## ENR-4.5 — Student Import validation contract (2026-09-17)
+Status: IMPLEMENTED / OWNER QA PENDING.
+Student Import now enforces required mapping and row-level required values for applicable Admission Form `STUDENT_PROFILE` fields, while `APPLICATION_ONLY` remains excluded. Curriculum academic targets remain authoritative through `ApplicantAcademicPreferenceService`; invalid/missing configured academic values block import and never create masters. If no applicable ACTIVE Admission Form Template exists, the UI explicitly states that import will use Core Student + Curriculum Academic Context only and permits the migration. No DB schema change; DB impact documentation updated.
+
+### ENR-4.6 — Academic Choice Parity — 2026-09-17
+- Student Import now mirrors Admission academic package vs genuine course-choice semantics.
+- Course-choice targets are dynamic from curriculum slot min/max; 2 choices => two sockets, 3 => three sockets, etc.
+- Genuine choices accept actual Curriculum Course Codes; Offered From/Common/category/term context resolves internally from Curriculum Course Mapping.
+- Package mode remains one configured academic-option selection with linked papers resolved internally.
+- No schema migration. Owner QA remains in progress; ENR-4 is not closed.
+
+### ENR-4.8 — Offered-From Admission/Import parity — 2026-09-17
+- Owner corrected the user-facing choice contract: non-package academic choices now show/accept Offered From (History, Hindi, Common / Interdisciplinary, etc.), not internal course codes.
+- Admission Form stores the resolved Curriculum Course Mapping ID behind the Offered From selection; final review also presents Offered From rather than exposing course codes.
+- Student Import dynamically creates Offered From choice sockets from Curriculum slot min/max and resolves CSV Offered From code/name through the same `ApplicantAcademicPreferenceService` before writing Enrollment course choices.
+- Ambiguous same-slot Offered From configuration (more than one active mapping for one source) is blocked rather than guessed.
+- ENR-4 remains OWNER QA IN PROGRESS. Admission and Import parity must be verified against the same Curriculum before closure.
+
+### ENR-4.9 — Candidate/Application Offered-From parity
+- College `Applications / Candidate Eligibility` create/edit mirrors the public Applicant Admission Form: users choose Offered From while existing curriculum-course-mapping IDs remain the persisted academic choice.
+- Academic Package behavior is preserved.
+- No schema change / no migration. ENR-4 remains OWNER QA IN PROGRESS.

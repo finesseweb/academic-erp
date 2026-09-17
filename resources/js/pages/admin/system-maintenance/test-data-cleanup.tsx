@@ -118,6 +118,8 @@ type Props = {
         users: Entity[];
         roles: Entity[];
         applicants: Entity[];
+        students: Entity[];
+        student_identity_assignments: Entity[];
         college_admission_form_templates: Entity[];
         college_application_fee_rules: Entity[];
         fee_adjustments: Entity[];
@@ -163,6 +165,8 @@ type TabKey =
     | 'users'
     | 'roles'
     | 'applicants'
+    | 'students'
+    | 'student_identity_assignments'
     | 'curriculum'
     | 'academic_policies'
     | 'college_admission_form_templates'
@@ -228,6 +232,8 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'users', label: 'Users' },
     { key: 'roles', label: 'Roles' },
     { key: 'applicants', label: 'Applicants' },
+    { key: 'students', label: 'Students' },
+    { key: 'student_identity_assignments', label: 'Student Identity Assignments' },
     { key: 'college_admission_form_templates', label: 'Admission Form Templates' },
     { key: 'college_application_fee_rules', label: 'Application Fee Rules' },
     { key: 'fee_adjustments', label: 'Fee Adjustments' },
@@ -274,6 +280,10 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
     {
         label: 'Access & Security',
         keys: ['users', 'roles'],
+    },
+    {
+        label: 'Student Management',
+        keys: ['students', 'student_identity_assignments'],
     },
     {
         label: 'Admission Processing',

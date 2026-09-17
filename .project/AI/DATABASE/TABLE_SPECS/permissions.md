@@ -23,3 +23,14 @@
 - 2026-08-13: Added `theme.select_own` and `theme.manage_personal_selection`; granted both to the global `SUPER_ADMIN` system role.
 - 2026-08-18: Current Laravel repository persists `university.view` and `university.update` for the University Profile milestone. Earlier catalog claims must be verified during their respective milestones.
 - 2026-08-19: Added `permission.view`, the module/status index, and the read-only searchable catalog UI. Permission creation remains migration/code-controlled.
+
+- 2026-09-16: ADR 197 migration `2026_09_16_080000_register_fee_clearance_permission.php` registers active, non-sensitive, College-delegable `college_fee_clearance.view` (`module=Fee Management`, `resource=college_fee_clearance`, `action=view`). The migration also synchronizes protected default role grants through existing `role_permissions`; no authorization schema change is introduced.
+
+### ENR-1 registration — 2026-09-16
+`college_student_enrollment.view` is registered by `2026_09_16_153000_register_student_enrollment_view_permission.php`. It is College-delegable and read-only; default active grants are SUPER_ADMIN and COLLEGE_ADMIN.
+
+## ENR-2 addition — 2026-09-16
+`college_student_enrollment.enroll` — sensitive, College-delegable mutation permission for converting an eligible confirmed Admission into Student Enrollment. Registered by `2026_09_16_163000_register_student_enrollment_enroll_permission.php`; default protected grants: SUPER_ADMIN, COLLEGE_ADMIN.
+
+## ENR-3.6 rows
+Student Management contains `college_student_enrollment.view`, `college_student_enrollment.enroll`, `college_student_identity.view`, and `college_student_identity.manage`. The migration changes permission metadata/reference rows only; the `permissions` table schema is unchanged.

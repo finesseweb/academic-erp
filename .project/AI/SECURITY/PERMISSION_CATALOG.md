@@ -368,3 +368,20 @@ Fee Structure item authoring is governed by the corresponding structure `update`
 - `college_fee_adjustment.post` — sensitive College-delegable permission to post manual CREDIT/DEBIT adjustments.
 - `college_fee_adjustment.reverse` — sensitive College-delegable permission to reverse a manual adjustment or an entire POSTED receipt.
 - `college_fee_refund.post` — sensitive College-delegable permission to post refunds against refundable paid allocations only.
+
+## Fee Clearance — ADR 197 (implemented 2026-09-16)
+- `college_fee_clearance.view` — College-delegable, non-sensitive read permission for the authoritative Fee Clearance projection at exact College scope. It grants no collection, adjustment, reversal, refund, demand mutation or manual clearance capability.
+
+Protected default grants are synchronized for `SUPER_ADMIN` and `COLLEGE_ADMIN` by migration `2026_09_16_080000_register_fee_clearance_permission.php`. Runtime access must remain server-enforced; sidebar/page visibility is UX only.
+
+### Student Enrollment — ENR-1
+- `college_student_enrollment.view` — College-delegable, non-sensitive read permission for the Student Enrollment eligibility queue. It grants no Student creation, Enrollment mutation, roll-number assignment, import, Fee Clearance override, or finance mutation capability.
+
+### Student Enrollment — ENR-2
+- `college_student_enrollment.enroll` — sensitive College-delegable permission. Authorizes the canonical Admission → Student Enrollment mutation; server still enforces College scope, CONFIRMED Admission, Programme Offering validity, duplicate protection and live Fee Clearance.
+
+### Student Management — ENR-3.6 alignment
+- `college_student_enrollment.view` — module `Student Management`; view enrollment queue.
+- `college_student_enrollment.enroll` — module `Student Management`; execute enrollment transaction.
+- `college_student_identity.view` — module `Student Management`; view Student Identity page/rules/assignments.
+- `college_student_identity.manage` — module `Student Management`; configure rules and assign identities; sensitive mutation permission.

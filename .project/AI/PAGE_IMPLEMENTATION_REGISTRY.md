@@ -229,3 +229,15 @@ On `next` / `next N` / `nextN`:
 - Controller: `CollegeFeeAdjustmentController`
 - Service: `FeeAdjustmentRefundService`
 - Status: IMPLEMENTED / OWNER QA REQUIRED (2026-09-12)
+
+## Fee Clearance — 2026-09-16
+- PAGE_SPEC: `PAGE_SPECS/COLLEGE_FINANCE/FEE_CLEARANCE_PAGE.md`
+- Route: `/college/{college}/fee-clearance`
+- Page: `resources/js/pages/college-fee-clearance/index.tsx`
+- Controller: `CollegeFeeClearanceController`
+- Service: `FeeClearanceService`
+- Permission: `college_fee_clearance.view`
+- Governing decision: ADR 197
+- Status: IMPLEMENTED / OWNER_QA_REQUIRED
+- Accounting model: read-only projection over required Demand Item snapshots + authoritative Student Fee Ledger; no duplicate clearance balance/table.
+- Downstream gate: Student Enrollment remains blocked until owner QA PASS.
