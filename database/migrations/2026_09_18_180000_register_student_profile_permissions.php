@@ -1,0 +1,7 @@
+<?php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+return new class extends Migration {
+ public function up():void{$now=now();foreach([['college_student_profile.view','view','View Student profiles and canonical enrollment context',false],['college_student_profile.edit','edit','Edit Student core and governed Student Profile data',true]] as [$code,$action,$description,$sensitive]){DB::table('permissions')->updateOrInsert(['code'=>$code],['module'=>'Student Management','resource'=>'college_student_profile','action'=>$action,'description'=>$description,'is_sensitive'=>$sensitive,'is_college_delegable'=>true,'status'=>'ACTIVE','created_at'=>$now,'updated_at'=>$now]);}$ids=DB::table('permissions')->whereIn('code',['college_student_profile.view','college_student_profile.edit'])->pluck('id');foreach(['SUPER_ADMIN','COLLEGE_ADMIN'] as $code){$role=DB::table('roles')->where('code',$code)->where('status','ACTIVE')->value('id');if($role)foreach($ids as $id)DB::table('role_permissions')->updateOrInsert(['role_id'=>$role,'permission_id'=>$id],['created_at'=>$now,'updated_at'=>$now]);}}
+ public function down():void{$ids=DB::table('permissions')->whereIn('code',['college_student_profile.view','college_student_profile.edit'])->pluck('id');DB::table('role_permissions')->whereIn('permission_id',$ids)->delete();DB::table('permissions')->whereIn('id',$ids)->delete();}
+};

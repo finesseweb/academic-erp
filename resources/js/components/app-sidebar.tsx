@@ -31,6 +31,7 @@ import {
     TriangleAlert,
     WalletCards,
     UsersRound,
+    UserRound,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
@@ -757,6 +758,13 @@ export function AppSidebar() {
                           href: `/college/${collegeId}/student-enrollments`,
                           icon: GraduationCap,
                           permission: 'college_student_enrollment.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Student Profile',
+                          href: `/college/${collegeId}/student-profiles`,
+                          icon: UserRound,
+                          permission: 'college_student_profile.view',
                           directNavigation: true,
                       },
                       {

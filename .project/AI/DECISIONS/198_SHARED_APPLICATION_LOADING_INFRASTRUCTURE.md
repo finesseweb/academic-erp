@@ -30,3 +30,9 @@ None.
 - The provider exposes `setNextLoadingLabel()` so pages may describe a known fetch while retaining the automatic `Loading data…` fallback for untouched/existing pages.
 - Resource-specific pages should add contextual labels when materially modified; they must not create separate router lifecycle listeners.
 - Student Fee Ledger is the first existing financial page migrated to contextual shared loading (`Loading fee ledger students…` / `Loading student fee ledger…`).
+
+## 2026-09-19 refinement — content-scoped navigation spinner
+- Global Inertia loading **state** remains shared so touched pages can keep contextual labels and button-level states.
+- The visual overlay is no longer mounted at the application root. It is rendered inside `AppContent`, which keeps the sidebar usable/visible and limits the loading mask to the main content region.
+- Auth/login layouts do not render `AppContent`; therefore login/auth pages have no page-loading overlay.
+- Existing form processing spinners remain local to their buttons. This change does not replace upload/progress/skeleton patterns where those are more appropriate.

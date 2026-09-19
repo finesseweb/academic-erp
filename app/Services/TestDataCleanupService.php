@@ -855,6 +855,8 @@ class TestDataCleanupService
                 $this->collegeProgramOfferingRows($universityId),
             'academic_calendars' =>
                 $this->academicCalendarRows($universityId),
+            'academic_calendar_periods' =>
+                $this->academicCalendarPeriodRows($universityId),
             'approval_workflows' =>
                 $this->approvalWorkflowRows($universityId),
             'courses' => $this->courseRows($universityId),
@@ -984,11 +986,127 @@ class TestDataCleanupService
         ];
     }
 
+    public function admissionWorkflowResetPreview(int $universityId): array
+    {
+        $collegeIds = Schema::hasTable('colleges')
+            ? DB::table('colleges')->where('university_id', $universityId)->pluck('id')
+            : collect();
+        $applicationIds = Schema::hasTable('college_admission_applications')
+            ? DB::table('college_admission_applications')->whereIn('college_id', $collegeIds)->pluck('id')
+            : collect();
+        $offeringIds = Schema::hasTable('college_program_offerings')
+            ? DB::table('college_program_offerings')->whereIn('college_id', $collegeIds)->pluck('id')
+            : collect();
+        $intakeIds = Schema::hasTable('college_program_intakes')
+            ? DB::table('college_program_intakes')->whereIn('college_program_offering_id', $offeringIds)->pluck('id')
+            : collect();
+        $ruleIds = Schema::hasTable('college_admission_selection_rules')
+            ? DB::table('college_admission_selection_rules')->whereIn('college_program_intake_id', $intakeIds)->pluck('id')
+            : collect();
+        $meritIds = Schema::hasTable('college_admission_merit_entries')
+            ? DB::table('college_admission_merit_entries')->whereIn('college_admission_selection_rule_id', $ruleIds)->pluck('id')
+            : collect();
+        $admissionIds = Schema::hasTable('admissions')
+            ? DB::table('admissions')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
+            : collect();
+        $studentIds = Schema::hasTable('students')
+            ? DB::table('students')->whereIn('admission_id', $admissionIds)->pluck('id')
+            : collect();
+
+        return [
+            'confirmation_code' => 'RESET-ADMISSION-WORKFLOW-TEST-DATA',
+            'counts' => [
+                'students_from_admission' => $studentIds->count(),
+                'admissions' => $admissionIds->count(),
+                'seat_allocations' => Schema::hasTable('college_admission_seat_allocations') ? DB::table('college_admission_seat_allocations')->whereIn('college_admission_application_id', $applicationIds)->count() : 0,
+                'document_verifications' => Schema::hasTable('college_admission_document_verifications') ? DB::table('college_admission_document_verifications')->whereIn('college_admission_application_id', $applicationIds)->count() : 0,
+                'merit_entries' => $meritIds->count(),
+                'selection_rules' => $ruleIds->count(),
+                'reservation_plans' => Schema::hasTable('college_program_reservation_plans') ? DB::table('college_program_reservation_plans')->whereIn('college_program_intake_id', $intakeIds)->count() : 0,
+            ],
+            'preserved' => [
+                'Admission Applications and submitted applicant answers',
+                'Applicant login identities/profiles',
+                'Admission Scores / eligibility data',
+                'Programme Offerings and Intake / Seat Capacity',
+                'Curriculum and academic masters',
+                'Users, roles, permissions and audit logs',
+            ],
+        ];
+    }
+
+    public function resetAdmissionWorkflow(int $universityId, int $actorId): array
+    {
+        $this->assertCleanupEnabled();
+        $preview = $this->admissionWorkflowResetPreview($universityId);
+
+        return DB::transaction(function () use ($universityId, $actorId, $preview) {
+            $collegeIds = DB::table('colleges')->where('university_id', $universityId)->pluck('id');
+            $applicationIds = DB::table('college_admission_applications')->whereIn('college_id', $collegeIds)->pluck('id');
+            $offeringIds = DB::table('college_program_offerings')->whereIn('college_id', $collegeIds)->pluck('id');
+            $intakeIds = DB::table('college_program_intakes')->whereIn('college_program_offering_id', $offeringIds)->pluck('id');
+            $ruleIds = DB::table('college_admission_selection_rules')->whereIn('college_program_intake_id', $intakeIds)->pluck('id');
+            $meritIds = DB::table('college_admission_merit_entries')->whereIn('college_admission_selection_rule_id', $ruleIds)->pluck('id');
+            $admissionIds = DB::table('admissions')->whereIn('college_admission_application_id', $applicationIds)->pluck('id');
+            $studentIds = DB::table('students')->whereIn('admission_id', $admissionIds)->pluck('id');
+            $enrollmentIds = Schema::hasTable('student_enrollments') ? DB::table('student_enrollments')->whereIn('student_id', $studentIds)->pluck('id') : collect();
+            $feeDemandIds = Schema::hasTable('fee_demands') ? DB::table('fee_demands')->whereIn('admission_id', $admissionIds)->pluck('id') : collect();
+            $paymentIds = Schema::hasTable('fee_payments') ? DB::table('fee_payments')->whereIn('admission_id', $admissionIds)->pluck('id') : collect();
+            $refundIds = Schema::hasTable('fee_payment_refunds') ? DB::table('fee_payment_refunds')->whereIn('fee_payment_id', $paymentIds)->pluck('id') : collect();
+
+            // Downstream finance generated for these test admissions, child-first.
+            $this->deleteWhereIn('fee_payment_refund_allocations', 'fee_payment_refund_id', $refundIds);
+            $this->deleteWhereIn('fee_payment_refunds', 'id', $refundIds);
+            $this->deleteWhereIn('fee_payment_allocations', 'fee_payment_id', $paymentIds);
+            $this->deleteWhereIn('fee_payments', 'id', $paymentIds);
+            $this->deleteWhereIn('fee_installment_schedules', 'fee_demand_id', $feeDemandIds);
+            $this->deleteWhereIn('fee_late_fine_charges', 'fee_demand_id', $feeDemandIds);
+            $this->deleteWhereIn('fee_student_benefits', 'fee_demand_id', $feeDemandIds);
+            $this->deleteWhereIn('fee_adjustments', 'fee_demand_id', $feeDemandIds);
+            $this->deleteWhereIn('fee_demand_items', 'fee_demand_id', $feeDemandIds);
+            $this->deleteWhereIn('fee_demands', 'id', $feeDemandIds);
+
+            // Canonical Student/Enrollment children before Admission.
+            $this->deleteWhereIn('student_enrollment_course_choices', 'student_enrollment_id', $enrollmentIds);
+            $this->deleteWhereIn('student_profile_values', 'student_id', $studentIds);
+            $this->deleteWhereIn('student_enrollments', 'student_id', $studentIds);
+            if (Schema::hasTable('applicant_profiles') && Schema::hasColumn('applicant_profiles', 'student_id')) {
+                DB::table('applicant_profiles')->whereIn('student_id', $studentIds)->update([
+                    'student_id' => null, 'student_enabled_at' => null, 'lifecycle_status' => 'APPLICANT', 'updated_at' => now(),
+                ]);
+            }
+            $this->deleteWhereIn('students', 'id', $studentIds);
+
+            $this->deleteWhereIn('admissions', 'id', $admissionIds);
+            $seatIds = Schema::hasTable('college_admission_seat_allocations') ? DB::table('college_admission_seat_allocations')->whereIn('college_admission_application_id', $applicationIds)->pluck('id') : collect();
+            $this->deleteWhereIn('college_admission_seat_allocation_horizontal_categories', 'college_admission_seat_allocation_id', $seatIds);
+            $this->deleteWhereIn('college_admission_seat_allocations', 'id', $seatIds);
+            $verificationIds = Schema::hasTable('college_admission_document_verifications') ? DB::table('college_admission_document_verifications')->whereIn('college_admission_application_id', $applicationIds)->pluck('id') : collect();
+            $this->deleteWhereIn('college_admission_document_verification_items', 'college_admission_document_verification_id', $verificationIds);
+            $this->deleteWhereIn('college_admission_document_verifications', 'id', $verificationIds);
+            $this->deleteWhereIn('college_admission_merit_entries', 'id', $meritIds);
+
+            // Reset generated/locked admission setup downstream of Intake so seat capacity can be edited.
+            $planIds = Schema::hasTable('college_program_reservation_plans') ? DB::table('college_program_reservation_plans')->whereIn('college_program_intake_id', $intakeIds)->pluck('id') : collect();
+            $this->deleteWhereIn('college_program_reservation_allocations', 'college_program_reservation_plan_id', $planIds);
+            $this->deleteWhereIn('college_program_reservation_plans', 'id', $planIds);
+            $this->deleteWhereIn('college_admission_selection_rule_tiebreakers', 'college_admission_selection_rule_id', $ruleIds);
+            $this->deleteWhereIn('college_admission_selection_rules', 'id', $ruleIds);
+
+            $this->audit('TEST_ADMISSION_WORKFLOW_RESET', 'test_data_cleanup', $universityId, $preview, $actorId);
+            return $preview;
+        });
+    }
+
     public function fullAcademicResetPreview(int $universityId): array
     {
         return [
             'confirmation_code' => 'RESET-ACADEMIC-TEST-DATA',
             'counts' => [
+                'students' => $this->countCollegeScopedRowsForUniversity('students', $universityId),
+                'student_enrollments' => Schema::hasTable('student_enrollments') ? DB::table('student_enrollments as se')->join('students as s','s.id','=','se.student_id')->join('colleges as c','c.id','=','s.college_id')->where('c.university_id',$universityId)->count() : 0,
+                'student_enrollment_course_choices' => Schema::hasTable('student_enrollment_course_choices') ? DB::table('student_enrollment_course_choices as ec')->join('student_enrollments as se','se.id','=','ec.student_enrollment_id')->join('students as s','s.id','=','se.student_id')->join('colleges as c','c.id','=','s.college_id')->where('c.university_id',$universityId)->count() : 0,
+                'student_profile_values' => Schema::hasTable('student_profile_values') ? DB::table('student_profile_values as spv')->join('students as s','s.id','=','spv.student_id')->join('colleges as c','c.id','=','s.college_id')->where('c.university_id',$universityId)->count() : 0,
                 'college_admission_form_templates' =>
                     $this->countUniversityRows('college_admission_form_templates', $universityId),
                 'college_admission_form_mappings' =>
@@ -1087,7 +1205,7 @@ class TestDataCleanupService
             'preserved' => [
                 'University Profile',
                 'Affiliated Colleges',
-                'Users and login accounts',
+                'Users and login accounts (including the designated test@ bootstrap login)',
                 'Applicant login identities/profiles (applications are cleared, identities are preserved)',
                 'Protected/system Roles',
                 'Permissions and Role-Permission grants',
@@ -1263,8 +1381,12 @@ class TestDataCleanupService
                 // ENR-0 foundation is downstream of Admission/Application. Keep reset child-first
                 // even before ENR-2 exposes Student creation in normal UI.
                 $studentIds = Schema::hasTable('students')
-                    ? DB::table('students')->whereIn('college_admission_application_id', $applicationIds)->pluck('id')
+                    ? DB::table('students')->whereIn('college_id', $collegeIds)->pluck('id')
                     : collect();
+                $enrollmentIdsForReset = Schema::hasTable('student_enrollments')
+                    ? DB::table('student_enrollments')->whereIn('student_id', $studentIds)->pluck('id')
+                    : collect();
+                $this->deleteWhereIn('student_enrollment_course_choices', 'student_enrollment_id', $enrollmentIdsForReset);
                 $this->deleteWhereIn('student_profile_values', 'student_id', $studentIds);
                 $this->deleteWhereIn('student_enrollments', 'student_id', $studentIds);
                 if (Schema::hasTable('applicant_profiles') && Schema::hasColumn('applicant_profiles', 'student_id') && $studentIds->isNotEmpty()) {
@@ -1901,6 +2023,12 @@ class TestDataCleanupService
                 ),
             'academic_calendars' =>
                 $this->cleanupAcademicCalendar(
+                    $id,
+                    $universityId,
+                    $actorId
+                ),
+            'academic_calendar_periods' =>
+                $this->cleanupAcademicCalendarPeriod(
                     $id,
                     $universityId,
                     $actorId
@@ -4160,6 +4288,10 @@ class TestDataCleanupService
                 'applicant_profiles_restored' => 0,
             ];
 
+            $enrollmentIds = Schema::hasTable('student_enrollments')
+                ? DB::table('student_enrollments')->where('student_id', $record->id)->pluck('id')
+                : collect();
+            $this->deleteWhereIn('student_enrollment_course_choices', 'student_enrollment_id', $enrollmentIds);
             $this->deleteWhereIn('student_profile_values', 'student_id', collect([$record->id]));
             $this->deleteWhereIn('student_enrollments', 'student_id', collect([$record->id]));
 
@@ -5810,6 +5942,112 @@ class TestDataCleanupService
             })
             ->values()
             ->all();
+    }
+
+    private function academicCalendarPeriodRows(int $universityId): array
+    {
+        if (
+            ! Schema::hasTable('academic_calendar_term_periods') ||
+            ! Schema::hasTable('academic_calendars') ||
+            ! Schema::hasTable('curriculum_terms') ||
+            ! Schema::hasTable('curricula')
+        ) {
+            return [];
+        }
+
+        return DB::table('academic_calendar_term_periods as actp')
+            ->join('academic_calendars as ac', 'ac.id', '=', 'actp.academic_calendar_id')
+            ->join('curriculum_terms as ct', 'ct.id', '=', 'actp.curriculum_term_id')
+            ->join('curricula as cur', 'cur.id', '=', 'ct.curriculum_id')
+            ->where('ac.university_id', $universityId)
+            ->orderByDesc('actp.id')
+            ->get([
+                'actp.id', 'actp.status', 'actp.start_date', 'actp.end_date',
+                'ac.code as calendar_code', 'ac.name as calendar_name',
+                'ct.name as term_name', 'ct.sequence_no',
+                'cur.code as curriculum_code', 'cur.name as curriculum_name',
+            ])
+            ->map(function ($row) {
+                $eventCount = $this->countIfExists(
+                    'academic_calendar_events',
+                    'academic_calendar_term_period_id',
+                    $row->id
+                );
+
+                return [
+                    'id' => $row->id,
+                    'code' => 'CAL-PERIOD-'.$row->id,
+                    'name' => $row->calendar_name.' · '.$row->curriculum_name.' · '.$row->term_name,
+                    'status' => $row->status,
+                    'kind' => 'ACADEMIC_CALENDAR_PERIOD',
+                    'dependencies' => [
+                        'period_specific_events_preserved_and_unlinked' => $eventCount,
+                    ],
+                    'blocked' => false,
+                    'blocking_references' => [],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function cleanupAcademicCalendarPeriod(
+        int $id,
+        int $universityId,
+        int $actorId
+    ): array {
+        if (! Schema::hasTable('academic_calendar_term_periods')) {
+            abort(404);
+        }
+
+        $record = DB::table('academic_calendar_term_periods as actp')
+            ->join('academic_calendars as ac', 'ac.id', '=', 'actp.academic_calendar_id')
+            ->where('actp.id', $id)
+            ->where('ac.university_id', $universityId)
+            ->select('actp.*')
+            ->first();
+
+        if (! $record) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($record, $actorId) {
+            $eventCount = $this->countIfExists(
+                'academic_calendar_events',
+                'academic_calendar_term_period_id',
+                $record->id
+            );
+
+            // Period cleanup is a QA reset. Calendar events are independent records;
+            // preserve them and remove only their optional period link before deletion.
+            if (
+                Schema::hasTable('academic_calendar_events') &&
+                Schema::hasColumn('academic_calendar_events', 'academic_calendar_term_period_id')
+            ) {
+                DB::table('academic_calendar_events')
+                    ->where('academic_calendar_term_period_id', $record->id)
+                    ->update(['academic_calendar_term_period_id' => null]);
+            }
+
+            DB::table('academic_calendar_term_periods')
+                ->where('id', $record->id)
+                ->delete();
+
+            $result = [
+                'record' => (array) $record,
+                'preserved_unlinked_events' => $eventCount,
+            ];
+
+            $this->audit(
+                'TEST_ACADEMIC_CALENDAR_PERIOD_CLEANED',
+                'test_data_cleanup',
+                $record->id,
+                $result,
+                $actorId
+            );
+
+            return $result;
+        });
     }
 
     private function approvalWorkflowRows(

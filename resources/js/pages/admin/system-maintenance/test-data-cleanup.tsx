@@ -82,6 +82,12 @@ type Entity = {
     program_offerings?: { id: number; code?: string | null; name: string }[];
 };
 
+type AdmissionWorkflowReset = {
+    confirmation_code: string;
+    counts: Record<string, number>;
+    preserved: string[];
+};
+
 type FullReset = {
     confirmation_code: string;
     counts: Record<string, number>;
@@ -111,6 +117,7 @@ type Props = {
     environment: string;
     curricula: Curriculum[];
     academicPolicies: AcademicPolicy[];
+    admissionWorkflowReset: AdmissionWorkflowReset;
     fullReset: FullReset;
     accessReset: AccessReset;
     legacyUnlinkedRegularApplications: LegacyUnlinkedRegularApplications;
@@ -149,6 +156,7 @@ type Props = {
         batches: Entity[];
         college_program_offerings: Entity[];
         academic_calendars: Entity[];
+        academic_calendar_periods: Entity[];
         approval_workflows: Entity[];
         courses: Entity[];
         course_categories: Entity[];
@@ -198,6 +206,7 @@ type TabKey =
     | 'batches'
     | 'college_program_offerings'
     | 'academic_calendars'
+    | 'academic_calendar_periods'
     | 'approval_workflows'
     | 'courses'
     | 'course_categories'
@@ -219,6 +228,7 @@ type ActionTarget = {
         | 'deactivate_admission_form_template'
         | 'cleanup_legacy_unlinked_regular'
         | 'full_access_reset'
+        | 'admission_workflow_reset'
         | 'full_reset';
     type?: TabKey;
     ids?: number[];
@@ -263,6 +273,7 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'batches', label: 'Batches' },
     { key: 'college_program_offerings', label: 'Program Offerings' },
     { key: 'academic_calendars', label: 'Academic Calendars' },
+    { key: 'academic_calendar_periods', label: 'Academic Calendar Periods' },
     { key: 'academic_policies', label: 'Academic Policies' },
     { key: 'curriculum', label: 'Curriculum' },
     { key: 'approval_workflows', label: 'Approval Workflows' },
@@ -341,6 +352,7 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
             'curriculum',
             'academic_policies',
             'academic_calendars',
+            'academic_calendar_periods',
             'college_academic_calendars',
             'batches',
             'sections',
@@ -357,6 +369,7 @@ export default function TestDataCleanup({
     curricula,
     academicPolicies,
     entities,
+    admissionWorkflowReset,
     fullReset,
     accessReset,
     legacyUnlinkedRegularApplications,
@@ -493,6 +506,14 @@ export default function TestDataCleanup({
         event.preventDefault();
 
         if (!target) return;
+
+        if (target.mode === 'admission_workflow_reset') {
+            form.delete('/admin/system-maintenance/test-data-cleanup/admission-workflow-reset', {
+                preserveScroll: true,
+                onSuccess: () => setTarget(null),
+            });
+            return;
+        }
 
         if (target.mode === 'full_reset') {
             form.delete(
@@ -696,6 +717,23 @@ export default function TestDataCleanup({
                                         {accessReset.preserved.join(' · ')}
                                     </div>
                                 </details>
+                            </div>
+
+                            <div className="rounded-lg border p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="font-medium">Admission & Merit Workflow Reset</div>
+                                        <div className="mt-1 text-xs text-muted-foreground">
+                                            Resets generated Admission/Merit processing so Intake / Seat Capacity can be adjusted without rebuilding applicant forms. Applications, scores, curriculum and setup masters are preserved.
+                                        </div>
+                                    </div>
+                                    <Button type="button" variant="outline" className="shrink-0" disabled={!enabled} onClick={() => openAction({ mode: 'admission_workflow_reset', id: 0, code: admissionWorkflowReset.confirmation_code, name: 'Admission & Merit Workflow Reset' })}>
+                                        <RotateCcw className="size-4" /> Reset Module
+                                    </Button>
+                                </div>
+                                <div className="mt-3 text-xs text-muted-foreground">
+                                    Preserved: {admissionWorkflowReset.preserved.join(' · ')}
+                                </div>
                             </div>
 
                             <div className="rounded-lg border border-destructive/40 p-4">
@@ -1508,7 +1546,9 @@ export default function TestDataCleanup({
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <AlertTriangle className="size-5 text-destructive" />
-                                {target.mode === 'full_reset'
+                                {target.mode === 'admission_workflow_reset'
+                                    ? 'Admission & Merit Workflow Reset'
+                                    : target.mode === 'full_reset'
                                     ? 'Full Academic Test Reset'
                                     : target.mode === 'full_access_reset'
                                       ? 'Full User & Role Test Reset'
@@ -1540,7 +1580,9 @@ export default function TestDataCleanup({
                                 </div>
 
                                 <p className="text-sm text-muted-foreground">
-                                    {target.mode === 'full_reset'
+                                    {target.mode === 'admission_workflow_reset'
+                                        ? 'Generated Merit/Roster, Seat Allocation, Admission, admission-created Student/Enrollment and dependent admission finance test data will be cleaned child-first. Submitted Applications, applicant answers, scores, Programme Offering, Intake/Seat Capacity, Curriculum and access data are preserved. Reservation/Selection setup downstream of Intake is reset so capacity can be edited and the workflow regenerated.'
+                                        : target.mode === 'full_reset'
                                         ? 'All currently implemented academic/test records will be permanently deleted in dependency-safe order. University Profile, Colleges, Users, protected Roles, Permissions, access assignments, Audit Logs, migrations, and system tables are preserved.'
                                         : target.mode === 'full_access_reset'
                                           ? 'All cleanable internal University/College staff test users and custom roles will be permanently removed. The current logged-in user, SUPER_ADMIN identities, applicants, system roles, permissions, audit logs and operationally referenced users/roles are preserved.'
@@ -1648,7 +1690,9 @@ export default function TestDataCleanup({
                                                 target.code
                                         }
                                     >
-                                        {target.mode === 'full_reset'
+                                        {target.mode === 'admission_workflow_reset'
+                                            ? 'Reset Admission & Merit Module'
+                                            : target.mode === 'full_reset'
                                             ? 'Reset All Academic Test Data'
                                             : target.mode === 'full_access_reset'
                                               ? 'Clean All Users & Roles'

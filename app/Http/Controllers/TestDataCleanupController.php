@@ -76,6 +76,8 @@ class TestDataCleanupController extends Controller
                 'entities' =>
                     $this->service
                         ->listMaintenanceEntities($university->id),
+                'admissionWorkflowReset' =>
+                    $this->service->admissionWorkflowResetPreview($university->id),
                 'fullReset' =>
                     $this->service
                         ->fullAcademicResetPreview($university->id),
@@ -171,6 +173,21 @@ class TestDataCleanupController extends Controller
             'success',
             'Selected Academic Policy test version chain and dependent policy configuration were cleaned successfully.'
         );
+    }
+
+    public function admissionWorkflowReset(Request $request): RedirectResponse
+    {
+        $this->authorizeCleanup($request);
+        $university = University::query()->firstOrFail();
+        $request->validate(['confirmation_code' => ['required', 'string', 'max:120']]);
+        $expected = 'RESET-ADMISSION-WORKFLOW-TEST-DATA';
+        if (trim((string) $request->input('confirmation_code')) !== $expected) {
+            throw ValidationException::withMessages([
+                'confirmation_code' => 'Type RESET-ADMISSION-WORKFLOW-TEST-DATA exactly to reset Admission & Merit QA workflow data.',
+            ]);
+        }
+        $this->service->resetAdmissionWorkflow($university->id, $request->user()->id);
+        return back()->with('success', 'Admission & Merit QA workflow reset completed. Applications and academic setup were preserved; Intake can now be adjusted after deactivation.');
     }
 
     public function fullReset(

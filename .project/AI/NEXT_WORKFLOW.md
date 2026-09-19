@@ -894,3 +894,33 @@ ENR-3 is implemented and requires Owner QA before ENR-4. Verify migration/permis
 10. Regression: enroll one Admission-origin student and verify its existing Application Academic Preference Discipline is copied to Enrollment and Student Identity still filters/displays it correctly.
 11. Verify cross-College import token/Offering access cannot be used.
 12. After Owner QA PASS, close ADR 204 / ENR-4 and return to the authoritative University Administration roadmap.
+
+## ENR-5 Owner QA — Canonical Enrollment Academic Normalization
+1. Dry-run the known legacy Admission enrollment: `php artisan students:normalize-enrollment-academics --enrollment=6`.
+2. Confirm it reports READY and expected Curriculum/Discipline/Specialization/course mappings from that Enrollment's own Admission/Application records; no DB mutation in dry-run.
+3. Apply only that row: `php artisan students:normalize-enrollment-academics --enrollment=6 --apply`.
+4. Re-run dry-run; it must report ALREADY_CANONICAL (restart/idempotency proof).
+5. Compare one ADMISSION and one IMPORT Enrollment under the same Programme Offering/Curriculum; both must expose academic truth from `student_enrollments` + `student_enrollment_course_choices` without provenance fallback.
+6. Verify Audit Log contains `student.enrollment.academic_normalized` for Enrollment 6.
+7. Create/enroll one new Admission-origin Student after this patch and verify it is canonical immediately; no normalization command should be needed.
+8. Import one Student after this patch and verify the same canonical tables remain the persistence target.
+9. If any row reports NEEDS_REVIEW, do not force/hand-edit it; inspect the documented provenance mismatch and correct source/data deliberately.
+10. After Owner QA PASS, close ENR-5 and proceed to Student Profile/View/Edit as the next Student lifecycle milestone.
+
+## Immediate QA — ADR 207 Test Data Cleanup Reset Levels
+Before resuming ENR-5 fresh Admission canonical-persistence QA, run Admission & Merit Workflow Reset. Verify Applications remain, generated Merit/Seat/Admission/Admission-Student data clears, Intake capacity becomes editable after deactivation, then regenerate the admission workflow. Also regression-test Full Academic Test Reset and confirm the designated `test@...` login remains usable after reset.
+
+
+### Immediate QA follow-up — Academic Calendar Period cleanup
+Before returning to ENR-5 fresh Admission QA: verify targeted Academic Calendar Period cleanup, re-add the current/amended curriculum Period 1 through Academic Calendar, then verify existing Fee Item calendar validation passes only after valid period dates exist. Do not apply the abandoned University Fee visibility patch as part of this workflow.
+
+## ENR-5 closure / ENR-6 next gate — 2026-09-18
+ENR-5 / ADR 206: OWNER QA PASSED / CLOSED. Fresh Admission-route QA confirmed current Admission enrollment writes canonical Curriculum/Discipline/Course Choice context directly.
+
+ENR-6 / ADR 208 Student Profile is now IMPLEMENTED / OWNER QA PENDING. Run `.project/AI/QA/ENR6_STUDENT_PROFILE_QA.md`. Do not start downstream Attendance/Examination/Result work until Student Profile owner QA is closed. Identity and Enrollment academic context remain owned by their dedicated modules; Student Profile must not mutate them.
+
+### ENR-6.2 QA gate
+Before ENR-6 closure, verify Admission DOB parity, Candidate Profile Photo carry-forward/replacement, category-labelled applicant-choice presentation, reservation-category parity, RBAC/audit, and that Student Identity/Enrollment canonical data remains unchanged.
+
+### ENR-6.3 QA addendum — Import photo parity (2026-09-19)
+Before ENR-6 closure, verify an IMPORT-source Student under an offering with an applicable governed Candidate Profile Photo field: empty placeholder/Add Photo before first upload, persistent photo after upload, same-row replacement on second upload, audit/RBAC, and no regression to Admission-source photo inheritance. Do not add image columns to CSV import for this milestone.

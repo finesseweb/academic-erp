@@ -1181,3 +1181,33 @@ Student Import now enforces required mapping and row-level required values for a
 - College `Applications / Candidate Eligibility` create/edit mirrors the public Applicant Admission Form: users choose Offered From while existing curriculum-course-mapping IDs remain the persisted academic choice.
 - Academic Package behavior is preserved.
 - No schema change / no migration. ENR-4 remains OWNER QA IN PROGRESS.
+
+### ENR-5 — Canonical Enrollment Academic Normalization — 2026-09-18
+- ADMISSION and IMPORT now share `StudentEnrollmentAcademicContextService` for canonical Enrollment academic persistence.
+- Legacy pre-ENR-4.4 ADMISSION enrollments can be dry-run/repaired from their own authoritative Application Academic Preference + saved Application Course Choices with `students:normalize-enrollment-academics`.
+- Conflicting/missing provenance is never guessed; it is reported `NEEDS_REVIEW`.
+- Downstream Student Profile/Attendance/Examination/Result/Marksheet/Promotion must consume Student + Enrollment canonical context and must not branch by provenance.
+- DB impact: data normalization only; no schema migration.
+- Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+## ADR 207 — Test Data Cleanup reset levels — 2026-09-18
+- Added Admission & Merit Workflow Reset for repeatable admission QA without rebuilding submitted applicant forms.
+- Module reset preserves Applications/answers, Applicant identities, Scores, Programme Offering, Intake/Seat Capacity, Curriculum and academic masters; generated downstream Merit/Seat/Admission/Admission-Student data is reset child-first.
+- Full Academic Test Reset explicitly preserves Users/login accounts including the designated `test@...` bootstrap login.
+- Full reset now includes canonical Student children and IMPORT-source Students; Enrollment Course Choices are deleted before Enrollments.
+- No schema change / no migration. Owner QA pending; see `.project/AI/QA/ADR207_TEST_DATA_CLEANUP_QA.md`.
+
+
+### 2026-09-18 — ADR 207 follow-up: Academic Calendar Period cleanup
+Test Data Cleanup now exposes Academic Calendar Period assignments under Academic Setup as targeted QA cleanup records. Deleting one removes only the session/calendar period assignment, preserves the parent calendar and academic masters, and preserves calendar events. No Fee Management behavior was changed. No schema migration. Owner QA pending.
+
+## 2026-09-18 — ENR-5 CLOSED / ENR-6 Student Profile started
+ENR-5 / ADR 206 is OWNER QA PASSED / CLOSED. Owner QA confirmed legacy Admission normalization, idempotent rerun, and a fresh Admission-route Student enrollment persisted canonical academic context without requiring normalization.
+
+ENR-6 / ADR 208 is IMPLEMENTED / OWNER QA PENDING. Student Management now includes Student Profile with server-paginated Session → Programme Offering filtering, one-Student detail/edit, governed STUDENT_PROFILE values, read-only Student Identity fields, and read-only canonical Enrollment/course context. Admission/Import remain provenance only. Profile mutation is protected by `college_student_profile.edit` and audited as `student.profile.updated`. FILE/IMAGE profile values remain read-only in ENR-6.1. No Student-domain schema change; permission/reference migration only.
+
+### 2026-09-18 — ENR-6.2 profile presentation/lifecycle correction
+Student Profile now uses the shared DatePicker for DOB, promotes the governed Candidate Profile Photo to the profile header with permission-gated private viewing and auditable replacement, and presents current Enrollment context at the top. Academic choices are category-labelled `APPLICANT_CHOICE` summaries resolved through canonical Curriculum mappings; AUTO_MANDATORY courses and internal IDs are not exposed as profile choices. OWNER QA remains pending.
+
+### 2026-09-19 — ENR-6.3 Import-source profile photo parity
+Student Profile photo capability now follows the applicable governed Admission Form configuration for the Student's current Programme Offering rather than the existence of an Admission-copied photo value. IMPORT Students therefore receive the same empty photo slot and Add Photo action when `CANDIDATE_PROFILE_PHOTO` is configured as `STUDENT_PROFILE`. First upload creates the canonical profile-value row; subsequent replacements reuse it. CSV import remains unchanged and does not map FILE/IMAGE fields. Owner QA pending.

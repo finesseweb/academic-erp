@@ -265,3 +265,17 @@ Migration `2026_09_17_110000_add_configurable_class_roll_scope` extends existing
 
 ### ENR-4 / ADR 204 — Student Import / Migration (2026-09-17)
 Migration `2026_09_17_130000_enable_student_import_migration` extends `student_enrollments` with nullable `discipline_id -> academic_disciplines.id` plus `(college_id, college_program_offering_id, discipline_id, status)` index. This is required because IMPORT provenance has no Admission/Application preference chain. Admission-origin enrollments populate the same field prospectively; historical rows use relationship fallback. Registers `college_student_import.view/manage` under Student Management. **No new domain table.**
+
+## Student / Enrollment canonical ownership — ADR 206 (2026-09-18)
+
+| Logical Entity | Physical Table | Domain | Scope | Primary Key | Important Business Key(s) | Main Parent/Owner |
+|---|---|---|---|---|---|---|
+| Student | `students` | Student | College | `id` | (`college_id`,`student_uid`); optional unique Admission/Application/User links | `colleges.id` |
+| Student Enrollment | `student_enrollments` | Enrollment / Registration | College + Programme Offering | `id` | (`student_id`,`college_program_offering_id`); optional unique `admission_id` | `students.id`, `college_program_offerings.id` |
+| Enrollment Course Choice | `student_enrollment_course_choices` | Enrollment / Registration | Enrollment | `id` | (`student_enrollment_id`,`curriculum_course_mapping_id`) | `student_enrollments.id` |
+| Student Profile Value | `student_profile_values` | Student | Student | `id` | (`student_id`,`profile_key`) | `students.id` |
+
+Canonical Enrollment academic columns are `student_enrollments.curriculum_id`, `discipline_id`, `specialization_id`; resolved course facts live in `student_enrollment_course_choices` with Term, Slot, Curriculum Course Mapping, Course and `selection_source`. `source_type` records provenance (`ADMISSION`/`IMPORT`) and is not a downstream academic branching key.
+
+### ENR-6 / ADR 208 — Student Profile (2026-09-18)
+No Student-domain schema change. Existing `students` and `student_profile_values` remain authoritative for permanent/core and governed dynamic profile data. `student_enrollments` and `student_enrollment_course_choices` are read-only academic context on the profile surface. Migration `2026_09_18_180000_register_student_profile_permissions.php` is RBAC/reference-data only.

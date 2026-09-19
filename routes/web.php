@@ -57,6 +57,7 @@ use App\Http\Controllers\CollegeFeeLedgerController;
 use App\Http\Controllers\CollegeFeeClearanceController;
 use App\Http\Controllers\CollegeStudentEnrollmentController;
 use App\Http\Controllers\CollegeStudentIdentityController;
+use App\Http\Controllers\CollegeStudentProfileController;
 use App\Http\Controllers\CollegeStudentImportController;
 use App\Http\Controllers\CollegePaymentGatewayController;
 use App\Http\Controllers\CollegeOnlinePaymentController;
@@ -170,6 +171,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::redirect('super-admin/permissions', '/admin/permissions');
     Route::get('admin/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     Route::get('admin/system-maintenance/test-data-cleanup', [TestDataCleanupController::class, 'index'])->name('test-data-cleanup.index');
+    Route::delete('admin/system-maintenance/test-data-cleanup/admission-workflow-reset', [TestDataCleanupController::class, 'admissionWorkflowReset'])->name('test-data-cleanup.admission-workflow-reset');
     Route::delete('admin/system-maintenance/test-data-cleanup/full-reset', [TestDataCleanupController::class, 'fullReset'])->name('test-data-cleanup.full-reset');
     Route::delete('admin/system-maintenance/test-data-cleanup/gateway-test-orders', GatewayTestOrderCleanupController::class)->name('test-data-cleanup.gateway-test-orders');
     Route::delete('admin/system-maintenance/test-data-cleanup/legacy-unlinked-regular-applications', [TestDataCleanupController::class, 'cleanupLegacyUnlinkedRegularApplications'])->name('test-data-cleanup.legacy-unlinked-regular-applications');
@@ -371,8 +373,11 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('college/{college}/student-imports/upload', [CollegeStudentImportController::class, 'upload'])->name('college-student-imports.upload');
     Route::post('college/{college}/student-imports/preview', [CollegeStudentImportController::class, 'preview'])->name('college-student-imports.preview');
     Route::post('college/{college}/student-imports/import', [CollegeStudentImportController::class, 'store'])->name('college-student-imports.store');
-    Route::post('college/{college}/student-imports/mappings', [CollegeStudentImportController::class, 'saveMapping'])->name('college-student-imports.mappings.save');
-    Route::get('college/{college}/student-imports/mappings/{mapping}/template', [CollegeStudentImportController::class, 'mappingTemplate'])->name('college-student-imports.mappings.template');
+    Route::get('college/{college}/student-profiles', [CollegeStudentProfileController::class, 'index'])->name('college-student-profiles.index');
+    Route::get('college/{college}/student-profiles/{student}', [CollegeStudentProfileController::class, 'show'])->name('college-student-profiles.show');
+    Route::get('college/{college}/student-profiles/{student}/profile-values/{profileValue}/file', [CollegeStudentProfileController::class, 'profileFile'])->name('college-student-profiles.profile-file');
+    Route::post('college/{college}/student-profiles/{student}/profile-photo', [CollegeStudentProfileController::class, 'updateProfilePhoto'])->name('college-student-profiles.profile-photo.update');
+    Route::patch('college/{college}/student-profiles/{student}', [CollegeStudentProfileController::class, 'update'])->name('college-student-profiles.update');
     Route::get('college/{college}/student-identities', [CollegeStudentIdentityController::class, 'index'])->name('college-student-identities.index');
     Route::patch('college/{college}/student-identities/settings', [CollegeStudentIdentityController::class, 'updateSettings'])->name('college-student-identities.settings.update');
     Route::post('college/{college}/student-identities/{enrollment}/assign', [CollegeStudentIdentityController::class, 'assign'])->name('college-student-identities.assign');
@@ -440,6 +445,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('college/{college}/admission-document-verification/applications/{application}/finalize', [CollegeAdmissionDocumentVerificationController::class, 'finalize'])->name('college-admission-document-verification.finalize');
     Route::get('college/{college}/admission-seat-allocations', [CollegeAdmissionSeatAllocationController::class, 'index'])->name('college-admission-seat-allocations.index');
     Route::post('college/{college}/admission-seat-allocations/merit/{meritEntry}', [CollegeAdmissionSeatAllocationController::class, 'allocate'])->name('college-admission-seat-allocations.allocate');
+    Route::post('college/{college}/admission-seat-allocations/direct/{choice}', [CollegeAdmissionSeatAllocationController::class, 'allocateDirect'])->name('college-admission-seat-allocations.allocate-direct');
     Route::patch('college/{college}/admission-seat-allocations/{allocation}/cancel', [CollegeAdmissionSeatAllocationController::class, 'cancel'])->name('college-admission-seat-allocations.cancel');
     Route::get('college/{college}/admission-confirmations', [CollegeAdmissionConfirmationController::class, 'index'])->name('college-admission-confirmations.index');
     Route::post('college/{college}/admission-confirmations/seat-allocation/{allocation}', [CollegeAdmissionConfirmationController::class, 'confirm'])->name('college-admission-confirmations.confirm');

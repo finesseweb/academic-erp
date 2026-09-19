@@ -575,3 +575,26 @@ Programme Offering carries Academic Session. Student identity therefore remains 
 
 ### ENR-4 Discipline normalization
 `academic_disciplines (0..1) -> student_enrollments.discipline_id`. For new ADMISSION enrollments this snapshots the already-authoritative Application Academic Preference Discipline; for IMPORT enrollments it is resolved from mapped `discipline_code`. Student Identity consumes Enrollment Discipline first, with legacy Admission preference fallback for pre-ENR-4 rows.
+
+## ADR 206 — Canonical Enrollment Academic Context — 2026-09-18
+Both Student entry routes converge before downstream academic processing:
+
+`Application -> Admission -> Student -> Student Enrollment <- Student Import`
+
+Canonical downstream relationships:
+- `student_enrollments.curriculum_id -> curricula.id`
+- `student_enrollments.discipline_id -> academic_disciplines.id`
+- `student_enrollments.specialization_id -> academic_disciplines.id`
+- `student_enrollment_course_choices.student_enrollment_id -> student_enrollments.id`
+- `student_enrollment_course_choices.curriculum_term_id -> curriculum_terms.id`
+- `student_enrollment_course_choices.curriculum_slot_id -> curriculum_slots.id`
+- `student_enrollment_course_choices.curriculum_course_mapping_id -> curriculum_course_mappings.id`
+- `student_enrollment_course_choices.course_id -> courses.id`
+
+For legacy ADMISSION rows only, normalization source is:
+`student_enrollments.admission_id -> admissions -> college_admission_applications -> college_admission_application_academic_preferences / college_admission_application_course_choices -> canonical Enrollment context`.
+
+Application/Admission remains provenance/history after normalization. Attendance, Examination, Result, Marksheet, Promotion, Registration and Student Profile must consume Student + Enrollment academic context rather than provenance-specific branches.
+
+### ENR-6 Student Profile consumption rule (2026-09-18)
+Student Profile reads `students (1) -> (0..N) student_profile_values` and `students (1) -> (0..N) student_enrollments -> student_enrollment_course_choices`. Profile editing may mutate Student core/profile values only; identity and Enrollment academic relationships are displayed but remain owned by Student Identity/Enrollment modules. `source_type` is provenance only.

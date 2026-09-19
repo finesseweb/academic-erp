@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\CollegeAdmissionCycle;
 use App\Models\College;
 use App\Models\CollegeProgramOffering;
+use App\Models\ProgramTemplate;
 use App\Models\CollegeAdmissionFormField;
 use App\Models\CollegeAdmissionFormMapping;
 use App\Models\CollegeAdmissionFormTemplate;
@@ -22,7 +23,10 @@ class StudentImportService
 {
     public const TARGETS=['full_name','date_of_birth','email','phone','student_uid','university_roll_no','class_roll_no','discipline_code','specialization_code'];
 
-    public function __construct(private readonly ApplicantAcademicPreferenceService $academicPreferences) {}
+    public function __construct(
+        private readonly ApplicantAcademicPreferenceService $academicPreferences,
+        private readonly StudentEnrollmentAcademicContextService $academicContext,
+    ) {}
 
 
     public function targetsForOffering(College $college, int $sessionId, int $offeringId): array
@@ -65,8 +69,15 @@ class StudentImportService
 
     private function applicableTemplateIds(College $college, CollegeProgramOffering $offering)
     {
-        $offering->loadMissing('programTemplate.degree');
-        $program=$offering->programTemplate; $degree=$program?->degree;
+        // Resolve the Program Template from its authoritative id instead of trusting a
+        // partially-selected eager-loaded relation. Student Profile list/show pages may
+        // eager-load only id/name/code; in that state degree_id is absent and a
+        // degree-scoped Admission Form mapping would incorrectly disappear for IMPORT students.
+        $programTemplateId = $offering->program_template_id ?: $offering->programTemplate?->id;
+        $program = $programTemplateId
+            ? ProgramTemplate::query()->with('degree:id,degree_level_id')->find($programTemplateId)
+            : null;
+        $degree=$program?->degree;
         $cycleIds=DB::table('college_admission_cycles')->where('college_program_offering_id',$offering->id)->pluck('id');
         return CollegeAdmissionFormMapping::query()->where('university_id',$college->university_id)->where('status','ACTIVE')
             ->where(fn($q)=>$q->whereNull('college_id')->orWhere('college_id',$college->id))
@@ -79,17 +90,25 @@ class StudentImportService
             ->pluck('college_admission_form_template_id')->unique()->values();
     }
 
-    private function profileFieldsForOffering(College $college, CollegeProgramOffering $offering)
+    public function profileFieldsForOffering(College $college, CollegeProgramOffering $offering, bool $includeFileFields = false)
     {
-        $offering->loadMissing('programTemplate.degree');
-        $program=$offering->programTemplate; $degree=$program?->degree;
+        // Resolve the Program Template from its authoritative id instead of trusting a
+        // partially-selected eager-loaded relation. Student Profile list/show pages may
+        // eager-load only id/name/code; in that state degree_id is absent and a
+        // degree-scoped Admission Form mapping would incorrectly disappear for IMPORT students.
+        $programTemplateId = $offering->program_template_id ?: $offering->programTemplate?->id;
+        $program = $programTemplateId
+            ? ProgramTemplate::query()->with('degree:id,degree_level_id')->find($programTemplateId)
+            : null;
+        $degree=$program?->degree;
         $cycleIds=DB::table('college_admission_cycles')->where('college_program_offering_id',$offering->id)->pluck('id');
         $templateIds=$this->applicableTemplateIds($college,$offering);
         $parents=CollegeAdmissionFormTemplate::query()->whereIn('id',$templateIds)->whereNotNull('parent_template_id')->pluck('parent_template_id');
         $allTemplateIds=$templateIds->concat($parents)->unique()->values();
         if($allTemplateIds->isEmpty()) return collect();
         $fields=CollegeAdmissionFormField::query()->with('scopes')->where('status','ACTIVE')->where('student_data_policy','STUDENT_PROFILE')->whereNotNull('student_profile_key')
-            ->whereNotIn('field_type',['FILE','IMAGE'])->whereHas('step',fn($q)=>$q->whereIn('college_admission_form_template_id',$allTemplateIds))->orderBy('display_order')->orderBy('id')->get();
+            ->when(! $includeFileFields, fn($q)=>$q->whereNotIn('field_type',['FILE','IMAGE']))
+            ->whereHas('step',fn($q)=>$q->whereIn('college_admission_form_template_id',$allTemplateIds))->orderBy('display_order')->orderBy('id')->get();
         $context=['degree_level_id'=>$degree?->degree_level_id,'degree_id'=>$program?->degree_id,'program_template_id'=>$program?->id,'college_program_offering_id'=>$offering->id,'curriculum_id'=>$offering->curriculum_id];
         return $fields->filter(function($field) use($context,$cycleIds){
             $scopes=$field->scopes->where('is_active',true); if($scopes->isEmpty()) return true;
@@ -185,7 +204,7 @@ class StudentImportService
                 $student=Student::create(['college_id'=>$college->id,'user_id'=>null,'admission_id'=>null,'college_admission_application_id'=>null,'source_type'=>'IMPORT','student_uid'=>$v['student_uid']?:null,'university_roll_no'=>$v['university_roll_no']?:null,'full_name'=>$v['full_name'],'date_of_birth'=>$v['date_of_birth']?:null,'email'=>$v['email']?:null,'phone'=>$v['phone']?:null,'status'=>'ACTIVE','created_by'=>$actorId,'updated_by'=>$actorId]);
                 $academic=$row['academic'];
                 $enrollment=StudentEnrollment::create(['student_id'=>$student->id,'college_id'=>$college->id,'college_program_offering_id'=>$offering->id,'curriculum_id'=>$academic['curriculum_id']?:null,'discipline_id'=>$academic['discipline_id'],'specialization_id'=>$academic['specialization_id'],'admission_id'=>null,'class_roll_no'=>$v['class_roll_no']?:null,'class_roll_scope_key'=>$row['class_roll_scope_key'],'source_type'=>'IMPORT','status'=>'ENROLLED','enrolled_at'=>now(),'enrolled_by'=>$actorId]);
-                foreach($academic['courses'] as $course) DB::table('student_enrollment_course_choices')->insert(['student_enrollment_id'=>$enrollment->id,'curriculum_term_id'=>$course['curriculum_term_id'],'curriculum_slot_id'=>$course['curriculum_slot_id'],'curriculum_course_mapping_id'=>$course['curriculum_course_mapping_id'],'course_id'=>$course['course_id'],'selection_source'=>$course['selection_source'],'created_at'=>now(),'updated_at'=>now()]);
+                $this->academicContext->persist($enrollment,$academic['curriculum_id']?:null,$academic['discipline_id'],$academic['specialization_id'],$academic['courses']);
                 foreach($row['profile_values'] as $profile){
                     StudentProfileValue::create(['student_id'=>$student->id,'source_application_field_id'=>$profile['field_id'],'profile_key'=>$profile['profile_key'],'label_snapshot'=>$profile['label'],'value_text'=>$profile['value_text'],'value_json'=>$profile['value_json']]);
                 }

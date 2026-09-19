@@ -16,6 +16,7 @@ class StudentEnrollmentService
     public function __construct(
         private readonly FeeClearanceService $feeClearance,
         private readonly ApplicantStudentPromotionService $promotion,
+        private readonly StudentEnrollmentAcademicContextService $academicContext,
     ) {}
 
     public function enroll(College $college, Admission $admission, int $actorId, ?string $ip): StudentEnrollment
@@ -83,17 +84,13 @@ class StudentEnrollmentService
                 'enrolled_by' => $actorId,
             ]);
 
-            foreach ($application->courseChoices as $course) {
-                DB::table('student_enrollment_course_choices')->insert([
-                    'student_enrollment_id' => $enrollment->id,
-                    'curriculum_term_id' => $course->curriculum_term_id,
-                    'curriculum_slot_id' => $course->curriculum_slot_id,
-                    'curriculum_course_mapping_id' => $course->curriculum_course_mapping_id,
-                    'course_id' => $course->course_id,
-                    'selection_source' => $course->selection_source,
-                    'created_at' => now(), 'updated_at' => now(),
-                ]);
-            }
+            $this->academicContext->persist(
+                $enrollment,
+                $application->academicPreference?->curriculum_id,
+                $application->academicPreference?->discipline_id,
+                $application->academicPreference?->specialization_id,
+                $application->courseChoices,
+            );
 
             // ENR-3.4: enrollment deliberately leaves institutional identity pending.
             // Authorized College staff assign Student UID / University Roll / Class Roll
