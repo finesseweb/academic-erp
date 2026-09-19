@@ -1211,3 +1211,10 @@ Student Profile now uses the shared DatePicker for DOB, promotes the governed Ca
 
 ### 2026-09-19 — ENR-6.3 Import-source profile photo parity
 Student Profile photo capability now follows the applicable governed Admission Form configuration for the Student's current Programme Offering rather than the existence of an Admission-copied photo value. IMPORT Students therefore receive the same empty photo slot and Add Photo action when `CANDIDATE_PROFILE_PHOTO` is configured as `STUDENT_PROFILE`. First upload creates the canonical profile-value row; subsequent replacements reuse it. CSV import remains unchanged and does not map FILE/IMAGE fields. Owner QA pending.
+
+### 2026-09-19 — ENR-4.6C College Student account credential correction / ADR 204C
+- College Users -> Students retains current-session Session -> Programme Offering -> Discipline filtering, canonical Admission/Import visibility, University-consistent Active/Inactive status, View Profile and login Enable/Disable.
+- Student `Send Password Reset Link` is superseded by `Generate New Temporary Password`; the existing password is invalidated, `must_change_password=true`, and the replacement is delivered through the actor-scoped one-time credential CSV. College Staff reset-link behavior is unchanged.
+- Unified Student account regeneration audits `student.account.temporary_password_regenerated`; no plaintext credential is audited and no database schema change is required.
+- Student Portal future information architecture is now documented in MASTER_DEVELOPMENT_HIERARCHY without changing or renumbering the existing phase roadmap. It is a downstream consumer specification, not a new immediate implementation phase.
+- ADR 204C is IMPLEMENTED / OWNER QA REQUIRED.

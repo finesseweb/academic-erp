@@ -13,6 +13,7 @@ use App\Models\StudentProfileValue;
 use App\Models\Student;
 use App\Models\StudentEnrollment;
 use App\Models\StudentIdentitySetting;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -135,6 +136,7 @@ class StudentImportService
     private function dir(College $college,int $userId): string { return "student-imports/{$college->id}/{$userId}"; }
     private function csvPath(College $college,int $userId,string $token): string { return $this->dir($college,$userId)."/{$token}.csv"; }
     private function metaPath(College $college,int $userId,string $token): string { return $this->dir($college,$userId)."/{$token}.json"; }
+    private function credentialsPath(College $college,int $userId,string $token): string { return $this->dir($college,$userId)."/{$token}-credentials.csv"; }
     private function assertToken(string $token): void { if(!preg_match('/^[A-Za-z0-9]{40}$/',$token)) abort(404); }
 
     public function upload(College $college,int $userId,UploadedFile $file): string
@@ -190,14 +192,28 @@ class StudentImportService
         return $meta;
     }
 
-    public function import(College $college,int $userId,string $token,int $actorId,?string $ip): int
+    public function import(College $college,int $userId,string $token,int $actorId,?string $ip,bool $createLoginAccounts=false): array
     {
         $this->assertToken($token); $path=$this->csvPath($college,$userId,$token); $mp=$this->metaPath($college,$userId,$token);
         if(!Storage::disk('local')->exists($path)||!Storage::disk('local')->exists($mp)) throw ValidationException::withMessages(['import'=>'Upload and validate the CSV before importing.']);
         $meta=json_decode(Storage::disk('local')->get($mp),true); $headers=$this->headers($path); $offering=$this->offering($college,(int)$meta['session_id'],(int)$meta['offering_id']);
         [, $total,$valid,$invalid,$allRows]=$this->scan($college,$path,$headers,$meta['mapping'],$offering,0,true);
         if($invalid>0) throw ValidationException::withMessages(['import'=>"Import blocked: {$invalid} row(s) contain validation errors. Validate the file again."]);
-        $count=DB::transaction(function() use($allRows,$college,$offering,$actorId,$ip,$total){
+
+        if($createLoginAccounts){
+            $emails=[];
+            foreach($allRows as $row){
+                $email=mb_strtolower(trim((string)($row['values']['email']??'')));
+                if($email==='') throw ValidationException::withMessages(['create_login_accounts'=>'Every imported student needs an Email when Create Student Login Accounts is enabled.']);
+                if(isset($emails[$email])) throw ValidationException::withMessages(['create_login_accounts'=>"Duplicate login email in CSV: {$email}."]);
+                $emails[$email]=true;
+            }
+            $existing=User::query()->whereIn('email',array_keys($emails))->pluck('email')->all();
+            if($existing) throw ValidationException::withMessages(['create_login_accounts'=>'Login account already exists for: '.implode(', ',$existing).'. Import without account creation or resolve the existing account first.']);
+        }
+
+        $credentials=[];
+        $count=DB::transaction(function() use($allRows,$college,$offering,$actorId,$ip,$createLoginAccounts,&$credentials){
             $created=0;
             foreach($allRows as $row){
                 $v=$row['values'];
@@ -208,13 +224,73 @@ class StudentImportService
                 foreach($row['profile_values'] as $profile){
                     StudentProfileValue::create(['student_id'=>$student->id,'source_application_field_id'=>$profile['field_id'],'profile_key'=>$profile['profile_key'],'label_snapshot'=>$profile['label'],'value_text'=>$profile['value_text'],'value_json'=>$profile['value_json']]);
                 }
+                if($createLoginAccounts){
+                    $temporaryPassword=Str::password(14, true, true, true, false);
+                    $user=User::create(['name'=>$student->full_name,'email'=>mb_strtolower((string)$student->email),'mobile'=>$student->phone,'account_type'=>'STUDENT','primary_college_id'=>$college->id,'status'=>'ACTIVE','password'=>$temporaryPassword,'must_change_password'=>true,'created_by_user_id'=>$actorId,'created_by_scope_type'=>'COLLEGE']);
+                    $student->update(['user_id'=>$user->id,'updated_by'=>$actorId]);
+                    $credentials[]=['student'=>$student->full_name,'email'=>$user->email,'temporary_password'=>$temporaryPassword];
+                }
                 $created++;
             }
-            DB::table('audit_logs')->insert(['actor_user_id'=>$actorId,'event'=>'student.import.completed','resource_type'=>'student_import','resource_id'=>null,'scope_type'=>'COLLEGE','scope_reference'=>'college:'.$college->id,'before'=>null,'after'=>json_encode(['programme_offering_id'=>$offering->id,'rows_imported'=>$created,'source_type'=>'IMPORT']),'ip_address'=>$ip,'created_at'=>now()]);
+            DB::table('audit_logs')->insert(['actor_user_id'=>$actorId,'event'=>'student.import.completed','resource_type'=>'student_import','resource_id'=>null,'scope_type'=>'COLLEGE','scope_reference'=>'college:'.$college->id,'before'=>null,'after'=>json_encode(['programme_offering_id'=>$offering->id,'rows_imported'=>$created,'source_type'=>'IMPORT','login_accounts_created'=>$createLoginAccounts?count($credentials):0]),'ip_address'=>$ip,'created_at'=>now()]);
             return $created;
         });
         Storage::disk('local')->delete([$path,$this->metaPath($college,$userId,$token)]);
-        return $count;
+        if($credentials){
+            $stream=fopen('php://temp','r+'); fputcsv($stream,['student','email','temporary_password']); foreach($credentials as $credential) fputcsv($stream,$credential); rewind($stream); Storage::disk('local')->put($this->credentialsPath($college,$userId,$token),stream_get_contents($stream)); fclose($stream);
+        }
+        return ['count'=>$count,'credentials_token'=>$credentials?$token:null,'login_accounts_created'=>count($credentials)];
+    }
+
+    public function credentialsCsv(College $college,int $userId,string $token): string
+    {
+        $this->assertToken($token); $path=$this->credentialsPath($college,$userId,$token); if(!Storage::disk('local')->exists($path)) abort(404); $csv=Storage::disk('local')->get($path); Storage::disk('local')->delete($path); return $csv;
+    }
+
+    public function regenerateImportedStudentCredential(College $college, int $actorId, string $email, ?string $ip): string
+    {
+        $email = mb_strtolower(trim($email));
+        $student = Student::query()
+            ->with('user')
+            ->where('college_id', $college->id)
+            ->where('source_type', 'IMPORT')
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        if (!$student || !$student->user || $student->user->account_type !== 'STUDENT' || (int) $student->user->primary_college_id !== (int) $college->id) {
+            throw ValidationException::withMessages(['credential_email' => 'No imported Student login account was found for this College and email.']);
+        }
+
+        $temporaryPassword = Str::password(14, true, true, true, false);
+        DB::transaction(function () use ($student, $temporaryPassword, $actorId, $college, $ip): void {
+            $student->user->forceFill([
+                'password' => $temporaryPassword,
+                'must_change_password' => true,
+            ])->save();
+
+            DB::table('audit_logs')->insert([
+                'actor_user_id' => $actorId,
+                'event' => 'student.import.login_credential_regenerated',
+                'resource_type' => 'student',
+                'resource_id' => $student->id,
+                'scope_type' => 'COLLEGE',
+                'scope_reference' => 'college:'.$college->id,
+                'before' => null,
+                'after' => json_encode(['student_id' => $student->id, 'user_id' => $student->user->id, 'must_change_password' => true]),
+                'ip_address' => $ip,
+                'created_at' => now(),
+            ]);
+        });
+
+        $token = Str::random(40);
+        $stream = fopen('php://temp', 'r+');
+        fputcsv($stream, ['student', 'email', 'temporary_password']);
+        fputcsv($stream, [$student->full_name, $student->user->email, $temporaryPassword]);
+        rewind($stream);
+        Storage::disk('local')->put($this->credentialsPath($college, $actorId, $token), stream_get_contents($stream));
+        fclose($stream);
+
+        return $token;
     }
 
     private function offering(College $college,int $sessionId,int $offeringId): CollegeProgramOffering

@@ -37,6 +37,7 @@ use App\Http\Controllers\CollegeAdmissionConfirmationController;
 use App\Http\Controllers\ApplicantPortalController;
 use App\Http\Controllers\PublicAdmissionApplicationController;
 use App\Http\Controllers\StudentPortalController;
+use App\Http\Controllers\StudentPasswordController;
 use App\Http\Controllers\CollegeProgramOfferingController;
 use App\Http\Controllers\CollegeRoleController;
 use App\Http\Controllers\CollegeRolePermissionController;
@@ -89,6 +90,8 @@ Route::post('/apply/{slug}/logout', [ApplicantPortalController::class, 'logout']
 Route::get('/apply/{slug}/application', [PublicAdmissionApplicationController::class, 'show'])->name('applicant.application');
 Route::post('/apply/{slug}/application', [PublicAdmissionApplicationController::class, 'store'])->name('applicant.application.store');
 Route::get('/student', [StudentPortalController::class, 'index'])->middleware('auth')->name('student.portal');
+Route::get('/student/change-password', [StudentPasswordController::class, 'edit'])->middleware('auth')->name('student.password.change');
+Route::put('/student/change-password', [StudentPasswordController::class, 'update'])->middleware(['auth','throttle:6,1'])->name('student.password.update');
 
 Route::post('payments/webhooks/razorpay', [PaymentWebhookController::class, 'razorpay'])->name('payments.webhooks.razorpay');
 Route::post('payments/webhooks/cashfree', [PaymentWebhookController::class, 'cashfree'])->name('payments.webhooks.cashfree');
@@ -373,6 +376,8 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('college/{college}/student-imports/upload', [CollegeStudentImportController::class, 'upload'])->name('college-student-imports.upload');
     Route::post('college/{college}/student-imports/preview', [CollegeStudentImportController::class, 'preview'])->name('college-student-imports.preview');
     Route::post('college/{college}/student-imports/import', [CollegeStudentImportController::class, 'store'])->name('college-student-imports.store');
+    Route::get('college/{college}/student-imports/credentials/{token}', [CollegeStudentImportController::class, 'credentials'])->name('college-student-imports.credentials');
+    Route::post('college/{college}/student-imports/credentials/regenerate', [CollegeStudentImportController::class, 'regenerateCredential'])->name('college-student-imports.credentials.regenerate');
     Route::get('college/{college}/student-profiles', [CollegeStudentProfileController::class, 'index'])->name('college-student-profiles.index');
     Route::get('college/{college}/student-profiles/{student}', [CollegeStudentProfileController::class, 'show'])->name('college-student-profiles.show');
     Route::get('college/{college}/student-profiles/{student}/profile-values/{profileValue}/file', [CollegeStudentProfileController::class, 'profileFile'])->name('college-student-profiles.profile-file');
@@ -458,6 +463,8 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::patch('college/{college}/users/{user}/status', [CollegeUserController::class, 'status'])->name('college-users.status');
     Route::get('college/{college}/audit-logs', [CollegeAuditLogController::class, 'index'])->name('college-audit-logs.index');
     Route::post('college/{college}/users/{user}/password-reset', [CollegeUserController::class, 'resetPassword'])->name('college-users.password-reset');
+    Route::patch('college/{college}/student-accounts/{student}/status', [CollegeUserController::class, 'studentStatus'])->name('college-student-accounts.status');
+    Route::post('college/{college}/student-accounts/{student}/password-reset', [CollegeUserController::class, 'studentResetPassword'])->name('college-student-accounts.password-reset');
     Route::get('college/{college}/users/{user}/roles', [CollegeUserRoleController::class, 'edit'])->name('college-users.roles.edit');
     Route::post('college/{college}/users/{user}/roles', [CollegeUserRoleController::class, 'store'])->name('college-users.roles.store');
     Route::delete('college/{college}/users/{user}/roles/{assignment}', [CollegeUserRoleController::class, 'destroy'])->name('college-users.roles.destroy');

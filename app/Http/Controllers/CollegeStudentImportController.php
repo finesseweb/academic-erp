@@ -30,6 +30,7 @@ class CollegeStudentImportController extends Controller
             'importContext'=>$service->importContextForOffering($college,$sessionId,$offeringId),
             'savedMappings'=>StudentImportMapping::query()->where('college_id',$college->id)->when($offeringId,fn($q)=>$q->where('college_program_offering_id',$offeringId))->orderBy('name')->get(['id','name','college_program_offering_id','mapping','updated_at']),
             'can'=>['manage'=>$request->user()->hasCollegePermission('college_student_import.manage',$college->id)],
+            'credentialsToken'=>preg_match('/^[A-Za-z0-9]{40}$/',(string)$request->query('credentials_token'))?(string)$request->query('credentials_token'):null,
         ]);
     }
 
@@ -60,10 +61,28 @@ class CollegeStudentImportController extends Controller
     public function store(Request $request, College $college, StudentImportService $service): RedirectResponse
     {
         abort_unless($request->user()->hasCollegePermission('college_student_import.manage',$college->id),403);
-        $data=$request->validate(['token'=>['required','string','size:40']]);
-        $count=$service->import($college,(int)$request->user()->id,$data['token'],(int)$request->user()->id,$request->ip());
-        return redirect()->route('college-student-imports.index',['college'=>$college->id])->with('toast',['type'=>'success','message'=>"{$count} student(s) imported successfully. Identity fields left blank remain Pending in Student Identity."]);
+        $data=$request->validate(['token'=>['required','string','size:40'],'create_login_accounts'=>['nullable','boolean']]);
+        $result=$service->import($college,(int)$request->user()->id,$data['token'],(int)$request->user()->id,$request->ip(),(bool)($data['create_login_accounts']??false));
+        $params=['college'=>$college->id]; if($result['credentials_token']) $params['credentials_token']=$result['credentials_token'];
+        $message=$result['count'].' student(s) imported successfully.'; if($result['login_accounts_created']) $message.=' '.$result['login_accounts_created'].' Student login account(s) created. Download the one-time credential sheet now.';
+        return redirect()->route('college-student-imports.index',$params)->with('toast',['type'=>'success','message'=>$message]);
     }
+    public function credentials(Request $request, College $college, string $token, StudentImportService $service): HttpResponse
+    {
+        abort_unless($request->user()->hasCollegePermission('college_student_import.manage',$college->id),403);
+        $csv=$service->credentialsCsv($college,(int)$request->user()->id,$token);
+        return response($csv,200,['Content-Type'=>'text/csv; charset=UTF-8','Content-Disposition'=>'attachment; filename="student-login-credentials.csv"','Cache-Control'=>'no-store, private']);
+    }
+
+    public function regenerateCredential(Request $request, College $college, StudentImportService $service): RedirectResponse
+    {
+        abort_unless($request->user()->hasCollegePermission('college_student_import.manage',$college->id),403);
+        $data=$request->validate(['credential_email'=>['required','email','max:255']]);
+        $token=$service->regenerateImportedStudentCredential($college,(int)$request->user()->id,$data['credential_email'],$request->ip());
+        return redirect()->route('college-student-imports.index',['college'=>$college->id,'credentials_token'=>$token])
+            ->with('toast',['type'=>'success','message'=>'A new temporary password was generated. The old password is now invalid. Download the one-time credential sheet now.']);
+    }
+
     public function saveMapping(Request $request, College $college, StudentImportService $service): RedirectResponse
     {
         abort_unless($request->user()->hasCollegePermission('college_student_import.manage',$college->id),403);

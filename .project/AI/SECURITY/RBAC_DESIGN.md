@@ -97,6 +97,7 @@ Examples:
 - Department Admin/HOD: one college + one or more departments.
 - Faculty: one college + assigned courses/classes/offerings.
 - Student: own student identity/records only.
+- Student-facing module access is role/policy driven, not individually ticked per Student account. As Student Portal modules are implemented, the standard Student authorization profile exposes only the capabilities applicable to the authenticated Student's own canonical Student + Enrollment context. College Users -> Students remains login/security administration, not academic permission assignment.
 
 Avoid encoding every possible scope dimension as nullable columns without first verifying actual ERP relationships. Prefer a model that follows the real academic ownership graph.
 

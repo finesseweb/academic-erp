@@ -25,6 +25,7 @@ Authentication audit metadata contains only safe reason categories and request c
 - Permission added to/removed from role
 - Role permission matrix changes use `ROLE_PERMISSIONS_UPDATED` with added and removed permission codes in one transactional event.
 - Password reset initiated/performed by an administrator
+- College Student temporary credential regeneration uses `student.account.temporary_password_regenerated`; the event records Student/User identifiers and `must_change_password=true` only, never the plaintext temporary password. Import-only credential recovery retains `student.import.login_credential_regenerated`.
 - Global theme policy changed (`THEME_GLOBAL_POLICY_CHANGED`)
 - User personal theme preference changed (`THEME_PREFERENCE_CHANGED`)
 

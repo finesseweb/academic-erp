@@ -924,3 +924,8 @@ Before ENR-6 closure, verify Admission DOB parity, Candidate Profile Photo carry
 
 ### ENR-6.3 QA addendum — Import photo parity (2026-09-19)
 Before ENR-6 closure, verify an IMPORT-source Student under an offering with an applicable governed Candidate Profile Photo field: empty placeholder/Add Photo before first upload, persistent photo after upload, same-row replacement on second upload, audit/RBAC, and no regression to Admission-source photo inheritance. Do not add image columns to CSV import for this milestone.
+
+### ENR-4.6C corrective QA — College Student temporary credential action (2026-09-19)
+Before formal ENR-4/ENR-6 documentation closure, verify College Users -> Students no longer shows `Send Password Reset Link` for Students. Generate New Temporary Password must invalidate the old password, provide the actor-scoped one-time credential download, force password change on next login, work for canonical Admission- and Import-origin Student accounts in the same College, reject cross-College access, and write `student.account.temporary_password_regenerated` without plaintext. Re-test Enable/Disable Login and confirm it does not mutate Student Enrollment status. This corrective QA does not alter the existing phase hierarchy.
+
+Student Portal future navigation is documented under MASTER_DEVELOPMENT_HIERARCHY section 09 as a downstream information-architecture contract. Do not start Attendance/Examination/Result merely because their future Student Portal destinations are documented; continue to honor the existing milestone gates.
