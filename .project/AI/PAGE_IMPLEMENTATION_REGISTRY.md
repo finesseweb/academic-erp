@@ -12,7 +12,7 @@ Default status for all entries:
 - Implementation Approval: REQUIRED
 - Review Status: NOT_APPLICABLE
 
-## Repository Implementation Snapshot (2026-09-12)
+## Repository Implementation Snapshot (2026-09-20)
 
 Verified from `routes/web.php`, controllers, and `resources/js/pages`.
 
@@ -31,6 +31,7 @@ Verified from `routes/web.php`, controllers, and `resources/js/pages`.
 - Academic Policies: header, Credit & Completion, Attendance, Assessment/Examination, Grading, Progression, and approval lifecycle.
 - Academic Calendars: University calendar and College calendar/overrides.
 - College academic setup: Program Offerings, Intake/Seat Capacity, Reservation Seat Distribution, Batches, and Sections.
+- Course Delivery: Course Offerings owner-QA passed; Faculty Allocation implemented and owner QA required.
 - Admissions: cycles, selection rules, form setup, internal applications, score capture, interviews, merit generation, document verification, seat allocation, confirmation, and public/applicant application flows.
 - Student portal: dashboard route and page shell.
 
@@ -241,3 +242,6 @@ On `next` / `next N` / `nextN`:
 - Status: IMPLEMENTED / OWNER_QA_REQUIRED
 - Accounting model: read-only projection over required Demand Item snapshots + authoritative Student Fee Ledger; no duplicate clearance balance/table.
 - Downstream gate: Student Enrollment remains blocked until owner QA PASS.
+
+- `PAGE_SPECS/COURSE_DELIVERY/COURSE_OFFERINGS_PAGE.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-20).
+- `PAGE_SPECS/COURSE_DELIVERY/FACULTY_ALLOCATIONS_PAGE.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-21).

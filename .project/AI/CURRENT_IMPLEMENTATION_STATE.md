@@ -1204,7 +1204,7 @@ Test Data Cleanup now exposes Academic Calendar Period assignments under Academi
 ## 2026-09-18 — ENR-5 CLOSED / ENR-6 Student Profile started
 ENR-5 / ADR 206 is OWNER QA PASSED / CLOSED. Owner QA confirmed legacy Admission normalization, idempotent rerun, and a fresh Admission-route Student enrollment persisted canonical academic context without requiring normalization.
 
-ENR-6 / ADR 208 is IMPLEMENTED / OWNER QA PENDING. Student Management now includes Student Profile with server-paginated Session → Programme Offering filtering, one-Student detail/edit, governed STUDENT_PROFILE values, read-only Student Identity fields, and read-only canonical Enrollment/course context. Admission/Import remain provenance only. Profile mutation is protected by `college_student_profile.edit` and audited as `student.profile.updated`. FILE/IMAGE profile values remain read-only in ENR-6.1. No Student-domain schema change; permission/reference migration only.
+ENR-6 / ADR 208 is OWNER QA PASSED / CLOSED. Student Management now includes Student Profile with server-paginated Session → Programme Offering filtering, one-Student detail/edit, governed STUDENT_PROFILE values, read-only Student Identity fields, and read-only canonical Enrollment/course context. Admission/Import remain provenance only. Profile mutation is protected by `college_student_profile.edit` and audited as `student.profile.updated`. FILE/IMAGE profile values remain read-only in ENR-6.1. No Student-domain schema change; permission/reference migration only.
 
 ### 2026-09-18 — ENR-6.2 profile presentation/lifecycle correction
 Student Profile now uses the shared DatePicker for DOB, promotes the governed Candidate Profile Photo to the profile header with permission-gated private viewing and auditable replacement, and presents current Enrollment context at the top. Academic choices are category-labelled `APPLICANT_CHOICE` summaries resolved through canonical Curriculum mappings; AUTO_MANDATORY courses and internal IDs are not exposed as profile choices. OWNER QA remains pending.
@@ -1217,4 +1217,43 @@ Student Profile photo capability now follows the applicable governed Admission F
 - Student `Send Password Reset Link` is superseded by `Generate New Temporary Password`; the existing password is invalidated, `must_change_password=true`, and the replacement is delivered through the actor-scoped one-time credential CSV. College Staff reset-link behavior is unchanged.
 - Unified Student account regeneration audits `student.account.temporary_password_regenerated`; no plaintext credential is audited and no database schema change is required.
 - Student Portal future information architecture is now documented in MASTER_DEVELOPMENT_HIERARCHY without changing or renumbering the existing phase roadmap. It is a downstream consumer specification, not a new immediate implementation phase.
-- ADR 204C is IMPLEMENTED / OWNER QA REQUIRED.
+- ADR 204C is OWNER QA PASSED / CLOSED.
+
+
+## 2026-09-20 — Phase 13 Course Delivery started / Course Offerings implemented
+Owner confirmed ENR-6 / ADR 208 and ADR 204C QA PASS / CLOSED. The next hierarchy milestone is Phase 13 Course Delivery -> Course Offerings. ADR 209 implements batch-level Course Offering as `Batch + Curriculum Course Mapping`, preserving the existing Program Offering, Curriculum, Batch and Section architecture without duplication. College-scoped create and activate/deactivate flows, RBAC, audit events, and database integrity guards are implemented. New Course Offerings start INACTIVE. Section-specific delivery is intentionally deferred to later Faculty Allocation/Class Scheduling. Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+### 2026-09-20 — Phase 13 Course Offering creation refinement
+Course Offering creation now derives applicable delivery records in bulk from existing University Curriculum structure using Batch + University-defined Discipline + Term. Mandatory common/discipline mappings are included automatically; choice mappings are included only where enrolled students selected them. Curriculum credits/countability are displayed read-only. No schema/hierarchy change. Owner QA remains required.
+
+
+### 2026-09-20 — Phase 13 Course Offering preview layout correction
+The Add Course Offerings dialog now uses a wider responsive layout and explicit Curriculum Preview column sizing so Course, Scope, Credits, Counting and Rule remain readable on desktop. Small viewports remain bounded to the viewport and the preview table can scroll horizontally. No business logic, schema, hierarchy, or Course Offering derivation rules changed. Owner QA remains required.
+
+- 2026-09-20: Course Offerings curriculum-preview modal responsive overflow corrected: shared Dialog breakpoint width is overridden, forced table minimum width removed, and preview is horizontal-scroll-free with wrapped cells and vertical-only list scrolling.
+
+### 2026-09-20 — Phase 13 Course Offering pre-enrollment correction
+Course Offering creation no longer depends on Student Enrollment or Student Course Choice records. For Batch + University-defined Discipline + Term, all active applicable MANDATORY mappings are auto-included/locked and all active applicable CHOICE mappings are visible/selectable for College delivery planning. Credits/countability remain inherited read-only from the University Curriculum. No schema/hierarchy change. Owner QA remains required.
+
+### 2026-09-20 — Phase 13 Course Offering delivery navigation refinement
+Course Offering delivery list now follows Session -> Program Offering -> Batch -> Discipline filters, defaulting Session to the current Academic Session and Program Offering/Batch to the first applicable context. Results are grouped from existing University Curriculum metadata as Discipline -> Semester/Term -> optional Specialization -> Course Offering. Semester rows are expandable and show total COUNTABLE Curriculum credits; specialization is derived from the existing Curriculum Course Mapping and Academic Discipline hierarchy and is not duplicated on Course Offering. No schema/hierarchy change. Owner QA remains required.
+
+
+### 2026-09-20 — Phase 13 Course Offering Curriculum-credit linkage correction
+Course Delivery semester/discipline credit summaries no longer sum Course Offering rows. They now consume the existing University Curriculum Slot rules: MANDATORY contributes Slot credits once; CHOICE contributes Slot credits × min_selection for Required Credits and × max_selection for Maximum Credits; NON_COUNTABLE Slots are excluded from countable totals. Multiple offered alternatives in one Slot therefore do not inflate curriculum credits. Course Offering remains a delivery instance and does not own or override academic credit rules. No schema/hierarchy change. Owner QA remains required.
+
+## 2026-09-21 — Course Offerings closure / Faculty Allocation (ADR 210)
+Course Offerings / ADR 209 is OWNER QA PASSED / CLOSED. Faculty Allocation is IMPLEMENTED / OWNER QA REQUIRED. It consumes Course Offerings and active College-scoped Faculty users, supports Batch-wide or same-Batch Section scope, teaching role and optional weekly load, and includes inactive-first lifecycle, RBAC, audit and dependency-safe cleanup. Timetable remains blocked until Faculty Allocation owner QA passes.
+
+### Faculty Allocation selection refinement
+Faculty Allocation defaults to the Current Academic Session and follows searchable Session → Program Offering → Discipline → Semester/Term → Course Offering selection. Faculty is searchable by name/email/role, and the page links to College Users and College Roles for onboarding. `UI_SEARCHABLE_SELECT_STANDARD.md` is the shared project-wide rule for dynamic/large selectors.
+
+## 2026-09-21 — Faculty Allocation closure / next three Course Delivery milestones
+Faculty Allocation / ADR 210 is OWNER QA PASSED / CLOSED. Rooms, Timetable and Class Scheduling are IMPLEMENTED / OWNER QA REQUIRED under ADR 211. The authoritative chain is Course Offering → Faculty Allocation → recurring Timetable Entry → dated Class Schedule, with optional College Room linkage, overlap protection, RBAC, audit and child-first cleanup. Attendance is next and remains blocked until owner QA passes.
+
+
+### 2026-09-21 — Faculty Allocation College-role eligibility permission correction
+- College Role → Permissions now exposes `college_faculty_allocation.eligible` as a College-delegable eligibility marker even when the assigning College administrator does not personally hold that marker.
+- Authorized College permission managers can assign/remove the marker from College-owned roles (for example, Faculty); normal College permission delegation remains constrained to permissions the actor holds.
+- University role/permission behavior is intentionally unchanged by this correction.
+- No schema migration. Faculty Allocation remains IMPLEMENTED / OWNER QA REQUIRED.

@@ -272,9 +272,7 @@ const platformItems: TreeNavItem[] = [
             },
         ],
     },
-
 ];
-
 
 function normalizePath(path: string): string {
     const cleanPath = path.split('?')[0].split('#')[0];
@@ -461,7 +459,7 @@ function TreeItem({
                 <div className="overflow-hidden">
                     <div
                         className={[
-                            'relative ml-4 border-l border-sidebar-border pl-3 pt-1',
+                            'relative ml-4 border-l border-sidebar-border pt-1 pl-3',
                             'transition-transform duration-300 ease-out motion-reduce:transition-none',
                             isOpen ? 'translate-y-0' : '-translate-y-1',
                         ].join(' ')}
@@ -485,7 +483,6 @@ function TreeItem({
         </SidebarMenuItem>
     );
 }
-
 
 function SidebarTree({
     items,
@@ -595,6 +592,42 @@ export function AppSidebar() {
                   ],
               },
               {
+                  title: 'Course Delivery',
+                  icon: BookOpenText,
+                  children: [
+                      {
+                          title: 'Course Offerings',
+                          href: `/college/${collegeId}/course-offerings`,
+                          icon: BookOpenCheck,
+                          permission: 'college_course_offering.view',
+                      },
+                      {
+                          title: 'Faculty Allocation',
+                          href: `/college/${collegeId}/faculty-allocations`,
+                          icon: UsersRound,
+                          permission: 'college_faculty_allocation.view',
+                      },
+                      {
+                          title: 'Rooms',
+                          href: `/college/${collegeId}/rooms`,
+                          icon: Building2,
+                          permission: 'college_room.view',
+                      },
+                      {
+                          title: 'Timetable',
+                          href: `/college/${collegeId}/timetables`,
+                          icon: CalendarRange,
+                          permission: 'college_timetable.view',
+                      },
+                      {
+                          title: 'Class Scheduling',
+                          href: `/college/${collegeId}/class-schedules`,
+                          icon: CalendarRange,
+                          permission: 'college_class_schedule.view',
+                      },
+                  ],
+              },
+              {
                   title: 'Admission Setup',
                   icon: FileCog,
                   children: [
@@ -654,7 +687,8 @@ export function AppSidebar() {
                           title: 'Document Verification',
                           href: `/college/${collegeId}/admission-document-verification`,
                           icon: ClipboardCheck,
-                          permission: 'college_admission_document_verification.view',
+                          permission:
+                              'college_admission_document_verification.view',
                           directNavigation: true,
                       },
                       {
@@ -788,7 +822,10 @@ export function AppSidebar() {
 
     const items = useMemo(
         () => [
-            ...filterByPermission(platformItems, auth.universityPermissions ?? []),
+            ...filterByPermission(
+                platformItems,
+                auth.universityPermissions ?? [],
+            ),
             ...filterByPermission(collegeItems, auth.permissions),
         ],
         [collegeId, auth.permissions, auth.universityPermissions],

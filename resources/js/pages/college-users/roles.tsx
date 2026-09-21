@@ -36,6 +36,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Role = {
     id: number;
@@ -244,39 +245,26 @@ export default function Roles({
                                         {({ processing, errors }) => (
                                             <>
                                                 <div className="grid gap-2">
-                                                    <Label>Role</Label>
-                                                    <Select
+                                                    <SearchableSelect
                                                         name="role_id"
+                                                        label="Role"
                                                         value={roleId}
                                                         onValueChange={
                                                             setRoleId
                                                         }
-                                                    >
-                                                        <SelectTrigger
-                                                            className="w-full"
-                                                            aria-invalid={Boolean(
-                                                                errors.role_id,
-                                                            )}
-                                                        >
-                                                            <SelectValue placeholder="Select College role" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {availableRoles.map(
-                                                                (r) => (
-                                                                    <SelectItem
-                                                                        key={
-                                                                            r.id
-                                                                        }
-                                                                        value={String(
-                                                                            r.id,
-                                                                        )}
-                                                                    >
-                                                                        {r.name}
-                                                                    </SelectItem>
+                                                        placeholder="Search and select College role"
+                                                        searchPlaceholder="Search role name, code or permission…"
+                                                        options={availableRoles.map(
+                                                            (role) => ({
+                                                                value: String(
+                                                                    role.id,
                                                                 ),
-                                                            )}
-                                                        </SelectContent>
-                                                    </Select>
+                                                                label: role.name,
+                                                                description: `${role.code} · ${role.permissions.length} permissions`,
+                                                                searchText: `${role.code} ${role.permissions.map((permission) => permission.code).join(' ')}`,
+                                                            }),
+                                                        )}
+                                                    />
                                                     <InputError
                                                         message={errors.role_id}
                                                     />

@@ -74,3 +74,12 @@ The permission is read-only and non-sensitive. It does not grant any financial m
 
 ### ENR-2 default protected grants
 - `college_student_enrollment.enroll`: SUPER_ADMIN = granted; COLLEGE_ADMIN = granted. Other College staff require explicit delegated permission and remain College-scoped.
+
+## Course Delivery defaults (2026-09-20)
+`SUPER_ADMIN` and `COLLEGE_ADMIN` receive the four `college_course_offering.*` permissions by migration. Other College roles receive no automatic Course Offering access and may receive College-delegable permissions through the existing role/permission workflow.
+## Faculty Allocation defaults (2026-09-21)
+
+SUPER_ADMIN and COLLEGE_ADMIN receive the five management permissions. `college_faculty_allocation.eligible` is deliberately not granted by default; College administrators grant it to their Faculty role. Allocation-management permission does not make a user teaching faculty.
+## Course Delivery scheduling defaults (2026-09-21)
+
+SUPER_ADMIN and COLLEGE_ADMIN receive Room, Timetable and Class Scheduling permissions. Other roles receive them only through College role permission assignment.

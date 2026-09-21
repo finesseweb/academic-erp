@@ -19,10 +19,14 @@ class CollegeRolePermissionController extends Controller
         abort_unless($request->user()->hasCollegePermission('college_role.view', $college->id), 403);
         $ownCodes = $request->user()->permissionCodes('COLLEGE', "college:{$college->id}");
         $currentDelegableIds = $role->permissions()->where('is_college_delegable', true)->pluck('permissions.id');
+        $eligibilityCodes = ['college_faculty_allocation.eligible'];
         $permissions = Permission::query()->where('status', 'ACTIVE')->where('is_college_delegable', true)
-            ->where(fn ($query) => $query->whereIn('code', $ownCodes)->orWhereIn('id', $currentDelegableIds))
+            ->where(fn ($query) => $query->whereIn('code', $ownCodes)->orWhereIn('code', $eligibilityCodes)->orWhereIn('id', $currentDelegableIds))
             ->orderBy('module')->orderBy('resource')->orderBy('action')->get()
-            ->each(fn (Permission $permission) => $permission->setAttribute('can_assign', in_array($permission->code, $ownCodes, true)));
+            ->each(fn (Permission $permission) => $permission->setAttribute(
+                'can_assign',
+                in_array($permission->code, $ownCodes, true) || in_array($permission->code, $eligibilityCodes, true),
+            ));
         $allowedIds = $permissions->pluck('id');
         $role->setRelation('permissions', $role->permissions()->whereIn('permissions.id', $allowedIds)->get(['permissions.id']));
         $role->loadCount('users');
@@ -48,8 +52,12 @@ class CollegeRolePermissionController extends Controller
         $removed = array_diff($currentDelegable, $submitted);
         abort_if($added && ! $request->user()->hasCollegePermission('college_permission.assign', $college->id), 403);
         abort_if($removed && ! $request->user()->hasCollegePermission('college_permission.remove', $college->id), 403);
-        $ownIds = Permission::query()->whereIn('code', $request->user()->permissionCodes('COLLEGE', "college:{$college->id}"))->pluck('id')->map(fn ($id) => (int) $id)->all();
-        abort_if(array_diff($added, $ownIds), 403, 'You cannot delegate a permission that you do not hold in this College.');
+        $assignableCodes = [
+            ...$request->user()->permissionCodes('COLLEGE', "college:{$college->id}"),
+            'college_faculty_allocation.eligible',
+        ];
+        $assignableIds = Permission::query()->whereIn('code', $assignableCodes)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        abort_if(array_diff($added, $assignableIds), 403, 'You cannot delegate a permission that you do not hold in this College.');
         $protectedIds = $role->permissions()->where('is_college_delegable', false)->pluck('permissions.id')->map(fn ($id) => (int) $id)->all();
         $changes = $service->sync($role, [...$protectedIds, ...$submitted], $request->user()->id, $request->ip());
 

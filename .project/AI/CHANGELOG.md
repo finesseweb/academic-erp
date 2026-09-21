@@ -26,3 +26,11 @@
 - Identity-only cleanup still does not rewind sequences; production lifecycle behavior is unchanged.
 - Identity numbering remains backed by `student_identity_sequences`, not Student/Enrollment auto-increment IDs.
 - Database structure impact: NONE; no migration and no new domain table/column.
+
+
+## 2026-09-21 — Faculty Allocation College-role eligibility permission fix
+- Fixed College Role permission management so `college_faculty_allocation.eligible` is visible and assignable to College-owned roles by an authorized College permission manager.
+- The eligibility code is treated as a College-delegable faculty-selection marker; the administrator does not need to be personally faculty-eligible in order to delegate it.
+- Existing safeguards remain: only ACTIVE College-delegable permissions can be submitted, role ownership remains College-scoped, and assign/remove actions still require the corresponding College permission-management capability.
+- University permission management was left unchanged as requested.
+- No database/schema change.

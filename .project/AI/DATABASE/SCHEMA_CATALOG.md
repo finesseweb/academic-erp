@@ -279,3 +279,12 @@ Canonical Enrollment academic columns are `student_enrollments.curriculum_id`, `
 
 ### ENR-6 / ADR 208 — Student Profile (2026-09-18)
 No Student-domain schema change. Existing `students` and `student_profile_values` remain authoritative for permanent/core and governed dynamic profile data. `student_enrollments` and `student_enrollment_course_choices` are read-only academic context on the profile surface. Migration `2026_09_18_180000_register_student_profile_permissions.php` is RBAC/reference-data only.
+
+## Phase 13 Course Delivery — `course_offerings` (2026-09-20)
+Persistent operational delivery table introduced by ADR 209. Authority is derived from existing structures: `course_offerings.batch_id -> batches -> college_program_offerings` and `course_offerings.curriculum_course_mapping_id -> curriculum_course_mappings -> curriculum_slots -> curriculum_terms -> curricula`. The service enforces that both branches resolve to the same Program Offering Curriculum. No duplicate College/Program/Session/Curriculum/Course/Section ownership columns are stored. See `DATABASE/TABLE_SPECS/course_offerings.md`.
+## Phase 13 Faculty Allocation — `faculty_allocations` (2026-09-21)
+
+Operational Course Offering-to-Faculty bridge with optional same-Batch Section scope, teaching role, weekly load, inactive-first lifecycle and actor audit columns. See `TABLE_SPECS/faculty_allocations.md` and ADR 210.
+## Phase 13 Scheduling — `college_rooms`, `timetable_entries`, `class_schedules` (2026-09-21)
+
+Linked Room master, recurring Timetable rules and dated Class occurrences. See ADR 211 and `TABLE_SPECS/course_delivery_scheduling.md`.

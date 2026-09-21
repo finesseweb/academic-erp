@@ -151,6 +151,11 @@ type Props = {
         college_program_reservation_plans: Entity[];
         reservation_categories: Entity[];
         college_program_intakes: Entity[];
+        class_schedules: Entity[];
+        timetable_entries: Entity[];
+        college_rooms: Entity[];
+        faculty_allocations: Entity[];
+        course_offerings: Entity[];
         sections: Entity[];
         college_academic_calendars: Entity[];
         batches: Entity[];
@@ -201,6 +206,11 @@ type TabKey =
     | 'college_program_reservation_plans'
     | 'reservation_categories'
     | 'college_program_intakes'
+    | 'class_schedules'
+    | 'timetable_entries'
+    | 'college_rooms'
+    | 'faculty_allocations'
+    | 'course_offerings'
     | 'sections'
     | 'college_academic_calendars'
     | 'batches'
@@ -268,6 +278,11 @@ const tabs: { key: TabKey; label: string }[] = [
     { key: 'college_program_reservation_plans', label: 'Reservation / Seat Distribution' },
     { key: 'college_program_intakes', label: 'Intake / Seat Capacity' },
     { key: 'reservation_categories', label: 'Reservation Categories' },
+    { key: 'class_schedules', label: 'Class Schedules' },
+    { key: 'timetable_entries', label: 'Timetable Entries' },
+    { key: 'college_rooms', label: 'Rooms' },
+    { key: 'faculty_allocations', label: 'Faculty Allocations' },
+    { key: 'course_offerings', label: 'Course Offerings' },
     { key: 'sections', label: 'Sections' },
     { key: 'college_academic_calendars', label: 'College Academic Calendars' },
     { key: 'batches', label: 'Batches' },
@@ -356,6 +371,11 @@ const tabGroups: { label: string; keys: TabKey[] }[] = [
             'college_academic_calendars',
             'batches',
             'sections',
+            'class_schedules',
+            'timetable_entries',
+            'college_rooms',
+            'faculty_allocations',
+            'course_offerings',
         ],
     },
 ];

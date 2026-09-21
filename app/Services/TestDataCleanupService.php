@@ -63,16 +63,14 @@ class TestDataCleanupService
             'name' => $curriculum->name,
             'version' => $curriculum->version,
             'lifecycle_status' => $curriculum->lifecycle_status,
-            'approval_status' =>
-                $curriculum->approval_status ?? 'NOT_SUBMITTED',
+            'approval_status' => $curriculum->approval_status ?? 'NOT_SUBMITTED',
             'terms' => $termIds->count(),
             'slots' => $slotIds->count(),
             'course_mappings' => DB::table('curriculum_course_mappings')
                 ->whereIn('curriculum_slot_id', $slotIds)
                 ->count(),
             'approval_requests' => $approvalRequestIds->count(),
-            'approval_request_stages' =>
-                Schema::hasTable('approval_request_stages')
+            'approval_request_stages' => Schema::hasTable('approval_request_stages')
                     ? DB::table('approval_request_stages')
                         ->whereIn('approval_request_id', $approvalRequestIds)
                         ->count()
@@ -96,8 +94,7 @@ class TestDataCleanupService
 
         if (count($preview['downstream_references']) > 0) {
             throw ValidationException::withMessages([
-                'curriculum' =>
-                    'This Curriculum already has downstream operational references. Approval reset is blocked.',
+                'curriculum' => 'This Curriculum already has downstream operational references. Approval reset is blocked.',
             ]);
         }
 
@@ -149,10 +146,8 @@ class TestDataCleanupService
                 $curriculum->id,
                 [
                     'curriculum' => $curriculum->toArray(),
-                    'removed_approval_requests' =>
-                        $preview['approval_requests'],
-                    'removed_approval_request_stages' =>
-                        $preview['approval_request_stages'],
+                    'removed_approval_requests' => $preview['approval_requests'],
+                    'removed_approval_request_stages' => $preview['approval_request_stages'],
                 ],
                 $actorId
             );
@@ -171,8 +166,7 @@ class TestDataCleanupService
 
         if (count($preview['downstream_references']) > 0) {
             throw ValidationException::withMessages([
-                'curriculum' =>
-                    'This Curriculum is already referenced by operational data and cannot be removed by Test Data Cleanup.',
+                'curriculum' => 'This Curriculum is already referenced by operational data and cannot be removed by Test Data Cleanup.',
             ]);
         }
 
@@ -246,7 +240,6 @@ class TestDataCleanupService
         });
     }
 
-
     public function academicPolicyCleanupPreview(
         AcademicPolicy $policy
     ): array {
@@ -278,15 +271,12 @@ class TestDataCleanupService
             'name' => $policy->name,
             'version' => $policy->version,
             'lifecycle_status' => $policy->lifecycle_status,
-            'approval_status' =>
-                $policy->approval_status ?? 'NOT_SUBMITTED',
-            'is_current_version' =>
-                (bool) ($policy->is_current_version ?? false),
+            'approval_status' => $policy->approval_status ?? 'NOT_SUBMITTED',
+            'is_current_version' => (bool) ($policy->is_current_version ?? false),
             'scope_type' => $policy->scope_type,
             'chain_versions' => $chainIds->count(),
             'approval_requests' => $approvalRequestIds->count(),
-            'approval_request_stages' =>
-                Schema::hasTable('approval_request_stages')
+            'approval_request_stages' => Schema::hasTable('approval_request_stages')
                     ? DB::table('approval_request_stages')
                         ->whereIn(
                             'approval_request_id',
@@ -294,53 +284,45 @@ class TestDataCleanupService
                         )
                         ->count()
                     : 0,
-            'credit_completion_rules' =>
-                $this->countWhereIn(
-                    'academic_policy_credit_completion_rules',
-                    'academic_policy_id',
-                    $chainIds
-                ),
-            'credit_category_requirements' =>
-                $this->countWhereIn(
-                    'academic_policy_credit_category_requirements',
-                    'academic_policy_id',
-                    $chainIds
-                ),
-            'attendance_rules' =>
-                $this->countWhereIn(
-                    'academic_policy_attendance_rules',
-                    'academic_policy_id',
-                    $chainIds
-                ),
-            'assessment_exam_rules' =>
-                $this->countWhereIn(
-                    'academic_policy_assessment_exam_rules',
-                    'academic_policy_id',
-                    $chainIds
-                ),
-            'grading_rules' =>
-                $this->countWhereIn(
-                    'academic_policy_grading_rules',
-                    'academic_policy_id',
-                    $chainIds
-                ),
-            'grade_bands' =>
-                $this->countWhereIn(
-                    'academic_policy_grade_bands',
-                    'academic_policy_id',
-                    $chainIds
-                ),
+            'credit_completion_rules' => $this->countWhereIn(
+                'academic_policy_credit_completion_rules',
+                'academic_policy_id',
+                $chainIds
+            ),
+            'credit_category_requirements' => $this->countWhereIn(
+                'academic_policy_credit_category_requirements',
+                'academic_policy_id',
+                $chainIds
+            ),
+            'attendance_rules' => $this->countWhereIn(
+                'academic_policy_attendance_rules',
+                'academic_policy_id',
+                $chainIds
+            ),
+            'assessment_exam_rules' => $this->countWhereIn(
+                'academic_policy_assessment_exam_rules',
+                'academic_policy_id',
+                $chainIds
+            ),
+            'grading_rules' => $this->countWhereIn(
+                'academic_policy_grading_rules',
+                'academic_policy_id',
+                $chainIds
+            ),
+            'grade_bands' => $this->countWhereIn(
+                'academic_policy_grade_bands',
+                'academic_policy_id',
+                $chainIds
+            ),
             'progression_rule_sets' => $ruleSetIds->count(),
-            'progression_rule_terms' =>
-                $this->countWhereIn(
-                    'academic_policy_progression_rule_terms',
-                    'progression_rule_set_id',
-                    $ruleSetIds
-                ),
+            'progression_rule_terms' => $this->countWhereIn(
+                'academic_policy_progression_rule_terms',
+                'progression_rule_set_id',
+                $ruleSetIds
+            ),
             'downstream_references' => $downstream,
             'can_cleanup' => count($downstream) === 0,
-            'can_reset_approval' =>
-                count($downstream) === 0 &&
+            'can_reset_approval' => count($downstream) === 0 &&
                 $chainIds->count() === 1,
         ];
     }
@@ -355,15 +337,13 @@ class TestDataCleanupService
 
         if (count($preview['downstream_references']) > 0) {
             throw ValidationException::withMessages([
-                'academic_policy' =>
-                    'This Academic Policy already has downstream operational references. Approval reset is blocked.',
+                'academic_policy' => 'This Academic Policy already has downstream operational references. Approval reset is blocked.',
             ]);
         }
 
         if ((int) $preview['chain_versions'] > 1) {
             throw ValidationException::withMessages([
-                'academic_policy' =>
-                    'Approval reset is blocked for a version chain. Clean the complete test policy chain instead, or reset a standalone test policy.',
+                'academic_policy' => 'Approval reset is blocked for a version chain. Clean the complete test policy chain instead, or reset a standalone test policy.',
             ]);
         }
 
@@ -417,10 +397,8 @@ class TestDataCleanupService
                 $policy->id,
                 [
                     'policy' => $policy->toArray(),
-                    'removed_approval_requests' =>
-                        $preview['approval_requests'],
-                    'removed_approval_request_stages' =>
-                        $preview['approval_request_stages'],
+                    'removed_approval_requests' => $preview['approval_requests'],
+                    'removed_approval_request_stages' => $preview['approval_request_stages'],
                 ],
                 $actorId
             );
@@ -439,8 +417,7 @@ class TestDataCleanupService
 
         if (count($preview['downstream_references']) > 0) {
             throw ValidationException::withMessages([
-                'academic_policy' =>
-                    'This Academic Policy version chain is referenced by operational data and cannot be removed by Test Data Cleanup.',
+                'academic_policy' => 'This Academic Policy version chain is referenced by operational data and cannot be removed by Test Data Cleanup.',
             ]);
         }
 
@@ -577,7 +554,6 @@ class TestDataCleanupService
             return $preview;
         });
     }
-
 
     public function legacyUnlinkedRegularApplicationsPreview(int $universityId): array
     {
@@ -797,192 +773,150 @@ class TestDataCleanupService
             'applicants' => $this->applicantRows($universityId),
             'students' => $this->studentRows($universityId),
             'student_identity_assignments' => $this->studentIdentityAssignmentRows($universityId),
-            'college_admission_form_templates' =>
-                $this->collegeAdmissionFormTemplateRows($universityId),
-            'college_application_fee_rules' =>
-                $this->collegeApplicationFeeRuleRows($universityId),
-            'fee_adjustments' =>
-                $this->feeAdjustmentRows($universityId),
-            'fee_payment_refunds' =>
-                $this->feePaymentRefundRows($universityId),
-            'fee_payments' =>
-                $this->feePaymentRows($universityId),
-            'gateway_test_orders' =>
-                $this->gatewayTestOrderRows($universityId),
-            'fee_late_fine_charges' =>
-                $this->feeLateFineChargeRows($universityId),
-            'fee_installment_schedules' =>
-                $this->feeInstallmentScheduleRows($universityId),
-            'fee_student_benefits' =>
-                $this->feeStudentBenefitRows($universityId),
-            'fee_demands' =>
-                $this->feeDemandRows($universityId),
-            'fee_scholarship_schemes' =>
-                $this->feeScholarshipSchemeRows($universityId),
-            'fee_structures' =>
-                $this->feeStructureRows($universityId),
-            'fee_heads' =>
-                $this->feeHeadRows($universityId),
-            'fee_categories' =>
-                $this->feeCategoryRows($universityId),
-            'college_admission_document_verifications' =>
-                $this->collegeAdmissionDocumentVerificationRows($universityId),
-            'college_admission_seat_allocations' =>
-                $this->collegeAdmissionSeatAllocationRows($universityId),
-            'admissions' =>
-                $this->admissionRows($universityId),
-            'college_admission_scores' =>
-                $this->collegeAdmissionScoreRows($universityId),
-            'college_admission_merit_rosters' =>
-                $this->collegeAdmissionMeritRosterRows($universityId),
-            'college_admission_applications' =>
-                $this->collegeAdmissionApplicationRows($universityId),
-            'college_admission_selection_rules' =>
-                $this->collegeAdmissionSelectionRuleRows($universityId),
-            'college_program_reservation_plans' =>
-                $this->collegeReservationPlanRows($universityId),
-            'reservation_categories' =>
-                $this->reservationCategoryRows($universityId),
-            'college_program_intakes' =>
-                $this->collegeProgramIntakeRows($universityId),
-            'sections' =>
-                $this->sectionRows($universityId),
-            'college_academic_calendars' =>
-                $this->collegeAcademicCalendarRows($universityId),
-            'batches' =>
-                $this->batchRows($universityId),
-            'college_program_offerings' =>
-                $this->collegeProgramOfferingRows($universityId),
-            'academic_calendars' =>
-                $this->academicCalendarRows($universityId),
-            'academic_calendar_periods' =>
-                $this->academicCalendarPeriodRows($universityId),
-            'approval_workflows' =>
-                $this->approvalWorkflowRows($universityId),
+            'college_admission_form_templates' => $this->collegeAdmissionFormTemplateRows($universityId),
+            'college_application_fee_rules' => $this->collegeApplicationFeeRuleRows($universityId),
+            'fee_adjustments' => $this->feeAdjustmentRows($universityId),
+            'fee_payment_refunds' => $this->feePaymentRefundRows($universityId),
+            'fee_payments' => $this->feePaymentRows($universityId),
+            'gateway_test_orders' => $this->gatewayTestOrderRows($universityId),
+            'fee_late_fine_charges' => $this->feeLateFineChargeRows($universityId),
+            'fee_installment_schedules' => $this->feeInstallmentScheduleRows($universityId),
+            'fee_student_benefits' => $this->feeStudentBenefitRows($universityId),
+            'fee_demands' => $this->feeDemandRows($universityId),
+            'fee_scholarship_schemes' => $this->feeScholarshipSchemeRows($universityId),
+            'fee_structures' => $this->feeStructureRows($universityId),
+            'fee_heads' => $this->feeHeadRows($universityId),
+            'fee_categories' => $this->feeCategoryRows($universityId),
+            'college_admission_document_verifications' => $this->collegeAdmissionDocumentVerificationRows($universityId),
+            'college_admission_seat_allocations' => $this->collegeAdmissionSeatAllocationRows($universityId),
+            'admissions' => $this->admissionRows($universityId),
+            'college_admission_scores' => $this->collegeAdmissionScoreRows($universityId),
+            'college_admission_merit_rosters' => $this->collegeAdmissionMeritRosterRows($universityId),
+            'college_admission_applications' => $this->collegeAdmissionApplicationRows($universityId),
+            'college_admission_selection_rules' => $this->collegeAdmissionSelectionRuleRows($universityId),
+            'college_program_reservation_plans' => $this->collegeReservationPlanRows($universityId),
+            'reservation_categories' => $this->reservationCategoryRows($universityId),
+            'college_program_intakes' => $this->collegeProgramIntakeRows($universityId),
+            'class_schedules' => $this->courseDeliveryRows('class_schedules', $universityId),
+            'timetable_entries' => $this->courseDeliveryRows('timetable_entries', $universityId),
+            'college_rooms' => $this->courseDeliveryRows('college_rooms', $universityId),
+            'faculty_allocations' => $this->facultyAllocationRows($universityId),
+            'course_offerings' => $this->courseOfferingRows($universityId),
+            'sections' => $this->sectionRows($universityId),
+            'college_academic_calendars' => $this->collegeAcademicCalendarRows($universityId),
+            'batches' => $this->batchRows($universityId),
+            'college_program_offerings' => $this->collegeProgramOfferingRows($universityId),
+            'academic_calendars' => $this->academicCalendarRows($universityId),
+            'academic_calendar_periods' => $this->academicCalendarPeriodRows($universityId),
+            'approval_workflows' => $this->approvalWorkflowRows($universityId),
             'courses' => $this->courseRows($universityId),
-            'course_categories' =>
-                $this->simpleRows(
-                    'course_categories',
-                    $universityId,
-                    fn ($id) => [
-                        'courses' => $this->countIfExists(
-                            'courses',
-                            'course_category_id',
-                            $id
-                        ),
-                        'academic_policy_requirements' =>
-                            $this->countIfExists(
-                                'academic_policy_credit_category_requirements',
-                                'course_category_id',
-                                $id
-                            ),
-                    ]
-                ),
-            'course_types' =>
-                $this->simpleRows(
-                    'course_types',
-                    $universityId,
-                    fn ($id) => [
-                        'courses' => $this->countIfExists(
-                            'courses',
-                            'course_type_id',
-                            $id
-                        ),
-                    ]
-                ),
-            'program_templates' =>
-                $this->simpleRows(
-                    'program_templates',
-                    $universityId,
-                    fn ($id) => [
-                        'curricula' => $this->countIfExists(
-                            'curricula',
-                            'program_template_id',
-                            $id
-                        ),
-                        'discipline_mappings' =>
-                            $this->countIfExists(
-                                'program_template_disciplines',
-                                'program_template_id',
-                                $id
-                            ),
-                        'academic_policies' =>
-                            $this->countIfExists(
-                                'academic_policies',
-                                'program_template_id',
-                                $id
-                            ),
-                        'college_program_offerings' =>
-                            $this->countIfExists(
-                                'college_program_offerings',
-                                'program_template_id',
-                                $id
-                            ),
-                    ]
-                ),
-            'disciplines' =>
-                $this->disciplineRows($universityId),
-            'degrees' =>
-                $this->simpleRows(
-                    'degrees',
-                    $universityId,
-                    fn ($id) => [
-                        'program_templates' =>
-                            $this->countIfExists(
-                                'program_templates',
-                                'degree_id',
-                                $id
-                            ),
-                    ]
-                ),
-            'degree_levels' =>
-                $this->simpleRows(
-                    'degree_levels',
-                    $universityId,
-                    fn ($id) => [
-                        'degrees' => $this->countIfExists(
-                            'degrees',
-                            'degree_level_id',
-                            $id
-                        ),
-                        'academic_policies' =>
-                            $this->countIfExists(
-                                'academic_policies',
-                                'degree_level_id',
-                                $id
-                            ),
-                    ]
-                ),
-            'academic_sessions' =>
-                $this->simpleRows(
-                    'academic_sessions',
-                    $universityId,
-                    fn ($id) => [
-                        'curricula' => $this->countIfExists(
-                            'curricula',
-                            'academic_session_id',
-                            $id
-                        ),
-                        'academic_policies' =>
-                            $this->countIfExists(
-                                'academic_policies',
-                                'academic_session_id',
-                                $id
-                            ),
-                        'academic_calendars' =>
-                            $this->countIfExists(
-                                'academic_calendars',
-                                'academic_session_id',
-                                $id
-                            ),
-                        'college_program_offerings' =>
-                            $this->countIfExists(
-                                'college_program_offerings',
-                                'academic_session_id',
-                                $id
-                            ),
-                    ]
-                ),
+            'course_categories' => $this->simpleRows(
+                'course_categories',
+                $universityId,
+                fn ($id) => [
+                    'courses' => $this->countIfExists(
+                        'courses',
+                        'course_category_id',
+                        $id
+                    ),
+                    'academic_policy_requirements' => $this->countIfExists(
+                        'academic_policy_credit_category_requirements',
+                        'course_category_id',
+                        $id
+                    ),
+                ]
+            ),
+            'course_types' => $this->simpleRows(
+                'course_types',
+                $universityId,
+                fn ($id) => [
+                    'courses' => $this->countIfExists(
+                        'courses',
+                        'course_type_id',
+                        $id
+                    ),
+                ]
+            ),
+            'program_templates' => $this->simpleRows(
+                'program_templates',
+                $universityId,
+                fn ($id) => [
+                    'curricula' => $this->countIfExists(
+                        'curricula',
+                        'program_template_id',
+                        $id
+                    ),
+                    'discipline_mappings' => $this->countIfExists(
+                        'program_template_disciplines',
+                        'program_template_id',
+                        $id
+                    ),
+                    'academic_policies' => $this->countIfExists(
+                        'academic_policies',
+                        'program_template_id',
+                        $id
+                    ),
+                    'college_program_offerings' => $this->countIfExists(
+                        'college_program_offerings',
+                        'program_template_id',
+                        $id
+                    ),
+                ]
+            ),
+            'disciplines' => $this->disciplineRows($universityId),
+            'degrees' => $this->simpleRows(
+                'degrees',
+                $universityId,
+                fn ($id) => [
+                    'program_templates' => $this->countIfExists(
+                        'program_templates',
+                        'degree_id',
+                        $id
+                    ),
+                ]
+            ),
+            'degree_levels' => $this->simpleRows(
+                'degree_levels',
+                $universityId,
+                fn ($id) => [
+                    'degrees' => $this->countIfExists(
+                        'degrees',
+                        'degree_level_id',
+                        $id
+                    ),
+                    'academic_policies' => $this->countIfExists(
+                        'academic_policies',
+                        'degree_level_id',
+                        $id
+                    ),
+                ]
+            ),
+            'academic_sessions' => $this->simpleRows(
+                'academic_sessions',
+                $universityId,
+                fn ($id) => [
+                    'curricula' => $this->countIfExists(
+                        'curricula',
+                        'academic_session_id',
+                        $id
+                    ),
+                    'academic_policies' => $this->countIfExists(
+                        'academic_policies',
+                        'academic_session_id',
+                        $id
+                    ),
+                    'academic_calendars' => $this->countIfExists(
+                        'academic_calendars',
+                        'academic_session_id',
+                        $id
+                    ),
+                    'college_program_offerings' => $this->countIfExists(
+                        'college_program_offerings',
+                        'academic_session_id',
+                        $id
+                    ),
+                ]
+            ),
         ];
     }
 
@@ -1094,6 +1028,7 @@ class TestDataCleanupService
             $this->deleteWhereIn('college_admission_selection_rules', 'id', $ruleIds);
 
             $this->audit('TEST_ADMISSION_WORKFLOW_RESET', 'test_data_cleanup', $universityId, $preview, $actorId);
+
             return $preview;
         });
     }
@@ -1104,103 +1039,56 @@ class TestDataCleanupService
             'confirmation_code' => 'RESET-ACADEMIC-TEST-DATA',
             'counts' => [
                 'students' => $this->countCollegeScopedRowsForUniversity('students', $universityId),
-                'student_enrollments' => Schema::hasTable('student_enrollments') ? DB::table('student_enrollments as se')->join('students as s','s.id','=','se.student_id')->join('colleges as c','c.id','=','s.college_id')->where('c.university_id',$universityId)->count() : 0,
-                'student_enrollment_course_choices' => Schema::hasTable('student_enrollment_course_choices') ? DB::table('student_enrollment_course_choices as ec')->join('student_enrollments as se','se.id','=','ec.student_enrollment_id')->join('students as s','s.id','=','se.student_id')->join('colleges as c','c.id','=','s.college_id')->where('c.university_id',$universityId)->count() : 0,
-                'student_profile_values' => Schema::hasTable('student_profile_values') ? DB::table('student_profile_values as spv')->join('students as s','s.id','=','spv.student_id')->join('colleges as c','c.id','=','s.college_id')->where('c.university_id',$universityId)->count() : 0,
-                'college_admission_form_templates' =>
-                    $this->countUniversityRows('college_admission_form_templates', $universityId),
-                'college_admission_form_mappings' =>
-                    $this->countUniversityRows('college_admission_form_mappings', $universityId),
-                'college_application_fee_rules' =>
-                    $this->countUniversityRows('college_application_fee_rules', $universityId),
-                'college_admission_application_field_values' =>
-                    $this->countCollegeAdmissionApplicationFieldValuesForUniversity($universityId),
-                'college_admission_application_academic_preferences' =>
-                    $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_academic_preferences', $universityId),
-                'college_admission_application_course_choices' =>
-                    $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_course_choices', $universityId),
-                'college_applicant_registration_settings' =>
-                    $this->countCollegeScopedRowsForUniversity('college_applicant_registration_settings', $universityId),
-                'college_admission_interviews' =>
-                    $this->countCollegeAdmissionInterviewsForUniversity($universityId),
-                'college_admission_document_verification_items' =>
-                    $this->countCollegeAdmissionDocumentVerificationItemsForUniversity($universityId),
-                'college_admission_document_verifications' =>
-                    $this->countCollegeScopedRowsForUniversity('college_admission_document_verifications', $universityId),
-                'college_admission_seat_allocations' =>
-                    $this->countCollegeScopedRowsForUniversity('college_admission_seat_allocations', $universityId),
-                'fee_demand_items' =>
-                    $this->countFeeDemandItemsForUniversity($universityId),
-                'fee_demands' =>
-                    $this->countUniversityRows('fee_demands', $universityId),
-                'fee_scholarship_scheme_heads' =>
-                    $this->countFeeScholarshipMappingsForUniversity('fee_scholarship_scheme_heads', $universityId),
-                'fee_scholarship_scheme_categories' =>
-                    $this->countFeeScholarshipMappingsForUniversity('fee_scholarship_scheme_categories', $universityId),
-                'fee_scholarship_schemes' =>
-                    $this->countUniversityRows('fee_scholarship_schemes', $universityId),
-                'admissions' =>
-                    $this->countCollegeScopedRowsForUniversity('admissions', $universityId),
-                'college_admission_scores' =>
-                    $this->countCollegeAdmissionScoresForUniversity($universityId),
-                'college_admission_application_choices' =>
-                    $this->countCollegeAdmissionApplicationChoicesForUniversity($universityId),
-                'college_admission_applications' =>
-                    $this->countCollegeAdmissionApplicationsForUniversity($universityId),
-                'college_admission_cycles' =>
-                    $this->countCollegeAdmissionCyclesForUniversity($universityId),
-                'college_admission_selection_rule_tiebreakers' =>
-                    $this->countCollegeAdmissionSelectionRuleTieBreakersForUniversity($universityId),
-                'college_admission_selection_rules' =>
-                    $this->countCollegeAdmissionSelectionRulesForUniversity($universityId),
-                'college_program_reservation_allocations' =>
-                    $this->countCollegeReservationAllocationsForUniversity($universityId),
-                'college_program_reservation_plans' =>
-                    $this->countCollegeReservationPlansForUniversity($universityId),
-                'reservation_categories' =>
-                    $this->countUniversityRows('reservation_categories', $universityId),
-                'college_program_intake_allocations' =>
-                    $this->countCollegeIntakeAllocationsForUniversity($universityId),
-                'college_program_intakes' =>
-                    $this->countCollegeIntakesForUniversity($universityId),
-                'sections' =>
-                    $this->countSectionsForUniversity($universityId),
-                'college_academic_calendars' =>
-                    $this->countCollegeAcademicCalendarsForUniversity($universityId),
-                'college_calendar_overrides' =>
-                    $this->countCollegeCalendarOverridesForUniversity($universityId),
-                'batches' =>
-                    $this->countBatchesForUniversity($universityId),
-                'college_program_offerings' =>
-                    $this->countCollegeOfferingsForUniversity($universityId),
-                'academic_calendar_events' =>
-                    $this->countCalendarEventsForUniversity($universityId),
-                'academic_calendars' =>
-                    $this->countUniversityRows('academic_calendars', $universityId),
-                'approval_requests' =>
-                    $this->countUniversityRows('approval_requests', $universityId),
-                'approval_workflows' =>
-                    $this->countUniversityRows('approval_workflows', $universityId),
-                'academic_policies' =>
-                    $this->countUniversityRows('academic_policies', $universityId),
-                'curricula' =>
-                    $this->countUniversityRows('curricula', $universityId),
-                'courses' =>
-                    $this->countUniversityRows('courses', $universityId),
-                'program_templates' =>
-                    $this->countUniversityRows('program_templates', $universityId),
-                'disciplines' =>
-                    $this->countUniversityRows('academic_disciplines', $universityId),
-                'course_categories' =>
-                    $this->countUniversityRows('course_categories', $universityId),
-                'course_types' =>
-                    $this->countUniversityRows('course_types', $universityId),
-                'degrees' =>
-                    $this->countUniversityRows('degrees', $universityId),
-                'degree_levels' =>
-                    $this->countUniversityRows('degree_levels', $universityId),
-                'academic_sessions' =>
-                    $this->countUniversityRows('academic_sessions', $universityId),
+                'student_enrollments' => Schema::hasTable('student_enrollments') ? DB::table('student_enrollments as se')->join('students as s', 's.id', '=', 'se.student_id')->join('colleges as c', 'c.id', '=', 's.college_id')->where('c.university_id', $universityId)->count() : 0,
+                'student_enrollment_course_choices' => Schema::hasTable('student_enrollment_course_choices') ? DB::table('student_enrollment_course_choices as ec')->join('student_enrollments as se', 'se.id', '=', 'ec.student_enrollment_id')->join('students as s', 's.id', '=', 'se.student_id')->join('colleges as c', 'c.id', '=', 's.college_id')->where('c.university_id', $universityId)->count() : 0,
+                'student_profile_values' => Schema::hasTable('student_profile_values') ? DB::table('student_profile_values as spv')->join('students as s', 's.id', '=', 'spv.student_id')->join('colleges as c', 'c.id', '=', 's.college_id')->where('c.university_id', $universityId)->count() : 0,
+                'college_admission_form_templates' => $this->countUniversityRows('college_admission_form_templates', $universityId),
+                'college_admission_form_mappings' => $this->countUniversityRows('college_admission_form_mappings', $universityId),
+                'college_application_fee_rules' => $this->countUniversityRows('college_application_fee_rules', $universityId),
+                'college_admission_application_field_values' => $this->countCollegeAdmissionApplicationFieldValuesForUniversity($universityId),
+                'college_admission_application_academic_preferences' => $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_academic_preferences', $universityId),
+                'college_admission_application_course_choices' => $this->countCollegeAdmissionApplicationChildForUniversity('college_admission_application_course_choices', $universityId),
+                'college_applicant_registration_settings' => $this->countCollegeScopedRowsForUniversity('college_applicant_registration_settings', $universityId),
+                'college_admission_interviews' => $this->countCollegeAdmissionInterviewsForUniversity($universityId),
+                'college_admission_document_verification_items' => $this->countCollegeAdmissionDocumentVerificationItemsForUniversity($universityId),
+                'college_admission_document_verifications' => $this->countCollegeScopedRowsForUniversity('college_admission_document_verifications', $universityId),
+                'college_admission_seat_allocations' => $this->countCollegeScopedRowsForUniversity('college_admission_seat_allocations', $universityId),
+                'fee_demand_items' => $this->countFeeDemandItemsForUniversity($universityId),
+                'fee_demands' => $this->countUniversityRows('fee_demands', $universityId),
+                'fee_scholarship_scheme_heads' => $this->countFeeScholarshipMappingsForUniversity('fee_scholarship_scheme_heads', $universityId),
+                'fee_scholarship_scheme_categories' => $this->countFeeScholarshipMappingsForUniversity('fee_scholarship_scheme_categories', $universityId),
+                'fee_scholarship_schemes' => $this->countUniversityRows('fee_scholarship_schemes', $universityId),
+                'admissions' => $this->countCollegeScopedRowsForUniversity('admissions', $universityId),
+                'college_admission_scores' => $this->countCollegeAdmissionScoresForUniversity($universityId),
+                'college_admission_application_choices' => $this->countCollegeAdmissionApplicationChoicesForUniversity($universityId),
+                'college_admission_applications' => $this->countCollegeAdmissionApplicationsForUniversity($universityId),
+                'college_admission_cycles' => $this->countCollegeAdmissionCyclesForUniversity($universityId),
+                'college_admission_selection_rule_tiebreakers' => $this->countCollegeAdmissionSelectionRuleTieBreakersForUniversity($universityId),
+                'college_admission_selection_rules' => $this->countCollegeAdmissionSelectionRulesForUniversity($universityId),
+                'college_program_reservation_allocations' => $this->countCollegeReservationAllocationsForUniversity($universityId),
+                'college_program_reservation_plans' => $this->countCollegeReservationPlansForUniversity($universityId),
+                'reservation_categories' => $this->countUniversityRows('reservation_categories', $universityId),
+                'college_program_intake_allocations' => $this->countCollegeIntakeAllocationsForUniversity($universityId),
+                'college_program_intakes' => $this->countCollegeIntakesForUniversity($universityId),
+                'sections' => $this->countSectionsForUniversity($universityId),
+                'college_academic_calendars' => $this->countCollegeAcademicCalendarsForUniversity($universityId),
+                'college_calendar_overrides' => $this->countCollegeCalendarOverridesForUniversity($universityId),
+                'batches' => $this->countBatchesForUniversity($universityId),
+                'college_program_offerings' => $this->countCollegeOfferingsForUniversity($universityId),
+                'academic_calendar_events' => $this->countCalendarEventsForUniversity($universityId),
+                'academic_calendars' => $this->countUniversityRows('academic_calendars', $universityId),
+                'approval_requests' => $this->countUniversityRows('approval_requests', $universityId),
+                'approval_workflows' => $this->countUniversityRows('approval_workflows', $universityId),
+                'academic_policies' => $this->countUniversityRows('academic_policies', $universityId),
+                'curricula' => $this->countUniversityRows('curricula', $universityId),
+                'courses' => $this->countUniversityRows('courses', $universityId),
+                'program_templates' => $this->countUniversityRows('program_templates', $universityId),
+                'disciplines' => $this->countUniversityRows('academic_disciplines', $universityId),
+                'course_categories' => $this->countUniversityRows('course_categories', $universityId),
+                'course_types' => $this->countUniversityRows('course_types', $universityId),
+                'degrees' => $this->countUniversityRows('degrees', $universityId),
+                'degree_levels' => $this->countUniversityRows('degree_levels', $universityId),
+                'academic_sessions' => $this->countUniversityRows('academic_sessions', $universityId),
             ],
             'preserved' => [
                 'University Profile',
@@ -1308,11 +1196,13 @@ class TestDataCleanupService
             // Posted test collections are leaf finance transactions. Remove allocations first,
             // then receipts/payments before installments, late fines, benefits and Fee Demands.
             if (Schema::hasTable('fee_payment_refunds')) {
-                $refundIds=DB::table('fee_payment_refunds')->where('university_id',$universityId)->pluck('id');
-                $this->deleteWhereIn('fee_payment_refund_allocations','fee_payment_refund_id',$refundIds);
-                $this->deleteWhereIn('fee_payment_refunds','id',$refundIds);
+                $refundIds = DB::table('fee_payment_refunds')->where('university_id', $universityId)->pluck('id');
+                $this->deleteWhereIn('fee_payment_refund_allocations', 'fee_payment_refund_id', $refundIds);
+                $this->deleteWhereIn('fee_payment_refunds', 'id', $refundIds);
             }
-            if (Schema::hasTable('fee_adjustments')) DB::table('fee_adjustments')->where('university_id',$universityId)->delete();
+            if (Schema::hasTable('fee_adjustments')) {
+                DB::table('fee_adjustments')->where('university_id', $universityId)->delete();
+            }
             if (Schema::hasTable('fee_payments')) {
                 $paymentIds = DB::table('fee_payments')->where('university_id', $universityId)->pluck('id');
                 $this->deleteWhereIn('fee_payment_allocations', 'fee_payment_id', $paymentIds);
@@ -1508,6 +1398,20 @@ class TestDataCleanupService
                     ->whereIn('college_id', $collegeIds)
                     ->pluck('id');
                 $batchIdsForReset = DB::table('batches')->whereIn('college_program_offering_id', $batchOfferingIds)->pluck('id');
+                if (Schema::hasTable('faculty_allocations')) {
+                    $courseOfferingIds = DB::table('course_offerings')->whereIn('batch_id', $batchIdsForReset)->pluck('id');
+                    $facultyAllocationIds = DB::table('faculty_allocations')->whereIn('course_offering_id', $courseOfferingIds)->pluck('id');
+                    if (Schema::hasTable('timetable_entries')) {
+                        $timetableIds = DB::table('timetable_entries')->whereIn('faculty_allocation_id', $facultyAllocationIds)->pluck('id');
+                        $this->deleteWhereIn('class_schedules', 'timetable_entry_id', $timetableIds);
+                        $this->deleteWhereIn('timetable_entries', 'id', $timetableIds);
+                    }
+                    $this->deleteWhereIn('faculty_allocations', 'course_offering_id', $courseOfferingIds);
+                }
+                if (Schema::hasTable('college_rooms')) {
+                    DB::table('college_rooms')->whereIn('college_id', $collegeIds)->delete();
+                }
+                $this->deleteWhereIn('course_offerings', 'batch_id', $batchIdsForReset);
                 $this->deleteWhereIn('sections', 'batch_id', $batchIdsForReset);
                 DB::table('batches')->whereIn('college_program_offering_id', $batchOfferingIds)->delete();
             }
@@ -1811,8 +1715,7 @@ class TestDataCleanupService
                 [
                     'deleted_counts' => $preview['counts'],
                     'preserved' => $preview['preserved'],
-                    'dependency_strategy' =>
-                        'child-first explicit deletion; foreign keys kept enabled',
+                    'dependency_strategy' => 'child-first explicit deletion; foreign keys kept enabled',
                 ],
                 $actorId
             );
@@ -1820,7 +1723,6 @@ class TestDataCleanupService
             return $preview;
         });
     }
-
 
     public function deactivateAdmissionFormTemplateForTesting(
         int $id,
@@ -1846,8 +1748,7 @@ class TestDataCleanupService
 
             if (strtoupper(trim((string) $record->status)) !== 'ACTIVE') {
                 throw ValidationException::withMessages([
-                    'record' =>
-                        'Only an ACTIVE Admission Form Template can be returned to DRAFT through Test Data Cleanup.',
+                    'record' => 'Only an ACTIVE Admission Form Template can be returned to DRAFT through Test Data Cleanup.',
                 ]);
             }
 
@@ -1926,217 +1827,178 @@ class TestDataCleanupService
         $this->assertCleanupEnabled();
 
         return match ($type) {
-            'users' =>
-                $this->cleanupAccessUser($id, $universityId, $actorId),
-            'roles' =>
-                $this->cleanupAccessRole($id, $universityId, $actorId),
-            'applicants' =>
-                $this->cleanupApplicant($id, $universityId, $actorId),
-            'students' =>
-                $this->cleanupStudent($id, $universityId, $actorId),
-            'student_identity_assignments' =>
-                $this->cleanupStudentIdentityAssignment($id, $universityId, $actorId),
-            'college_admission_form_templates' =>
-                $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
-            'college_application_fee_rules' =>
-                $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
-            'fee_adjustments' =>
-                $this->cleanupFeeAdjustment($id, $universityId, $actorId),
-            'fee_payment_refunds' =>
-                $this->cleanupFeePaymentRefund($id, $universityId, $actorId),
-            'fee_payments' =>
-                $this->cleanupFeePayment($id, $universityId, $actorId),
-            'gateway_test_orders' =>
-                $this->cleanupGatewayTestOrder($id, $universityId, $actorId),
-            'fee_late_fine_charges' =>
-                $this->cleanupFeeLateFineCharge($id, $universityId, $actorId),
-            'fee_installment_schedules' =>
-                $this->cleanupFeeInstallmentSchedule($id, $universityId, $actorId),
-            'fee_student_benefits' =>
-                $this->cleanupFeeStudentBenefit($id, $universityId, $actorId),
-            'fee_demands' =>
-                $this->cleanupFeeDemand($id, $universityId, $actorId),
-            'fee_scholarship_schemes' =>
-                $this->cleanupFeeScholarshipScheme($id, $universityId, $actorId),
-            'fee_structures' =>
-                $this->cleanupFeeStructure($id, $universityId, $actorId),
-            'fee_heads' =>
-                $this->cleanupFeeHead($id, $universityId, $actorId),
-            'fee_categories' =>
-                $this->cleanupFeeCategory($id, $universityId, $actorId),
-            'college_admission_document_verifications' =>
-                $this->cleanupCollegeAdmissionDocumentVerification($id, $universityId, $actorId),
-            'college_admission_seat_allocations' =>
-                $this->cleanupCollegeAdmissionSeatAllocation($id, $universityId, $actorId),
-            'admissions' =>
-                $this->cleanupAdmission($id, $universityId, $actorId),
-            'college_admission_scores' =>
-                $this->cleanupCollegeAdmissionScore($id, $universityId, $actorId),
-            'college_admission_merit_rosters' =>
-                $this->cleanupCollegeAdmissionMeritRoster($id, $universityId, $actorId),
-            'college_admission_applications' =>
-                $this->cleanupCollegeAdmissionApplication(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'college_admission_selection_rules' =>
-                $this->cleanupCollegeAdmissionSelectionRule(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'college_program_reservation_plans' =>
-                $this->cleanupCollegeReservationPlan(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'reservation_categories' =>
-                $this->cleanupSimpleMaster(
-                    'reservation_categories',
-                    'Reservation / Quota Category',
-                    $id,
-                    $universityId,
+            'users' => $this->cleanupAccessUser($id, $universityId, $actorId),
+            'roles' => $this->cleanupAccessRole($id, $universityId, $actorId),
+            'applicants' => $this->cleanupApplicant($id, $universityId, $actorId),
+            'students' => $this->cleanupStudent($id, $universityId, $actorId),
+            'student_identity_assignments' => $this->cleanupStudentIdentityAssignment($id, $universityId, $actorId),
+            'college_admission_form_templates' => $this->cleanupCollegeAdmissionFormTemplate($id, $universityId, $actorId),
+            'college_application_fee_rules' => $this->cleanupCollegeApplicationFeeRule($id, $universityId, $actorId),
+            'fee_adjustments' => $this->cleanupFeeAdjustment($id, $universityId, $actorId),
+            'fee_payment_refunds' => $this->cleanupFeePaymentRefund($id, $universityId, $actorId),
+            'fee_payments' => $this->cleanupFeePayment($id, $universityId, $actorId),
+            'gateway_test_orders' => $this->cleanupGatewayTestOrder($id, $universityId, $actorId),
+            'fee_late_fine_charges' => $this->cleanupFeeLateFineCharge($id, $universityId, $actorId),
+            'fee_installment_schedules' => $this->cleanupFeeInstallmentSchedule($id, $universityId, $actorId),
+            'fee_student_benefits' => $this->cleanupFeeStudentBenefit($id, $universityId, $actorId),
+            'fee_demands' => $this->cleanupFeeDemand($id, $universityId, $actorId),
+            'fee_scholarship_schemes' => $this->cleanupFeeScholarshipScheme($id, $universityId, $actorId),
+            'fee_structures' => $this->cleanupFeeStructure($id, $universityId, $actorId),
+            'fee_heads' => $this->cleanupFeeHead($id, $universityId, $actorId),
+            'fee_categories' => $this->cleanupFeeCategory($id, $universityId, $actorId),
+            'college_admission_document_verifications' => $this->cleanupCollegeAdmissionDocumentVerification($id, $universityId, $actorId),
+            'college_admission_seat_allocations' => $this->cleanupCollegeAdmissionSeatAllocation($id, $universityId, $actorId),
+            'admissions' => $this->cleanupAdmission($id, $universityId, $actorId),
+            'college_admission_scores' => $this->cleanupCollegeAdmissionScore($id, $universityId, $actorId),
+            'college_admission_merit_rosters' => $this->cleanupCollegeAdmissionMeritRoster($id, $universityId, $actorId),
+            'college_admission_applications' => $this->cleanupCollegeAdmissionApplication(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'college_admission_selection_rules' => $this->cleanupCollegeAdmissionSelectionRule(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'college_program_reservation_plans' => $this->cleanupCollegeReservationPlan(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'reservation_categories' => $this->cleanupSimpleMaster(
+                'reservation_categories',
+                'Reservation / Quota Category',
+                $id,
+                $universityId,
+                [
+                    ['college_program_reservation_allocations', 'reservation_category_id'],
+                ],
+                $actorId
+            ),
+            'college_program_intakes' => $this->cleanupCollegeProgramIntake(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'class_schedules' => $this->cleanupCourseDeliveryRecord('class_schedules', $id, $universityId, $actorId),
+            'timetable_entries' => $this->cleanupCourseDeliveryRecord('timetable_entries', $id, $universityId, $actorId),
+            'college_rooms' => $this->cleanupCourseDeliveryRecord('college_rooms', $id, $universityId, $actorId),
+            'faculty_allocations' => $this->cleanupFacultyAllocation($id, $universityId, $actorId),
+            'course_offerings' => $this->cleanupCourseOffering($id, $universityId, $actorId),
+            'sections' => $this->cleanupSection($id, $universityId, $actorId),
+            'college_academic_calendars' => $this->cleanupCollegeAcademicCalendar($id, $universityId, $actorId),
+            'batches' => $this->cleanupBatch($id, $universityId, $actorId),
+            'college_program_offerings' => $this->cleanupCollegeProgramOffering(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'academic_calendars' => $this->cleanupAcademicCalendar(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'academic_calendar_periods' => $this->cleanupAcademicCalendarPeriod(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'approval_workflows' => $this->cleanupApprovalWorkflow(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'courses' => $this->cleanupCourse(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'course_categories' => $this->cleanupSimpleMaster(
+                'course_categories',
+                'Course Category',
+                $id,
+                $universityId,
+                [
+                    ['courses', 'course_category_id'],
                     [
-                        ['college_program_reservation_allocations', 'reservation_category_id'],
+                        'academic_policy_credit_category_requirements',
+                        'course_category_id',
                     ],
-                    $actorId
-                ),
-            'college_program_intakes' =>
-                $this->cleanupCollegeProgramIntake(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'sections' =>
-                $this->cleanupSection($id, $universityId, $actorId),
-            'college_academic_calendars' =>
-                $this->cleanupCollegeAcademicCalendar($id, $universityId, $actorId),
-            'batches' =>
-                $this->cleanupBatch($id, $universityId, $actorId),
-            'college_program_offerings' =>
-                $this->cleanupCollegeProgramOffering(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'academic_calendars' =>
-                $this->cleanupAcademicCalendar(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'academic_calendar_periods' =>
-                $this->cleanupAcademicCalendarPeriod(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'approval_workflows' =>
-                $this->cleanupApprovalWorkflow(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'courses' =>
-                $this->cleanupCourse(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'course_categories' =>
-                $this->cleanupSimpleMaster(
-                    'course_categories',
-                    'Course Category',
-                    $id,
-                    $universityId,
+                ],
+                $actorId
+            ),
+            'course_types' => $this->cleanupSimpleMaster(
+                'course_types',
+                'Course Type',
+                $id,
+                $universityId,
+                [
+                    ['courses', 'course_type_id'],
+                ],
+                $actorId
+            ),
+            'program_templates' => $this->cleanupSimpleMaster(
+                'program_templates',
+                'Program Template',
+                $id,
+                $universityId,
+                [
+                    ['curricula', 'program_template_id'],
                     [
-                        ['courses', 'course_category_id'],
-                        [
-                            'academic_policy_credit_category_requirements',
-                            'course_category_id',
-                        ],
+                        'program_template_disciplines',
+                        'program_template_id',
                     ],
-                    $actorId
-                ),
-            'course_types' =>
-                $this->cleanupSimpleMaster(
-                    'course_types',
-                    'Course Type',
-                    $id,
-                    $universityId,
+                    ['academic_policies', 'program_template_id'],
                     [
-                        ['courses', 'course_type_id'],
+                        'college_program_offerings',
+                        'program_template_id',
                     ],
-                    $actorId
-                ),
-            'program_templates' =>
-                $this->cleanupSimpleMaster(
-                    'program_templates',
-                    'Program Template',
-                    $id,
-                    $universityId,
+                ],
+                $actorId
+            ),
+            'disciplines' => $this->cleanupDiscipline(
+                $id,
+                $universityId,
+                $actorId
+            ),
+            'degrees' => $this->cleanupSimpleMaster(
+                'degrees',
+                'Degree',
+                $id,
+                $universityId,
+                [
+                    ['program_templates', 'degree_id'],
+                ],
+                $actorId
+            ),
+            'degree_levels' => $this->cleanupSimpleMaster(
+                'degree_levels',
+                'Degree Level',
+                $id,
+                $universityId,
+                [
+                    ['degrees', 'degree_level_id'],
+                    ['academic_policies', 'degree_level_id'],
+                ],
+                $actorId
+            ),
+            'academic_sessions' => $this->cleanupSimpleMaster(
+                'academic_sessions',
+                'Academic Session',
+                $id,
+                $universityId,
+                [
+                    ['curricula', 'academic_session_id'],
+                    ['academic_policies', 'academic_session_id'],
+                    ['academic_calendars', 'academic_session_id'],
                     [
-                        ['curricula', 'program_template_id'],
-                        [
-                            'program_template_disciplines',
-                            'program_template_id',
-                        ],
-                        ['academic_policies', 'program_template_id'],
-                        [
-                            'college_program_offerings',
-                            'program_template_id',
-                        ],
+                        'college_program_offerings',
+                        'academic_session_id',
                     ],
-                    $actorId
-                ),
-            'disciplines' =>
-                $this->cleanupDiscipline(
-                    $id,
-                    $universityId,
-                    $actorId
-                ),
-            'degrees' =>
-                $this->cleanupSimpleMaster(
-                    'degrees',
-                    'Degree',
-                    $id,
-                    $universityId,
-                    [
-                        ['program_templates', 'degree_id'],
-                    ],
-                    $actorId
-                ),
-            'degree_levels' =>
-                $this->cleanupSimpleMaster(
-                    'degree_levels',
-                    'Degree Level',
-                    $id,
-                    $universityId,
-                    [
-                        ['degrees', 'degree_level_id'],
-                        ['academic_policies', 'degree_level_id'],
-                    ],
-                    $actorId
-                ),
-            'academic_sessions' =>
-                $this->cleanupSimpleMaster(
-                    'academic_sessions',
-                    'Academic Session',
-                    $id,
-                    $universityId,
-                    [
-                        ['curricula', 'academic_session_id'],
-                        ['academic_policies', 'academic_session_id'],
-                        ['academic_calendars', 'academic_session_id'],
-                        [
-                            'college_program_offerings',
-                            'academic_session_id',
-                        ],
-                    ],
-                    $actorId
-                ),
+                ],
+                $actorId
+            ),
             default => throw ValidationException::withMessages([
                 'type' => 'Unsupported cleanup type.',
             ]),
@@ -2260,60 +2122,114 @@ class TestDataCleanupService
 
     private function feeAdjustmentRows(int $universityId): array
     {
-        if (! Schema::hasTable('fee_adjustments')) return [];
-        return DB::table('fee_adjustments as x')->join('colleges as c','c.id','=','x.college_id')->where('x.university_id',$universityId)->orderByDesc('x.id')->get(['x.id','x.adjustment_no','x.direction','x.amount','x.status','c.name as college_name'])->map(fn($r)=>['id'=>(int)$r->id,'code'=>$r->adjustment_no,'name'=>$r->college_name.' · '.$r->direction.' '.number_format((float)$r->amount,2),'status'=>$r->status,'kind'=>'FEE_ADJUSTMENT','dependencies'=>[],'blocked'=>false,'blocking_references'=>[]])->values()->all();
+        if (! Schema::hasTable('fee_adjustments')) {
+            return [];
+        }
+
+        return DB::table('fee_adjustments as x')->join('colleges as c', 'c.id', '=', 'x.college_id')->where('x.university_id', $universityId)->orderByDesc('x.id')->get(['x.id', 'x.adjustment_no', 'x.direction', 'x.amount', 'x.status', 'c.name as college_name'])->map(fn ($r) => ['id' => (int) $r->id, 'code' => $r->adjustment_no, 'name' => $r->college_name.' · '.$r->direction.' '.number_format((float) $r->amount, 2), 'status' => $r->status, 'kind' => 'FEE_ADJUSTMENT', 'dependencies' => [], 'blocked' => false, 'blocking_references' => []])->values()->all();
     }
-    private function cleanupFeeAdjustment(int $id,int $universityId,int $actorId): array
+
+    private function cleanupFeeAdjustment(int $id, int $universityId, int $actorId): array
     {
-        if(!Schema::hasTable('fee_adjustments'))abort(404);
-        return DB::transaction(function()use($id,$universityId,$actorId){$x=DB::table('fee_adjustments')->where('id',$id)->where('university_id',$universityId)->lockForUpdate()->first();if(!$x)abort(404);DB::table('fee_adjustments')->where('id',$id)->delete();app(\App\Services\FeeInstallmentAdjustmentService::class)->rebalanceForGenericAdjustment((int)$x->fee_demand_item_id,$actorId);app(\App\Services\FeeAdjustmentRefundService::class)->recalculateDemand((int)$x->fee_demand_id);$this->audit('TEST_FEE_ADJUSTMENT_CLEANED','fee_adjustment',$id,(array)$x,$actorId);return ['fee_adjustment_id'=>$id];});
+        if (! Schema::hasTable('fee_adjustments')) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($id, $universityId, $actorId) {
+            $x = DB::table('fee_adjustments')->where('id', $id)->where('university_id', $universityId)->lockForUpdate()->first();
+            if (! $x) {
+                abort(404);
+            }DB::table('fee_adjustments')->where('id', $id)->delete();
+            app(FeeInstallmentAdjustmentService::class)->rebalanceForGenericAdjustment((int) $x->fee_demand_item_id, $actorId);
+            app(FeeAdjustmentRefundService::class)->recalculateDemand((int) $x->fee_demand_id);
+            $this->audit('TEST_FEE_ADJUSTMENT_CLEANED', 'fee_adjustment', $id, (array) $x, $actorId);
+
+            return ['fee_adjustment_id' => $id];
+        });
     }
+
     private function feePaymentRefundRows(int $universityId): array
     {
-        if(!Schema::hasTable('fee_payment_refunds'))return [];
-        return DB::table('fee_payment_refunds as r')->join('fee_payments as p','p.id','=','r.fee_payment_id')->join('colleges as c','c.id','=','r.college_id')->where('r.university_id',$universityId)->orderByDesc('r.id')->get(['r.id','r.refund_no','r.amount','r.status','p.receipt_no','c.name as college_name'])->map(fn($r)=>['id'=>(int)$r->id,'code'=>$r->refund_no,'name'=>$r->college_name.' · '.$r->receipt_no.' · '.number_format((float)$r->amount,2),'status'=>$r->status,'kind'=>'FEE_PAYMENT_REFUND','dependencies'=>[],'blocked'=>false,'blocking_references'=>[]])->values()->all();
+        if (! Schema::hasTable('fee_payment_refunds')) {
+            return [];
+        }
+
+        return DB::table('fee_payment_refunds as r')->join('fee_payments as p', 'p.id', '=', 'r.fee_payment_id')->join('colleges as c', 'c.id', '=', 'r.college_id')->where('r.university_id', $universityId)->orderByDesc('r.id')->get(['r.id', 'r.refund_no', 'r.amount', 'r.status', 'p.receipt_no', 'c.name as college_name'])->map(fn ($r) => ['id' => (int) $r->id, 'code' => $r->refund_no, 'name' => $r->college_name.' · '.$r->receipt_no.' · '.number_format((float) $r->amount, 2), 'status' => $r->status, 'kind' => 'FEE_PAYMENT_REFUND', 'dependencies' => [], 'blocked' => false, 'blocking_references' => []])->values()->all();
     }
-    private function cleanupFeePaymentRefund(int $id,int $universityId,int $actorId): array
+
+    private function cleanupFeePaymentRefund(int $id, int $universityId, int $actorId): array
     {
-        if(!Schema::hasTable('fee_payment_refunds'))abort(404);
-        return DB::transaction(function()use($id,$universityId,$actorId){$r=DB::table('fee_payment_refunds')->where('id',$id)->where('university_id',$universityId)->lockForUpdate()->first();if(!$r)abort(404);$a=DB::table('fee_payment_refund_allocations')->where('fee_payment_refund_id',$id)->lockForUpdate()->get();foreach($a as $row)if($row->fee_installment_schedule_id)DB::table('fee_installment_schedules')->where('id',$row->fee_installment_schedule_id)->increment('paid_amount',(float)$row->amount,['updated_at'=>now()]);DB::table('fee_payment_refund_allocations')->where('fee_payment_refund_id',$id)->delete();DB::table('fee_payment_refunds')->where('id',$id)->delete();foreach($a->pluck('fee_demand_id')->unique() as $d)app(\App\Services\FeeAdjustmentRefundService::class)->recalculateDemand((int)$d);$this->audit('TEST_FEE_REFUND_CLEANED','fee_payment_refund',$id,['refund'=>(array)$r,'allocations'=>$a->toArray()],$actorId);return ['fee_payment_refund_id'=>$id,'allocations_deleted'=>$a->count()];});
+        if (! Schema::hasTable('fee_payment_refunds')) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($id, $universityId, $actorId) {
+            $r = DB::table('fee_payment_refunds')->where('id', $id)->where('university_id', $universityId)->lockForUpdate()->first();
+            if (! $r) {
+                abort(404);
+            }$a = DB::table('fee_payment_refund_allocations')->where('fee_payment_refund_id', $id)->lockForUpdate()->get();
+            foreach ($a as $row) {
+                if ($row->fee_installment_schedule_id) {
+                    DB::table('fee_installment_schedules')->where('id', $row->fee_installment_schedule_id)->increment('paid_amount', (float) $row->amount, ['updated_at' => now()]);
+                }
+            }DB::table('fee_payment_refund_allocations')->where('fee_payment_refund_id', $id)->delete();
+            DB::table('fee_payment_refunds')->where('id', $id)->delete();
+            foreach ($a->pluck('fee_demand_id')->unique() as $d) {
+                app(FeeAdjustmentRefundService::class)->recalculateDemand((int) $d);
+            }$this->audit('TEST_FEE_REFUND_CLEANED', 'fee_payment_refund', $id, ['refund' => (array) $r, 'allocations' => $a->toArray()], $actorId);
+
+            return ['fee_payment_refund_id' => $id, 'allocations_deleted' => $a->count()];
+        });
     }
 
     private function feePaymentRows(int $universityId): array
     {
-        if (! Schema::hasTable('fee_payments')) return [];
+        if (! Schema::hasTable('fee_payments')) {
+            return [];
+        }
+
         return DB::table('fee_payments as p')
-            ->join('colleges as c','c.id','=','p.college_id')
-            ->join('admissions as ad','ad.id','=','p.admission_id')
-            ->leftJoin('college_admission_applications as a','a.id','=','ad.college_admission_application_id')
-            ->where('p.university_id',$universityId)->whereIn('p.status',['POSTED','REVERSED'])->orderByDesc('p.id')
-            ->get(['p.id','p.receipt_no','p.payment_date','p.amount','p.payment_mode','p.reference_no','p.status','c.name as college_name','ad.admission_no','a.candidate_name'])
-            ->map(function($r){
-                $alloc=$this->countIfExists('fee_payment_allocations','fee_payment_id',(int)$r->id);
-                return ['id'=>(int)$r->id,'code'=>$r->receipt_no,'name'=>($r->candidate_name?:$r->admission_no).' · '.$r->college_name.' · '.number_format((float)$r->amount,2),
-                    'status'=>$r->status,'kind'=>'FEE_PAYMENT','dependencies'=>['allocations'=>$alloc,'mode'=>$r->payment_mode],
-                    'blocked'=>false,'blocking_references'=>[]];
+            ->join('colleges as c', 'c.id', '=', 'p.college_id')
+            ->join('admissions as ad', 'ad.id', '=', 'p.admission_id')
+            ->leftJoin('college_admission_applications as a', 'a.id', '=', 'ad.college_admission_application_id')
+            ->where('p.university_id', $universityId)->whereIn('p.status', ['POSTED', 'REVERSED'])->orderByDesc('p.id')
+            ->get(['p.id', 'p.receipt_no', 'p.payment_date', 'p.amount', 'p.payment_mode', 'p.reference_no', 'p.status', 'c.name as college_name', 'ad.admission_no', 'a.candidate_name'])
+            ->map(function ($r) {
+                $alloc = $this->countIfExists('fee_payment_allocations', 'fee_payment_id', (int) $r->id);
+
+                return ['id' => (int) $r->id, 'code' => $r->receipt_no, 'name' => ($r->candidate_name ?: $r->admission_no).' · '.$r->college_name.' · '.number_format((float) $r->amount, 2),
+                    'status' => $r->status, 'kind' => 'FEE_PAYMENT', 'dependencies' => ['allocations' => $alloc, 'mode' => $r->payment_mode],
+                    'blocked' => false, 'blocking_references' => []];
             })->values()->all();
     }
 
     private function cleanupFeePayment(int $id, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('fee_payments')) abort(404);
-        return DB::transaction(function() use($id,$universityId,$actorId){
-            $payment=DB::table('fee_payments')->where('id',$id)->where('university_id',$universityId)->whereIn('status',['POSTED','REVERSED'])->lockForUpdate()->first();
-            if(!$payment) abort(404);
-            if(Schema::hasTable('fee_payment_refunds') && DB::table('fee_payment_refunds')->where('fee_payment_id',$payment->id)->exists()) throw ValidationException::withMessages(['payment'=>'Clean the linked test refund first, then clean this payment.']);
-            $allocations=DB::table('fee_payment_allocations')->where('fee_payment_id',$payment->id)->orderBy('sequence_no')->lockForUpdate()->get();
-            $demandIds=$allocations->pluck('fee_demand_id')->unique()->values();
+        if (! Schema::hasTable('fee_payments')) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($id, $universityId, $actorId) {
+            $payment = DB::table('fee_payments')->where('id', $id)->where('university_id', $universityId)->whereIn('status', ['POSTED', 'REVERSED'])->lockForUpdate()->first();
+            if (! $payment) {
+                abort(404);
+            }
+            if (Schema::hasTable('fee_payment_refunds') && DB::table('fee_payment_refunds')->where('fee_payment_id', $payment->id)->exists()) {
+                throw ValidationException::withMessages(['payment' => 'Clean the linked test refund first, then clean this payment.']);
+            }
+            $allocations = DB::table('fee_payment_allocations')->where('fee_payment_id', $payment->id)->orderBy('sequence_no')->lockForUpdate()->get();
+            $demandIds = $allocations->pluck('fee_demand_id')->unique()->values();
             // A POSTED receipt still contributes to installment paid_amount, so permanent
             // test cleanup must remove that contribution. A REVERSED receipt has already had
             // its installment paid_amount restored by the controlled reversal workflow; doing
             // it again here would double-decrement the schedule.
             if ($payment->status === 'POSTED') {
-                foreach($allocations->where('source_type','INSTALLMENT') as $a){
-                    if($a->fee_installment_schedule_id){
-                        $schedule=DB::table('fee_installment_schedules')->where('id',$a->fee_installment_schedule_id)->lockForUpdate()->first();
-                        if($schedule) DB::table('fee_installment_schedules')->where('id',$schedule->id)->update(['paid_amount'=>max(0,round((float)$schedule->paid_amount-(float)$a->amount,2)),'updated_at'=>now()]);
+                foreach ($allocations->where('source_type', 'INSTALLMENT') as $a) {
+                    if ($a->fee_installment_schedule_id) {
+                        $schedule = DB::table('fee_installment_schedules')->where('id', $a->fee_installment_schedule_id)->lockForUpdate()->first();
+                        if ($schedule) {
+                            DB::table('fee_installment_schedules')->where('id', $schedule->id)->update(['paid_amount' => max(0, round((float) $schedule->paid_amount - (float) $a->amount, 2)), 'updated_at' => now()]);
+                        }
                     }
                 }
             }
@@ -2323,145 +2239,178 @@ class TestDataCleanupService
             if ($onlineTransactions->isNotEmpty()) {
                 DB::table('online_payment_transactions')->whereIn('id', $onlineTransactions->pluck('id'))->delete();
             }
-            DB::table('fee_payment_allocations')->where('fee_payment_id',$payment->id)->delete();
-            DB::table('fee_payments')->where('id',$payment->id)->delete();
-            foreach($demandIds as $demandId){
-                $d=DB::table('fee_demands')->where('id',$demandId)->lockForUpdate()->first(); if(!$d)continue;
-                $principal=(float)DB::table('fee_payment_allocations as a')->join('fee_payments as p','p.id','=','a.fee_payment_id')
-                    ->where('a.fee_demand_id',$demandId)->whereIn('a.source_type',['DEMAND_ITEM','INSTALLMENT'])->where('p.status','POSTED')->sum('a.amount');
-                $out=max(round((float)$d->total_amount-$principal-(float)$d->adjusted_amount,2),0);
-                $status=$out<=0?'CLEARED':(($principal+(float)$d->adjusted_amount)>0?'PARTIALLY_CLEARED':'OPEN');
-                DB::table('fee_demands')->where('id',$demandId)->update(['paid_amount'=>$principal,'outstanding_amount'=>$out,'status'=>$status,'updated_at'=>now()]);
+            DB::table('fee_payment_allocations')->where('fee_payment_id', $payment->id)->delete();
+            DB::table('fee_payments')->where('id', $payment->id)->delete();
+            foreach ($demandIds as $demandId) {
+                $d = DB::table('fee_demands')->where('id', $demandId)->lockForUpdate()->first();
+                if (! $d) {
+                    continue;
+                }
+                $principal = (float) DB::table('fee_payment_allocations as a')->join('fee_payments as p', 'p.id', '=', 'a.fee_payment_id')
+                    ->where('a.fee_demand_id', $demandId)->whereIn('a.source_type', ['DEMAND_ITEM', 'INSTALLMENT'])->where('p.status', 'POSTED')->sum('a.amount');
+                $out = max(round((float) $d->total_amount - $principal - (float) $d->adjusted_amount, 2), 0);
+                $status = $out <= 0 ? 'CLEARED' : (($principal + (float) $d->adjusted_amount) > 0 ? 'PARTIALLY_CLEARED' : 'OPEN');
+                DB::table('fee_demands')->where('id', $demandId)->update(['paid_amount' => $principal, 'outstanding_amount' => $out, 'status' => $status, 'updated_at' => now()]);
             }
-            $this->audit('TEST_FEE_PAYMENT_CLEANED','fee_payment',$id,['payment'=>(array)$payment,'allocations'=>$allocations->toArray(),'online_transactions'=>$onlineTransactions->toArray()],$actorId);
-            return ['fee_payment_id'=>$id,'allocations_deleted'=>$allocations->count()];
+            $this->audit('TEST_FEE_PAYMENT_CLEANED', 'fee_payment', $id, ['payment' => (array) $payment, 'allocations' => $allocations->toArray(), 'online_transactions' => $onlineTransactions->toArray()], $actorId);
+
+            return ['fee_payment_id' => $id, 'allocations_deleted' => $allocations->count()];
         });
     }
 
     private function feeLateFineChargeRows(int $universityId): array
     {
-        if (! Schema::hasTable('fee_late_fine_charges')) return [];
+        if (! Schema::hasTable('fee_late_fine_charges')) {
+            return [];
+        }
+
         return DB::table('fee_late_fine_charges as f')
-            ->join('fee_demands as d','d.id','=','f.fee_demand_id')
-            ->join('fee_demand_items as i','i.id','=','f.fee_demand_item_id')
-            ->join('colleges as c','c.id','=','f.college_id')
-            ->where('f.university_id',$universityId)
-            ->where('f.status','ACTIVE')
+            ->join('fee_demands as d', 'd.id', '=', 'f.fee_demand_id')
+            ->join('fee_demand_items as i', 'i.id', '=', 'f.fee_demand_item_id')
+            ->join('colleges as c', 'c.id', '=', 'f.college_id')
+            ->where('f.university_id', $universityId)
+            ->where('f.status', 'ACTIVE')
             ->orderByDesc('f.id')
-            ->get(['f.id','f.status','f.fine_amount','f.overdue_days','d.demand_no','i.fee_head_name','c.name as college_name'])
-            ->map(fn($r)=>[
-                'id'=>(int)$r->id,'code'=>$r->demand_no,
-                'name'=>$r->fee_head_name.' · '.$r->college_name.' · Fine '.number_format((float)$r->fine_amount,2),
-                'status'=>$r->status,'kind'=>'FEE_LATE_FINE_CHARGE',
-                'dependencies'=>['overdue_days'=>(int)$r->overdue_days,'fine_amount'=>(float)$r->fine_amount],
-                'blocked'=>false,'blocking_references'=>[],
+            ->get(['f.id', 'f.status', 'f.fine_amount', 'f.overdue_days', 'd.demand_no', 'i.fee_head_name', 'c.name as college_name'])
+            ->map(fn ($r) => [
+                'id' => (int) $r->id, 'code' => $r->demand_no,
+                'name' => $r->fee_head_name.' · '.$r->college_name.' · Fine '.number_format((float) $r->fine_amount, 2),
+                'status' => $r->status, 'kind' => 'FEE_LATE_FINE_CHARGE',
+                'dependencies' => ['overdue_days' => (int) $r->overdue_days, 'fine_amount' => (float) $r->fine_amount],
+                'blocked' => false, 'blocking_references' => [],
             ])->values()->all();
     }
 
     private function cleanupFeeLateFineCharge(int $id, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('fee_late_fine_charges')) abort(404);
-        return DB::transaction(function() use($id,$universityId,$actorId){
-            $record=DB::table('fee_late_fine_charges')->where('id',$id)->where('university_id',$universityId)->first();
-            if(!$record) abort(404);
-            if (Schema::hasTable('fee_payment_allocations') && DB::table('fee_payment_allocations')->where('fee_late_fine_charge_id',$record->id)->exists()) {
-                throw ValidationException::withMessages(['record'=>'This Late Fine Charge has payment allocation. Clean the related test payment first.']);
+        if (! Schema::hasTable('fee_late_fine_charges')) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($id, $universityId, $actorId) {
+            $record = DB::table('fee_late_fine_charges')->where('id', $id)->where('university_id', $universityId)->first();
+            if (! $record) {
+                abort(404);
             }
-            $history=DB::table('fee_late_fine_charges')
-                ->where('university_id',$universityId)
-                ->where('fee_late_fine_rule_id',$record->fee_late_fine_rule_id)
-                ->where('fee_installment_schedule_id',$record->fee_installment_schedule_id)
+            if (Schema::hasTable('fee_payment_allocations') && DB::table('fee_payment_allocations')->where('fee_late_fine_charge_id', $record->id)->exists()) {
+                throw ValidationException::withMessages(['record' => 'This Late Fine Charge has payment allocation. Clean the related test payment first.']);
+            }
+            $history = DB::table('fee_late_fine_charges')
+                ->where('university_id', $universityId)
+                ->where('fee_late_fine_rule_id', $record->fee_late_fine_rule_id)
+                ->where('fee_installment_schedule_id', $record->fee_installment_schedule_id)
                 ->get();
             DB::table('fee_late_fine_charges')
-                ->where('university_id',$universityId)
-                ->where('fee_late_fine_rule_id',$record->fee_late_fine_rule_id)
-                ->where('fee_installment_schedule_id',$record->fee_installment_schedule_id)
+                ->where('university_id', $universityId)
+                ->where('fee_late_fine_rule_id', $record->fee_late_fine_rule_id)
+                ->where('fee_installment_schedule_id', $record->fee_installment_schedule_id)
                 ->delete();
-            $this->audit('TEST_FEE_LATE_FINE_CHARGE_CLEANED','fee_late_fine_charge',$id,['history'=>$history->toArray()],$actorId);
-            return ['late_fine_charge_id'=>$id,'history_deleted'=>$history->count()];
+            $this->audit('TEST_FEE_LATE_FINE_CHARGE_CLEANED', 'fee_late_fine_charge', $id, ['history' => $history->toArray()], $actorId);
+
+            return ['late_fine_charge_id' => $id, 'history_deleted' => $history->count()];
         });
     }
 
     private function feeInstallmentScheduleRows(int $universityId): array
     {
-        if (! Schema::hasTable('fee_installment_schedules')) return [];
+        if (! Schema::hasTable('fee_installment_schedules')) {
+            return [];
+        }
+
         return DB::table('fee_installment_schedules as s')
-            ->join('fee_demands as d','d.id','=','s.fee_demand_id')
-            ->join('fee_demand_items as i','i.id','=','s.fee_demand_item_id')
-            ->join('colleges as c','c.id','=','d.college_id')
-            ->where('d.university_id',$universityId)->where('s.status','ACTIVE')
-            ->groupBy('i.id','d.demand_no','i.fee_head_name','c.name')
+            ->join('fee_demands as d', 'd.id', '=', 's.fee_demand_id')
+            ->join('fee_demand_items as i', 'i.id', '=', 's.fee_demand_item_id')
+            ->join('colleges as c', 'c.id', '=', 'd.college_id')
+            ->where('d.university_id', $universityId)->where('s.status', 'ACTIVE')
+            ->groupBy('i.id', 'd.demand_no', 'i.fee_head_name', 'c.name')
             ->orderByDesc('i.id')
-            ->get(['i.id','d.demand_no','i.fee_head_name','c.name as college_name',DB::raw('COUNT(s.id) as schedule_count'),DB::raw('SUM(s.amount) as schedule_total')])
-            ->map(fn($r)=>[
-                'id'=>(int)$r->id,'code'=>$r->demand_no,'name'=>$r->fee_head_name.' · '.$r->college_name,
-                'status'=>'ACTIVE','kind'=>'FEE_INSTALLMENT_SCHEDULE','dependencies'=>['installments'=>(int)$r->schedule_count,'scheduled_total'=>(float)$r->schedule_total],
-                'blocked'=>false,'blocking_references'=>[],
+            ->get(['i.id', 'd.demand_no', 'i.fee_head_name', 'c.name as college_name', DB::raw('COUNT(s.id) as schedule_count'), DB::raw('SUM(s.amount) as schedule_total')])
+            ->map(fn ($r) => [
+                'id' => (int) $r->id, 'code' => $r->demand_no, 'name' => $r->fee_head_name.' · '.$r->college_name,
+                'status' => 'ACTIVE', 'kind' => 'FEE_INSTALLMENT_SCHEDULE', 'dependencies' => ['installments' => (int) $r->schedule_count, 'scheduled_total' => (float) $r->schedule_total],
+                'blocked' => false, 'blocking_references' => [],
             ])->values()->all();
     }
 
     private function cleanupFeeInstallmentSchedule(int $demandItemId, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('fee_installment_schedules')) abort(404);
-        return DB::transaction(function() use($demandItemId,$universityId,$actorId){
-            $valid=DB::table('fee_demand_items as i')->join('fee_demands as d','d.id','=','i.fee_demand_id')->where('i.id',$demandItemId)->where('d.university_id',$universityId)->exists();
-            if(!$valid) abort(404);
-            $scheduleIds=DB::table('fee_installment_schedules')->where('fee_demand_item_id',$demandItemId)->pluck('id');
-            if (Schema::hasTable('fee_payment_allocations') && DB::table('fee_payment_allocations')->whereIn('fee_installment_schedule_id',$scheduleIds)->exists()) {
-                throw ValidationException::withMessages(['record'=>'This Installment Schedule has payment allocation. Clean the related test payment first.']);
+        if (! Schema::hasTable('fee_installment_schedules')) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($demandItemId, $universityId, $actorId) {
+            $valid = DB::table('fee_demand_items as i')->join('fee_demands as d', 'd.id', '=', 'i.fee_demand_id')->where('i.id', $demandItemId)->where('d.university_id', $universityId)->exists();
+            if (! $valid) {
+                abort(404);
             }
-            $rows=DB::table('fee_installment_schedules')->where('fee_demand_item_id',$demandItemId)->get();
-            DB::table('fee_installment_schedules')->where('fee_demand_item_id',$demandItemId)->delete();
-            $this->audit('TEST_FEE_INSTALLMENT_SCHEDULE_CLEANED','fee_demand_item',$demandItemId,['schedules'=>$rows->toArray()],$actorId);
-            return ['fee_demand_item_id'=>$demandItemId,'schedules_deleted'=>$rows->count()];
+            $scheduleIds = DB::table('fee_installment_schedules')->where('fee_demand_item_id', $demandItemId)->pluck('id');
+            if (Schema::hasTable('fee_payment_allocations') && DB::table('fee_payment_allocations')->whereIn('fee_installment_schedule_id', $scheduleIds)->exists()) {
+                throw ValidationException::withMessages(['record' => 'This Installment Schedule has payment allocation. Clean the related test payment first.']);
+            }
+            $rows = DB::table('fee_installment_schedules')->where('fee_demand_item_id', $demandItemId)->get();
+            DB::table('fee_installment_schedules')->where('fee_demand_item_id', $demandItemId)->delete();
+            $this->audit('TEST_FEE_INSTALLMENT_SCHEDULE_CLEANED', 'fee_demand_item', $demandItemId, ['schedules' => $rows->toArray()], $actorId);
+
+            return ['fee_demand_item_id' => $demandItemId, 'schedules_deleted' => $rows->count()];
         });
     }
 
     private function feeStudentBenefitRows(int $universityId): array
     {
-        if (! Schema::hasTable('fee_student_benefits')) return [];
+        if (! Schema::hasTable('fee_student_benefits')) {
+            return [];
+        }
+
         return DB::table('fee_student_benefits as b')
-            ->join('fee_demands as d','d.id','=','b.fee_demand_id')
-            ->join('admissions as ad','ad.id','=','b.admission_id')
-            ->leftJoin('college_admission_applications as a','a.id','=','ad.college_admission_application_id')
-            ->join('colleges as c','c.id','=','b.college_id')
-            ->where('b.university_id',$universityId)
+            ->join('fee_demands as d', 'd.id', '=', 'b.fee_demand_id')
+            ->join('admissions as ad', 'ad.id', '=', 'b.admission_id')
+            ->leftJoin('college_admission_applications as a', 'a.id', '=', 'ad.college_admission_application_id')
+            ->join('colleges as c', 'c.id', '=', 'b.college_id')
+            ->where('b.university_id', $universityId)
             ->orderByDesc('b.id')
-            ->get(['b.id','b.scheme_name_snapshot','b.status','b.sanctioned_amount','d.demand_no','a.candidate_name','ad.admission_no','c.name as college_name'])
-            ->map(fn($r)=>[
-                'id'=>(int)$r->id,
-                'code'=>$r->demand_no,
-                'name'=>($r->candidate_name ?: $r->admission_no).' · '.$r->scheme_name_snapshot.' · '.$r->college_name,
-                'status'=>$r->status,
-                'kind'=>'FEE_STUDENT_BENEFIT',
-                'dependencies'=>['benefit_items'=>$this->countIfExists('fee_student_benefit_items','fee_student_benefit_id',(int)$r->id)],
-                'blocked'=>false,
-                'blocking_references'=>[],
+            ->get(['b.id', 'b.scheme_name_snapshot', 'b.status', 'b.sanctioned_amount', 'd.demand_no', 'a.candidate_name', 'ad.admission_no', 'c.name as college_name'])
+            ->map(fn ($r) => [
+                'id' => (int) $r->id,
+                'code' => $r->demand_no,
+                'name' => ($r->candidate_name ?: $r->admission_no).' · '.$r->scheme_name_snapshot.' · '.$r->college_name,
+                'status' => $r->status,
+                'kind' => 'FEE_STUDENT_BENEFIT',
+                'dependencies' => ['benefit_items' => $this->countIfExists('fee_student_benefit_items', 'fee_student_benefit_id', (int) $r->id)],
+                'blocked' => false,
+                'blocking_references' => [],
             ])->values()->all();
     }
 
     private function cleanupFeeStudentBenefit(int $id, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('fee_student_benefits')) abort(404);
-        return DB::transaction(function () use ($id,$universityId,$actorId) {
-            $record = DB::table('fee_student_benefits')->where('id',$id)->where('university_id',$universityId)->lockForUpdate()->first();
-            if (! $record) abort(404);
-            if ($record->status === 'APPROVED') {
-                $demand = DB::table('fee_demands')->where('id',$record->fee_demand_id)->lockForUpdate()->first();
-                if (! $demand) abort(404);
-                if ((float)$demand->paid_amount > 0) {
-                    throw ValidationException::withMessages(['record'=>'Approved benefit cannot be test-cleaned after payment activity.']);
-                }
-                $sanctioned = (float)($record->sanctioned_amount ?? 0);
-                $adjusted = max(round((float)$demand->adjusted_amount - $sanctioned,2),0);
-                $outstanding = max(round((float)$demand->total_amount - (float)$demand->paid_amount - $adjusted,2),0);
-                $status = $outstanding <= 0 ? 'CLEARED' : (($adjusted + (float)$demand->paid_amount) > 0 ? 'PARTIALLY_CLEARED' : 'OPEN');
-                DB::table('fee_demands')->where('id',$demand->id)->update(['adjusted_amount'=>$adjusted,'outstanding_amount'=>$outstanding,'status'=>$status,'updated_at'=>now()]);
+        if (! Schema::hasTable('fee_student_benefits')) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($id, $universityId, $actorId) {
+            $record = DB::table('fee_student_benefits')->where('id', $id)->where('university_id', $universityId)->lockForUpdate()->first();
+            if (! $record) {
+                abort(404);
             }
-            DB::table('fee_student_benefit_items')->where('fee_student_benefit_id',$record->id)->delete();
-            DB::table('fee_student_benefits')->where('id',$record->id)->delete();
-            $this->audit('TEST_FEE_STUDENT_BENEFIT_CLEANED','fee_student_benefit',$record->id,(array)$record,$actorId);
-            return ['benefit_id'=>(int)$record->id,'status'=>$record->status];
+            if ($record->status === 'APPROVED') {
+                $demand = DB::table('fee_demands')->where('id', $record->fee_demand_id)->lockForUpdate()->first();
+                if (! $demand) {
+                    abort(404);
+                }
+                if ((float) $demand->paid_amount > 0) {
+                    throw ValidationException::withMessages(['record' => 'Approved benefit cannot be test-cleaned after payment activity.']);
+                }
+                $sanctioned = (float) ($record->sanctioned_amount ?? 0);
+                $adjusted = max(round((float) $demand->adjusted_amount - $sanctioned, 2), 0);
+                $outstanding = max(round((float) $demand->total_amount - (float) $demand->paid_amount - $adjusted, 2), 0);
+                $status = $outstanding <= 0 ? 'CLEARED' : (($adjusted + (float) $demand->paid_amount) > 0 ? 'PARTIALLY_CLEARED' : 'OPEN');
+                DB::table('fee_demands')->where('id', $demand->id)->update(['adjusted_amount' => $adjusted, 'outstanding_amount' => $outstanding, 'status' => $status, 'updated_at' => now()]);
+            }
+            DB::table('fee_student_benefit_items')->where('fee_student_benefit_id', $record->id)->delete();
+            DB::table('fee_student_benefits')->where('id', $record->id)->delete();
+            $this->audit('TEST_FEE_STUDENT_BENEFIT_CLEANED', 'fee_student_benefit', $record->id, (array) $record, $actorId);
+
+            return ['benefit_id' => (int) $record->id, 'status' => $record->status];
         });
     }
 
@@ -2582,6 +2531,7 @@ class TestDataCleanupService
                 'deleted_demand_items' => $itemCount,
             ];
             $this->audit('TEST_FEE_DEMAND_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+
             return $result;
         });
     }
@@ -2849,6 +2799,7 @@ class TestDataCleanupService
                 'deleted_college_adoptions' => $adoptionCount,
             ];
             $this->audit('TEST_FEE_STRUCTURE_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+
             return $result;
         });
     }
@@ -2921,6 +2872,7 @@ class TestDataCleanupService
         DB::table('fee_heads')->where('id', $id)->delete();
         $result = ['record' => (array) $record];
         $this->audit('TEST_FEE_HEAD_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+
         return $result;
     }
 
@@ -3008,6 +2960,7 @@ class TestDataCleanupService
         DB::table('fee_categories')->where('id', $id)->delete();
         $result = ['record' => (array) $record];
         $this->audit('TEST_FEE_CATEGORY_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+
         return $result;
     }
 
@@ -3057,6 +3010,7 @@ class TestDataCleanupService
                 $interviewEvaluators =
                     $this->countIfExists('college_admission_interview_evaluators', 'evaluator_user_id', (int) $user->id)
                     + $this->countIfExists('college_admission_interview_panel_evaluators', 'evaluator_user_id', (int) $user->id);
+                $facultyAllocations = $this->countIfExists('faculty_allocations', 'faculty_user_id', (int) $user->id);
 
                 $blocking = [];
 
@@ -3101,6 +3055,14 @@ class TestDataCleanupService
                     ];
                 }
 
+                if ($facultyAllocations > 0) {
+                    $blocking[] = [
+                        'table' => 'faculty_allocations',
+                        'column' => 'faculty_user_id',
+                        'count' => $facultyAllocations,
+                    ];
+                }
+
                 $label = $user->name.' · '.(
                     $user->account_type === 'COLLEGE_STAFF'
                         ? 'College Staff'.($user->college_name ? ' · '.$user->college_name : '')
@@ -3117,6 +3079,7 @@ class TestDataCleanupService
                         'role_assignments' => $roleAssignments,
                         'approval_submissions' => $approvalSubmissions,
                         'interview_evaluator_rows' => $interviewEvaluators,
+                        'faculty_allocations' => $facultyAllocations,
                     ],
                     'blocked' => count($blocking) > 0,
                     'blocking_references' => $blocking,
@@ -3319,7 +3282,9 @@ class TestDataCleanupService
 
     private function collegeAdmissionFormTemplateRows(int $universityId): array
     {
-        if (! Schema::hasTable('college_admission_form_templates')) return [];
+        if (! Schema::hasTable('college_admission_form_templates')) {
+            return [];
+        }
 
         return DB::table('college_admission_form_templates as t')
             ->leftJoin('colleges as c', 'c.id', '=', 't.college_id')
@@ -3331,6 +3296,7 @@ class TestDataCleanupService
                     'applications' => $this->countIfExists('college_admission_applications', 'college_admission_form_template_id', $row->id),
                     'child_templates' => $this->countIfExists('college_admission_form_templates', 'parent_template_id', $row->id),
                 ]);
+
                 return [
                     'id' => $row->id,
                     'code' => $row->code,
@@ -3400,9 +3366,13 @@ class TestDataCleanupService
 
     private function cleanupCollegeAdmissionFormTemplate(int $id, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('college_admission_form_templates')) abort(404);
+        if (! Schema::hasTable('college_admission_form_templates')) {
+            abort(404);
+        }
         $record = DB::table('college_admission_form_templates')->where('id', $id)->where('university_id', $universityId)->first();
-        if (! $record) abort(404);
+        if (! $record) {
+            abort(404);
+        }
 
         $downstream = array_filter([
             'applications' => $this->countIfExists('college_admission_applications', 'college_admission_form_template_id', $id),
@@ -3428,12 +3398,15 @@ class TestDataCleanupService
         DB::table('college_admission_form_templates')->where('id', $id)->delete();
         $result = ['deleted' => 1, 'record' => $before];
         $this->audit('TEST_ADMISSION_FORM_TEMPLATE_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+
         return $result;
     }
 
     private function collegeApplicationFeeRuleRows(int $universityId): array
     {
-        if (! Schema::hasTable('college_application_fee_rules')) return [];
+        if (! Schema::hasTable('college_application_fee_rules')) {
+            return [];
+        }
 
         return DB::table('college_application_fee_rules as r')
             ->leftJoin('colleges as c', 'c.id', '=', 'r.college_id')
@@ -3442,6 +3415,7 @@ class TestDataCleanupService
             ->get(['r.id', 'r.name', 'r.status', 'r.amount', 'r.currency', 'r.fee_required', 'c.name as college_name'])
             ->map(function ($row) {
                 $applications = $this->countIfExists('college_admission_applications', 'application_fee_rule_id', $row->id);
+
                 return [
                     'id' => $row->id,
                     'code' => $row->fee_required ? $row->currency.' '.$row->amount : 'FREE',
@@ -3457,9 +3431,13 @@ class TestDataCleanupService
 
     private function cleanupCollegeApplicationFeeRule(int $id, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('college_application_fee_rules')) abort(404);
+        if (! Schema::hasTable('college_application_fee_rules')) {
+            abort(404);
+        }
         $record = DB::table('college_application_fee_rules')->where('id', $id)->where('university_id', $universityId)->first();
-        if (! $record) abort(404);
+        if (! $record) {
+            abort(404);
+        }
 
         $applications = $this->countIfExists('college_admission_applications', 'application_fee_rule_id', $id);
         if ($applications > 0) {
@@ -3470,12 +3448,16 @@ class TestDataCleanupService
         DB::table('college_application_fee_rules')->where('id', $id)->delete();
         $result = ['deleted' => 1, 'record' => $before];
         $this->audit('TEST_APPLICATION_FEE_RULE_CLEANED', 'test_data_cleanup', $id, $result, $actorId);
+
         return $result;
     }
 
     private function countCollegeAdmissionApplicationFieldValuesForUniversity(int $universityId): int
     {
-        if (! Schema::hasTable('college_admission_application_field_values') || ! Schema::hasTable('college_admission_applications')) return 0;
+        if (! Schema::hasTable('college_admission_application_field_values') || ! Schema::hasTable('college_admission_applications')) {
+            return 0;
+        }
+
         return DB::table('college_admission_application_field_values as v')
             ->join('college_admission_applications as a', 'a.id', '=', 'v.college_admission_application_id')
             ->join('colleges as c', 'c.id', '=', 'a.college_id')
@@ -3691,7 +3673,6 @@ class TestDataCleanupService
         });
     }
 
-
     private function admissionRows(int $universityId): array
     {
         if (! Schema::hasTable('admissions')) {
@@ -3776,7 +3757,6 @@ class TestDataCleanupService
 
         return $result;
     }
-
 
     private function collegeAdmissionMeritRosterRows(int $universityId): array
     {
@@ -3935,47 +3915,61 @@ class TestDataCleanupService
 
     private function cleanupCollegeAdmissionScore(int $id, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('college_admission_scores')) abort(404);
+        if (! Schema::hasTable('college_admission_scores')) {
+            abort(404);
+        }
         $record = DB::table('college_admission_scores as s')
             ->join('college_admission_applications as a', 'a.id', '=', 's.college_admission_application_id')
             ->join('colleges as c', 'c.id', '=', 'a.college_id')
             ->where('s.id', $id)->where('c.university_id', $universityId)
             ->select('s.*', 'a.application_no', 'a.candidate_name', 'c.name as college_name')->first();
-        if (! $record) abort(404);
+        if (! $record) {
+            abort(404);
+        }
         $downstream = $this->downstreamReferences($id, [
             ['college_admission_merit_entries', 'college_admission_score_id'],
             ['college_admission_seat_allocations', 'college_admission_score_id'],
             ['admissions', 'college_admission_score_id'],
         ]);
-        if (count($downstream) > 0) throw ValidationException::withMessages(['record'=>'This normalized Score is already consumed by downstream Merit / Seat / Admission records. Clean those dependent test records first.']);
+        if (count($downstream) > 0) {
+            throw ValidationException::withMessages(['record' => 'This normalized Score is already consumed by downstream Merit / Seat / Admission records. Clean those dependent test records first.']);
+        }
         DB::table('college_admission_scores')->where('id', $record->id)->delete();
-        $result=['record'=>(array)$record];
-        $this->audit('TEST_COLLEGE_ADMISSION_SCORE_CLEANED','test_data_cleanup',$record->id,$result,$actorId);
+        $result = ['record' => (array) $record];
+        $this->audit('TEST_COLLEGE_ADMISSION_SCORE_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+
         return $result;
     }
 
     private function collegeAdmissionInterviewRows(int $universityId): array
     {
-        if (! Schema::hasTable('college_admission_interviews') || ! Schema::hasTable('college_admission_applications')) return [];
-        return DB::table('college_admission_interviews as i')->join('college_admission_applications as a','a.id','=','i.college_admission_application_id')->join('colleges as c','c.id','=','a.college_id')->where('c.university_id',$universityId)->select(['i.id','i.panel_name as name','i.status','c.name as college_name'])->orderByDesc('i.id')->get()->map(fn($r)=>(array)$r)->all();
+        if (! Schema::hasTable('college_admission_interviews') || ! Schema::hasTable('college_admission_applications')) {
+            return [];
+        }
+
+        return DB::table('college_admission_interviews as i')->join('college_admission_applications as a', 'a.id', '=', 'i.college_admission_application_id')->join('colleges as c', 'c.id', '=', 'a.college_id')->where('c.university_id', $universityId)->select(['i.id', 'i.panel_name as name', 'i.status', 'c.name as college_name'])->orderByDesc('i.id')->get()->map(fn ($r) => (array) $r)->all();
     }
 
     private function collegeAdmissionScoreRows(int $universityId): array
     {
-        if (! Schema::hasTable('college_admission_scores')) return [];
+        if (! Schema::hasTable('college_admission_scores')) {
+            return [];
+        }
+
         return DB::table('college_admission_scores as s')
-            ->join('college_admission_applications as a','a.id','=','s.college_admission_application_id')
-            ->join('college_admission_application_choices as ch','ch.id','=','s.college_admission_application_choice_id')
-            ->join('colleges as c','c.id','=','a.college_id')
-            ->where('c.university_id',$universityId)->orderByDesc('s.id')
-            ->get(['s.id','s.qualification_status','s.final_weighted_score','a.application_no','a.candidate_name','ch.preference_no','c.name as college_name'])
-            ->map(function($row){
-                $downstream=$this->downstreamReferences($row->id,[
-                    ['college_admission_merit_entries','college_admission_score_id'],
-                    ['college_admission_seat_allocations','college_admission_score_id'],
-                    ['admissions','college_admission_score_id'],
+            ->join('college_admission_applications as a', 'a.id', '=', 's.college_admission_application_id')
+            ->join('college_admission_application_choices as ch', 'ch.id', '=', 's.college_admission_application_choice_id')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)->orderByDesc('s.id')
+            ->get(['s.id', 's.qualification_status', 's.final_weighted_score', 'a.application_no', 'a.candidate_name', 'ch.preference_no', 'c.name as college_name'])
+            ->map(function ($row) {
+                $downstream = $this->downstreamReferences($row->id, [
+                    ['college_admission_merit_entries', 'college_admission_score_id'],
+                    ['college_admission_seat_allocations', 'college_admission_score_id'],
+                    ['admissions', 'college_admission_score_id'],
                 ]);
-                return ['id'=>$row->id,'code'=>$row->application_no.'-P'.$row->preference_no,'name'=>$row->candidate_name.' · '.$row->college_name,'status'=>$row->qualification_status,'kind'=>'NORMALIZED_SCORE','dependencies'=>[],'blocked'=>count($downstream)>0,'blocking_references'=>$downstream];
+
+                return ['id' => $row->id, 'code' => $row->application_no.'-P'.$row->preference_no, 'name' => $row->candidate_name.' · '.$row->college_name, 'status' => $row->qualification_status, 'kind' => 'NORMALIZED_SCORE', 'dependencies' => [], 'blocked' => count($downstream) > 0, 'blocking_references' => $downstream];
             })->values()->all();
     }
 
@@ -4109,10 +4103,10 @@ class TestDataCleanupService
                 $result,
                 $actorId
             );
+
             return $result;
         });
     }
-
 
     private function studentIdentityAssignmentRows(int $universityId): array
     {
@@ -4202,6 +4196,7 @@ class TestDataCleanupService
                 'identity_sequences_rewound' => false,
             ];
             $this->audit('TEST_STUDENT_IDENTITY_CLEANED', 'test_data_cleanup', $record->enrollment_id, $result, $actorId);
+
             return $result;
         });
     }
@@ -4333,7 +4328,9 @@ class TestDataCleanupService
                         ->where('identity_type', 'STUDENT_UID')
                         ->where('scope_key', 'COLLEGE')
                         ->delete();
-                    if ($deleted) $resetSequences[] = 'STUDENT_UID:COLLEGE';
+                    if ($deleted) {
+                        $resetSequences[] = 'STUDENT_UID:COLLEGE';
+                    }
                 }
 
                 if (! DB::table('students')->where('college_id', $record->college_id)->whereNotNull('university_roll_no')->exists()) {
@@ -4342,7 +4339,9 @@ class TestDataCleanupService
                         ->where('identity_type', 'UNIVERSITY_ROLL')
                         ->where('scope_key', 'COLLEGE')
                         ->delete();
-                    if ($deleted) $resetSequences[] = 'UNIVERSITY_ROLL:COLLEGE';
+                    if ($deleted) {
+                        $resetSequences[] = 'UNIVERSITY_ROLL:COLLEGE';
+                    }
                 }
 
                 // Class Roll is scope-aware (Programme Offering or Discipline). Reset only
@@ -4367,7 +4366,9 @@ class TestDataCleanupService
                             ->where('identity_type', 'CLASS_ROLL')
                             ->where('scope_key', $scopeKey)
                             ->delete();
-                        if ($deleted) $resetSequences[] = 'CLASS_ROLL:'.$scopeKey;
+                        if ($deleted) {
+                            $resetSequences[] = 'CLASS_ROLL:'.$scopeKey;
+                        }
                     }
                 }
             }
@@ -4827,8 +4828,7 @@ class TestDataCleanupService
 
         if (count($downstream) > 0) {
             throw ValidationException::withMessages([
-                'record' =>
-                    'This Reservation plan already has Admission/Student references. Clean those dependent test records first.',
+                'record' => 'This Reservation plan already has Admission/Student references. Clean those dependent test records first.',
             ]);
         }
 
@@ -4921,8 +4921,7 @@ class TestDataCleanupService
 
         if (count($downstream) > 0) {
             throw ValidationException::withMessages([
-                'record' =>
-                    'This Intake / Seat Capacity already has downstream Reservation, Admission, or Student references. Clean those dependent test records first.',
+                'record' => 'This Intake / Seat Capacity already has downstream Reservation, Admission, or Student references. Clean those dependent test records first.',
             ]);
         }
 
@@ -5088,6 +5087,140 @@ class TestDataCleanupService
             ->count();
     }
 
+    private function cleanupCourseOffering(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('course_offerings')) {
+            abort(404);
+        }
+        $record = DB::table('course_offerings as co')
+            ->join('batches as b', 'b.id', '=', 'co.batch_id')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->where('co.id', $id)->where('c.university_id', $universityId)->select('co.*')->first();
+        if (! $record) {
+            abort(404);
+        }
+        $downstream = $this->downstreamReferences($id, [['faculty_allocations', 'course_offering_id']]);
+        if (count($downstream) > 0) {
+            abort(422, 'Clean Faculty Allocations before deleting this Course Offering.');
+        }
+        DB::table('course_offerings')->where('id', $id)->delete();
+        $this->audit('TEST_COURSE_OFFERING_CLEANED', 'test_data_cleanup', $id, ['record' => (array) $record], $actorId);
+
+        return ['record' => (array) $record];
+    }
+
+    private function courseOfferingRows(int $universityId): array
+    {
+        if (! Schema::hasTable('course_offerings')) {
+            return [];
+        }
+
+        return DB::table('course_offerings as co')
+            ->join('batches as b', 'b.id', '=', 'co.batch_id')
+            ->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')
+            ->join('curriculum_course_mappings as m', 'm.id', '=', 'co.curriculum_course_mapping_id')
+            ->join('courses as crs', 'crs.id', '=', 'm.course_id')
+            ->where('c.university_id', $universityId)
+            ->orderBy('c.name')->orderBy('b.name')->orderBy('crs.name')
+            ->get(['co.id', 'co.status', 'c.name as college_name', 'b.name as batch_name', 'crs.code as course_code', 'crs.name as course_name'])
+            ->map(fn ($row) => [
+                'id' => $row->id,
+                'code' => 'CO-'.$row->id,
+                'name' => $row->college_name.' · '.$row->batch_name.' · '.$row->course_code.' · '.$row->course_name,
+                'status' => $row->status,
+                'kind' => 'COURSE_OFFERING',
+                'dependencies' => [],
+                'blocked' => count($refs = $this->downstreamReferences($row->id, [['faculty_allocations', 'course_offering_id']])) > 0,
+                'blocking_references' => $refs,
+            ])->values()->all();
+    }
+
+    private function cleanupFacultyAllocation(int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable('faculty_allocations')) {
+            abort(404);
+        }
+        $record = DB::table('faculty_allocations as fa')->join('course_offerings as co', 'co.id', '=', 'fa.course_offering_id')
+            ->join('batches as b', 'b.id', '=', 'co.batch_id')->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')->where('fa.id', $id)->where('c.university_id', $universityId)->select('fa.*')->first();
+        if (! $record) {
+            abort(404);
+        }
+        if (count($this->downstreamReferences($id, [['timetable_entries', 'faculty_allocation_id']])) > 0) {
+            abort(422, 'Clean Timetable entries before deleting this Faculty Allocation.');
+        }
+        DB::table('faculty_allocations')->where('id', $id)->delete();
+        $this->audit('TEST_FACULTY_ALLOCATION_CLEANED', 'test_data_cleanup', $id, ['record' => (array) $record], $actorId);
+
+        return ['record' => (array) $record];
+    }
+
+    private function cleanupCourseDeliveryRecord(string $table, int $id, int $universityId, int $actorId): array
+    {
+        if (! Schema::hasTable($table)) {
+            abort(404);
+        }
+        $query = DB::table($table.' as target');
+        if ($table === 'college_rooms') {
+            $query->join('colleges as c', 'c.id', '=', 'target.college_id');
+        } elseif ($table === 'timetable_entries') {
+            $query->join('faculty_allocations as fa', 'fa.id', '=', 'target.faculty_allocation_id')->join('course_offerings as co', 'co.id', '=', 'fa.course_offering_id')->join('batches as b', 'b.id', '=', 'co.batch_id')->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')->join('colleges as c', 'c.id', '=', 'cpo.college_id');
+        } else {
+            $query->join('timetable_entries as te', 'te.id', '=', 'target.timetable_entry_id')->join('faculty_allocations as fa', 'fa.id', '=', 'te.faculty_allocation_id')->join('course_offerings as co', 'co.id', '=', 'fa.course_offering_id')->join('batches as b', 'b.id', '=', 'co.batch_id')->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')->join('colleges as c', 'c.id', '=', 'cpo.college_id');
+        }
+        $record = $query->where('target.id', $id)->where('c.university_id', $universityId)->select('target.*')->first();
+        if (! $record) {
+            abort(404);
+        }
+        $refs = $table === 'timetable_entries' ? $this->downstreamReferences($id, [['class_schedules', 'timetable_entry_id']]) : ($table === 'college_rooms' ? $this->downstreamReferences($id, [['timetable_entries', 'room_id'], ['class_schedules', 'room_id']]) : []);
+        if (count($refs)) {
+            abort(422, 'Clean dependent Course Delivery records first.');
+        }
+        DB::table($table)->where('id', $id)->delete();
+        $this->audit('TEST_'.strtoupper($table).'_CLEANED', 'test_data_cleanup', $id, ['record' => (array) $record], $actorId);
+
+        return ['record' => (array) $record];
+    }
+
+    private function courseDeliveryRows(string $table, int $universityId): array
+    {
+        if (! Schema::hasTable($table)) {
+            return [];
+        }
+        if ($table === 'college_rooms') {
+            $rows = DB::table('college_rooms as target')->join('colleges as c', 'c.id', '=', 'target.college_id')->where('c.university_id', $universityId)->get(['target.id', 'target.code', 'target.name', 'target.status', 'c.name as college_name']);
+
+            return $rows->map(fn ($row) => ['id' => $row->id, 'code' => $row->code, 'name' => $row->college_name.' · '.$row->name, 'status' => $row->status, 'kind' => 'COLLEGE_ROOM', 'dependencies' => [], 'blocked' => count($refs = $this->downstreamReferences($row->id, [['timetable_entries', 'room_id'], ['class_schedules', 'room_id']])) > 0, 'blocking_references' => $refs])->values()->all();
+        }
+        $query = DB::table($table.' as target');
+        if ($table === 'timetable_entries') {
+            $query->join('faculty_allocations as fa', 'fa.id', '=', 'target.faculty_allocation_id');
+        } else {
+            $query->join('timetable_entries as te', 'te.id', '=', 'target.timetable_entry_id')->join('faculty_allocations as fa', 'fa.id', '=', 'te.faculty_allocation_id');
+        }
+        $rows = $query->join('course_offerings as co', 'co.id', '=', 'fa.course_offering_id')->join('batches as b', 'b.id', '=', 'co.batch_id')->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')->join('colleges as c', 'c.id', '=', 'cpo.college_id')->join('users as u', 'u.id', '=', 'fa.faculty_user_id')->where('c.university_id', $universityId)->get(['target.id', 'target.status', 'b.name as batch_name', 'c.name as college_name', 'u.name as faculty_name']);
+
+        return $rows->map(fn ($row) => ['id' => $row->id, 'code' => strtoupper($table).'-'.$row->id, 'name' => $row->college_name.' · '.$row->batch_name.' · '.$row->faculty_name, 'status' => $row->status, 'kind' => strtoupper($table), 'dependencies' => [], 'blocked' => $table === 'timetable_entries' && count($refs = $this->downstreamReferences($row->id, [['class_schedules', 'timetable_entry_id']])) > 0, 'blocking_references' => $refs ?? []])->values()->all();
+    }
+
+    private function facultyAllocationRows(int $universityId): array
+    {
+        if (! Schema::hasTable('faculty_allocations')) {
+            return [];
+        }
+
+        return DB::table('faculty_allocations as fa')->join('course_offerings as co', 'co.id', '=', 'fa.course_offering_id')
+            ->join('batches as b', 'b.id', '=', 'co.batch_id')->join('college_program_offerings as cpo', 'cpo.id', '=', 'b.college_program_offering_id')
+            ->join('colleges as c', 'c.id', '=', 'cpo.college_id')->join('users as u', 'u.id', '=', 'fa.faculty_user_id')
+            ->join('curriculum_course_mappings as m', 'm.id', '=', 'co.curriculum_course_mapping_id')->join('courses as crs', 'crs.id', '=', 'm.course_id')
+            ->where('c.university_id', $universityId)->orderBy('c.name')->orderBy('b.name')->orderBy('crs.name')
+            ->get(['fa.id', 'fa.status', 'c.name as college_name', 'b.name as batch_name', 'crs.code as course_code', 'u.name as faculty_name'])
+            ->map(fn ($row) => ['id' => $row->id, 'code' => 'FA-'.$row->id, 'name' => $row->college_name.' · '.$row->batch_name.' · '.$row->course_code.' · '.$row->faculty_name,
+                'status' => $row->status, 'kind' => 'FACULTY_ALLOCATION', 'dependencies' => [], 'blocked' => count($refs = $this->downstreamReferences($row->id, [['timetable_entries', 'faculty_allocation_id']])) > 0, 'blocking_references' => $refs])->values()->all();
+    }
+
     private function cleanupBatch(
         int $id,
         int $universityId,
@@ -5112,6 +5245,8 @@ class TestDataCleanupService
         $downstream = $this->downstreamReferences(
             $id,
             [
+                ['course_offerings', 'batch_id'],
+                ['faculty_allocations', 'section_id'],
                 ['sections', 'batch_id'],
                 ['student_enrollments', 'batch_id'],
             ]
@@ -5227,8 +5362,7 @@ class TestDataCleanupService
 
         if (count($downstream) > 0) {
             throw ValidationException::withMessages([
-                'record' =>
-                    'This Program Offering already has downstream College/operational records. Clean those dependent test records first.',
+                'record' => 'This Program Offering already has downstream College/operational records. Clean those dependent test records first.',
             ]);
         }
 
@@ -5249,12 +5383,16 @@ class TestDataCleanupService
 
     private function cleanupCollegeAcademicCalendar(int $id, int $universityId, int $actorId): array
     {
-        if (! Schema::hasTable('college_academic_calendars')) abort(404);
+        if (! Schema::hasTable('college_academic_calendars')) {
+            abort(404);
+        }
         $record = DB::table('college_academic_calendars as cac')
             ->join('colleges as c', 'c.id', '=', 'cac.college_id')
             ->where('cac.id', $id)->where('c.university_id', $universityId)
             ->select('cac.*')->first();
-        if (! $record) abort(404);
+        if (! $record) {
+            abort(404);
+        }
 
         return DB::transaction(function () use ($record, $actorId) {
             $overrideCount = $this->countIfExists('college_calendar_overrides', 'college_academic_calendar_id', $record->id);
@@ -5264,20 +5402,24 @@ class TestDataCleanupService
             DB::table('college_academic_calendars')->where('id', $record->id)->delete();
             $result = ['record' => (array) $record, 'deleted_overrides' => $overrideCount];
             $this->audit('TEST_COLLEGE_ACADEMIC_CALENDAR_CLEANED', 'test_data_cleanup', $record->id, $result, $actorId);
+
             return $result;
         });
     }
 
     private function collegeAcademicCalendarRows(int $universityId): array
     {
-        if (! Schema::hasTable('college_academic_calendars')) return [];
+        if (! Schema::hasTable('college_academic_calendars')) {
+            return [];
+        }
+
         return DB::table('college_academic_calendars as cac')
             ->join('colleges as c', 'c.id', '=', 'cac.college_id')
             ->join('academic_calendars as ac', 'ac.id', '=', 'cac.university_academic_calendar_id')
             ->join('academic_sessions as s', 's.id', '=', 'ac.academic_session_id')
             ->where('c.university_id', $universityId)
             ->orderBy('c.name')->orderByDesc('s.starts_on')
-            ->get(['cac.id','cac.status','c.name as college_name','ac.code as calendar_code','ac.name as calendar_name','s.name as session_name'])
+            ->get(['cac.id', 'cac.status', 'c.name as college_name', 'ac.code as calendar_code', 'ac.name as calendar_name', 's.name as session_name'])
             ->map(fn ($row) => [
                 'id' => $row->id,
                 'code' => $row->calendar_code,
@@ -5292,14 +5434,20 @@ class TestDataCleanupService
 
     private function countCollegeAcademicCalendarsForUniversity(int $universityId): int
     {
-        if (! Schema::hasTable('college_academic_calendars')) return 0;
-        return (int) DB::table('college_academic_calendars as cac')->join('colleges as c','c.id','=','cac.college_id')->where('c.university_id',$universityId)->count();
+        if (! Schema::hasTable('college_academic_calendars')) {
+            return 0;
+        }
+
+        return (int) DB::table('college_academic_calendars as cac')->join('colleges as c', 'c.id', '=', 'cac.college_id')->where('c.university_id', $universityId)->count();
     }
 
     private function countCollegeCalendarOverridesForUniversity(int $universityId): int
     {
-        if (! Schema::hasTable('college_calendar_overrides') || ! Schema::hasTable('college_academic_calendars')) return 0;
-        return (int) DB::table('college_calendar_overrides as cco')->join('college_academic_calendars as cac','cac.id','=','cco.college_academic_calendar_id')->join('colleges as c','c.id','=','cac.college_id')->where('c.university_id',$universityId)->count();
+        if (! Schema::hasTable('college_calendar_overrides') || ! Schema::hasTable('college_academic_calendars')) {
+            return 0;
+        }
+
+        return (int) DB::table('college_calendar_overrides as cco')->join('college_academic_calendars as cac', 'cac.id', '=', 'cco.college_academic_calendar_id')->join('colleges as c', 'c.id', '=', 'cac.college_id')->where('c.university_id', $universityId)->count();
     }
 
     private function cleanupAcademicCalendar(
@@ -5330,8 +5478,7 @@ class TestDataCleanupService
 
         if (count($futureRefs) > 0) {
             throw ValidationException::withMessages([
-                'record' =>
-                    'This University Academic Calendar is already referenced by College Calendar data. Clean those dependent test records first.',
+                'record' => 'This University Academic Calendar is already referenced by College Calendar data. Clean those dependent test records first.',
             ]);
         }
 
@@ -5398,8 +5545,7 @@ class TestDataCleanupService
 
         if ($requestCount > 0) {
             throw ValidationException::withMessages([
-                'record' =>
-                    'This Approval Workflow still has approval request history. Clean/reset the related Curriculum or Academic Policy approval data first.',
+                'record' => 'This Approval Workflow still has approval request history. Clean/reset the related Curriculum or Academic Policy approval data first.',
             ]);
         }
 
@@ -5474,8 +5620,7 @@ class TestDataCleanupService
 
         if (count($operationalRefs) > 0) {
             throw ValidationException::withMessages([
-                'record' =>
-                    'This Course has operational references and cannot be cleaned.',
+                'record' => 'This Course has operational references and cannot be cleaned.',
             ]);
         }
 
@@ -5549,8 +5694,7 @@ class TestDataCleanupService
             $childCount > 0
         ) {
             throw ValidationException::withMessages([
-                'record' =>
-                    'Discipline/Specialization is still linked to a Program Template or Curriculum Mapping. Clean those dependent test records first.',
+                'record' => 'Discipline/Specialization is still linked to a Program Template or Curriculum Mapping. Clean those dependent test records first.',
             ]);
         }
 
@@ -5610,8 +5754,7 @@ class TestDataCleanupService
 
         if (count($blocked) > 0) {
             throw ValidationException::withMessages([
-                'record' =>
-                    "{$label} still has dependent test records. Clean those records first.",
+                'record' => "{$label} still has dependent test records. Clean those records first.",
             ]);
         }
 
@@ -5650,8 +5793,8 @@ class TestDataCleanupService
             ->orderBy('c.name')
             ->orderBy('pt.name')
             ->get([
-                'p.id','p.status','p.bucket_type','p.bucket_key','p.basis_capacity',
-                'c.name as college_name','pt.name as program_name',
+                'p.id', 'p.status', 'p.bucket_type', 'p.bucket_key', 'p.basis_capacity',
+                'c.name as college_name', 'pt.name as program_name',
             ])
             ->map(function ($row) {
                 $downstream = $this->downstreamReferences(
@@ -5797,20 +5940,18 @@ class TestDataCleanupService
                 return [
                     'id' => $row->id,
                     'code' => 'INTAKE-'.$row->id,
-                    'name' =>
-                        $row->college_name.' · '.
+                    'name' => $row->college_name.' · '.
                         ($row->program_name ?? 'Program').' · '.
                         ($row->session_name ?? 'Session').
                         ' · '.$row->approved_capacity.' seats',
                     'status' => $row->status,
                     'kind' => $row->allocation_mode,
                     'dependencies' => [
-                        'allocations' =>
-                            $this->countIfExists(
-                                'college_program_intake_allocations',
-                                'college_program_intake_id',
-                                $row->id
-                            ),
+                        'allocations' => $this->countIfExists(
+                            'college_program_intake_allocations',
+                            'college_program_intake_id',
+                            $row->id
+                        ),
                     ],
                     'blocked' => count($downstream) > 0,
                     'blocking_references' => $downstream,
@@ -5882,8 +6023,7 @@ class TestDataCleanupService
                 return [
                     'id' => $row->id,
                     'code' => 'OFFERING-'.$row->id,
-                    'name' =>
-                        $row->college_name.' · '.
+                    'name' => $row->college_name.' · '.
                         $row->program_name.' · '.
                         $row->session_name,
                     'status' => $row->status,
@@ -6083,8 +6223,7 @@ class TestDataCleanupService
                         'approval_requests' => $requestCount,
                     ],
                     'blocked' => $requestCount > 0,
-                    'blocking_references' =>
-                        $requestCount > 0
+                    'blocking_references' => $requestCount > 0
                             ? [[
                                 'table' => 'approval_requests',
                                 'column' => 'approval_workflow_id',
@@ -6109,26 +6248,22 @@ class TestDataCleanupService
             ->get()
             ->map(function ($row) {
                 $dependencies = [
-                    'curriculum_mappings' =>
-                        $this->disciplineMappingCount($row->id),
-                    'program_templates' =>
-                        $this->countIfExists(
-                            'program_template_disciplines',
-                            'discipline_id',
-                            $row->id
-                        ),
-                    'specialization_mappings' =>
-                        $this->countIfExists(
-                            'program_template_discipline_specializations',
-                            'specialization_id',
-                            $row->id
-                        ),
-                    'child_specializations' =>
-                        $this->countIfExists(
-                            'academic_disciplines',
-                            'parent_id',
-                            $row->id
-                        ),
+                    'curriculum_mappings' => $this->disciplineMappingCount($row->id),
+                    'program_templates' => $this->countIfExists(
+                        'program_template_disciplines',
+                        'discipline_id',
+                        $row->id
+                    ),
+                    'specialization_mappings' => $this->countIfExists(
+                        'program_template_discipline_specializations',
+                        'specialization_id',
+                        $row->id
+                    ),
+                    'child_specializations' => $this->countIfExists(
+                        'academic_disciplines',
+                        'parent_id',
+                        $row->id
+                    ),
                 ];
 
                 return [
@@ -6138,9 +6273,8 @@ class TestDataCleanupService
                     'status' => $row->status ?? null,
                     'kind' => $row->kind ?? null,
                     'dependencies' => $dependencies,
-                    'blocked' =>
-                        collect($dependencies)
-                            ->contains(fn ($count) => (int) $count > 0),
+                    'blocked' => collect($dependencies)
+                        ->contains(fn ($count) => (int) $count > 0),
                     'blocking_references' => [],
                 ];
             })
@@ -6370,12 +6504,11 @@ class TestDataCleanupService
                     'name' => $row->name,
                     'status' => $row->status ?? null,
                     'dependencies' => [
-                        'curriculum_mappings' =>
-                            $this->countIfExists(
-                                'curriculum_course_mappings',
-                                'course_id',
-                                $row->id
-                            ),
+                        'curriculum_mappings' => $this->countIfExists(
+                            'curriculum_course_mappings',
+                            'course_id',
+                            $row->id
+                        ),
                     ],
                     'blocked' => count($operationalRefs) > 0,
                     'blocking_references' => $operationalRefs,
@@ -6408,12 +6541,10 @@ class TestDataCleanupService
                     'status' => $row->status ?? null,
                     'kind' => $row->kind ?? null,
                     'dependencies' => $dependencies,
-                    'blocked' =>
-                        collect($dependencies)
-                            ->filter(fn ($count) =>
-                                (int) $count > 0
-                            )
-                            ->isNotEmpty(),
+                    'blocked' => collect($dependencies)
+                        ->filter(fn ($count) => (int) $count > 0
+                        )
+                        ->isNotEmpty(),
                     'blocking_references' => [],
                 ];
             })
@@ -6434,7 +6565,6 @@ class TestDataCleanupService
             })
             ->count();
     }
-
 
     private function academicPolicyChainIds(int $policyId): Collection
     {
@@ -6599,8 +6729,7 @@ class TestDataCleanupService
     {
         if (! config('test-data-cleanup.enabled')) {
             throw ValidationException::withMessages([
-                'cleanup' =>
-                    'Test Data Cleanup is disabled in this environment.',
+                'cleanup' => 'Test Data Cleanup is disabled in this environment.',
             ]);
         }
     }
@@ -6631,17 +6760,23 @@ class TestDataCleanupService
 
     private function countCollegeAdmissionInterviewsForUniversity(int $universityId): int
     {
-        if (! Schema::hasTable('college_admission_interviews') || ! Schema::hasTable('college_admission_applications')) return 0;
-        return DB::table('college_admission_interviews as i')->join('college_admission_applications as a','a.id','=','i.college_admission_application_id')->join('colleges as c','c.id','=','a.college_id')->where('c.university_id',$universityId)->count();
+        if (! Schema::hasTable('college_admission_interviews') || ! Schema::hasTable('college_admission_applications')) {
+            return 0;
+        }
+
+        return DB::table('college_admission_interviews as i')->join('college_admission_applications as a', 'a.id', '=', 'i.college_admission_application_id')->join('colleges as c', 'c.id', '=', 'a.college_id')->where('c.university_id', $universityId)->count();
     }
 
     private function countCollegeAdmissionScoresForUniversity(int $universityId): int
     {
-        if (! Schema::hasTable('college_admission_scores') || ! Schema::hasTable('college_admission_applications')) return 0;
+        if (! Schema::hasTable('college_admission_scores') || ! Schema::hasTable('college_admission_applications')) {
+            return 0;
+        }
+
         return DB::table('college_admission_scores as s')
-            ->join('college_admission_applications as a','a.id','=','s.college_admission_application_id')
-            ->join('colleges as c','c.id','=','a.college_id')
-            ->where('c.university_id',$universityId)->count();
+            ->join('college_admission_applications as a', 'a.id', '=', 's.college_admission_application_id')
+            ->join('colleges as c', 'c.id', '=', 'a.college_id')
+            ->where('c.university_id', $universityId)->count();
     }
 
     private function countCollegeAdmissionApplicationsForUniversity(int $universityId): int
@@ -6649,6 +6784,7 @@ class TestDataCleanupService
         if (! Schema::hasTable('college_admission_applications')) {
             return 0;
         }
+
         return DB::table('college_admission_applications as a')
             ->join('colleges as c', 'c.id', '=', 'a.college_id')
             ->where('c.university_id', $universityId)
@@ -6685,6 +6821,7 @@ class TestDataCleanupService
         if (! Schema::hasTable('college_admission_application_choices') || ! Schema::hasTable('college_admission_applications')) {
             return 0;
         }
+
         return DB::table('college_admission_application_choices as ch')
             ->join('college_admission_applications as a', 'a.id', '=', 'ch.college_admission_application_id')
             ->join('colleges as c', 'c.id', '=', 'a.college_id')
@@ -6697,6 +6834,7 @@ class TestDataCleanupService
         if (! Schema::hasTable('college_admission_cycles')) {
             return 0;
         }
+
         return DB::table('college_admission_cycles as ac')
             ->join('colleges as c', 'c.id', '=', 'ac.college_id')
             ->where('c.university_id', $universityId)
@@ -6708,6 +6846,7 @@ class TestDataCleanupService
         if (! Schema::hasTable('college_admission_selection_rules')) {
             return 0;
         }
+
         return DB::table('college_admission_selection_rules as sr')
             ->join('college_program_intakes as i', 'i.id', '=', 'sr.college_program_intake_id')
             ->join('college_program_offerings as o', 'o.id', '=', 'i.college_program_offering_id')
@@ -6721,6 +6860,7 @@ class TestDataCleanupService
         if (! Schema::hasTable('college_admission_selection_rule_tiebreakers') || ! Schema::hasTable('college_admission_selection_rules')) {
             return 0;
         }
+
         return DB::table('college_admission_selection_rule_tiebreakers as tb')
             ->join('college_admission_selection_rules as sr', 'sr.id', '=', 'tb.college_admission_selection_rule_id')
             ->join('college_program_intakes as i', 'i.id', '=', 'sr.college_program_intake_id')
@@ -6729,5 +6869,4 @@ class TestDataCleanupService
             ->where('c.university_id', $universityId)
             ->count();
     }
-
 }

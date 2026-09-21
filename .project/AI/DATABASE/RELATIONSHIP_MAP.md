@@ -598,3 +598,16 @@ Application/Admission remains provenance/history after normalization. Attendance
 
 ### ENR-6 Student Profile consumption rule (2026-09-18)
 Student Profile reads `students (1) -> (0..N) student_profile_values` and `students (1) -> (0..N) student_enrollments -> student_enrollment_course_choices`. Profile editing may mutate Student core/profile values only; identity and Enrollment academic relationships are displayed but remain owned by Student Identity/Enrollment modules. `source_type` is provenance only.
+
+## Phase 13 Course Delivery — Course Offering (2026-09-20)
+`college_program_offerings.id -> batches.college_program_offering_id -> course_offerings.batch_id`
+
+`curricula.id -> curriculum_terms.curriculum_id -> curriculum_slots.curriculum_term_id -> curriculum_course_mappings.curriculum_slot_id -> course_offerings.curriculum_course_mapping_id`
+
+Integrity invariant: a Course Offering's Curriculum Course Mapping must resolve to the same `curricula.id` stored on its Batch's parent Program Offering. `sections` remain independent children of Batch and are not parents of Course Offering in this milestone.
+## Phase 13 Course Delivery — Faculty Allocation (2026-09-21)
+
+`Course Offering -> Faculty Allocation -> Faculty User`, with optional `Faculty Allocation -> Section` constrained by service validation to the Course Offering Batch. Timetable is the next downstream consumer.
+## Phase 13 Scheduling chain (2026-09-21)
+
+`Course Offering -> Faculty Allocation -> Timetable Entry -> Class Schedule`; optional `College Room -> Timetable Entry`, snapshotted as `College Room -> Class Schedule`.

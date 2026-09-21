@@ -385,3 +385,23 @@ Protected default grants are synchronized for `SUPER_ADMIN` and `COLLEGE_ADMIN` 
 - `college_student_enrollment.enroll` — module `Student Management`; execute enrollment transaction.
 - `college_student_identity.view` — module `Student Management`; view Student Identity page/rules/assignments.
 - `college_student_identity.manage` — module `Student Management`; configure rules and assign identities; sensitive mutation permission.
+
+## Course Delivery — Course Offerings (2026-09-20)
+- `college_course_offering.view` — view College Course Offerings; College-delegable.
+- `college_course_offering.create` — create INACTIVE Course Offerings; College-delegable.
+- `college_course_offering.enable` — activate Course Offerings; College-delegable; sensitive.
+- `college_course_offering.disable` — deactivate Course Offerings; College-delegable; sensitive.
+
+All checks are server-authoritative and scoped to the route College through Batch -> Program Offering ownership. Default protected grants: SUPER_ADMIN and COLLEGE_ADMIN.
+## Course Delivery — Faculty Allocation (2026-09-21)
+
+- `college_faculty_allocation.view`, `.create`, `.update` — College-delegable.
+- `college_faculty_allocation.enable`, `.disable` — College-delegable and sensitive.
+- `college_faculty_allocation.eligible` — College-delegable Faculty teaching eligibility; does not grant management access.
+## Course Delivery — Scheduling (2026-09-21)
+
+- `college_room.view`, `.manage`
+- `college_timetable.view`, `.manage`, `.enable`, `.disable`
+- `college_class_schedule.view`, `.manage`, `.status`
+
+All are College-delegable. Timetable enable/disable and Class Schedule status are sensitive.

@@ -34,3 +34,11 @@
 
 ## ENR-3.6 rows
 Student Management contains `college_student_enrollment.view`, `college_student_enrollment.enroll`, `college_student_identity.view`, and `college_student_identity.manage`. The migration changes permission metadata/reference rows only; the `permissions` table schema is unchanged.
+
+## 2026-09-20 — Course Delivery permission rows
+Migration `2026_09_20_080000_create_course_offerings_table.php` registers `college_course_offering.view`, `.create`, `.enable`, and `.disable` under module `Course Delivery`, resource `college_course_offering`. All are College-delegable; enable/disable are sensitive.
+## 2026-09-21 — Faculty Allocation permissions
+
+Migration `2026_09_21_080000_create_faculty_allocations_table.php` registers five management permissions plus College-delegable `college_faculty_allocation.eligible` under Course Delivery. Enable and disable are sensitive; eligibility is not a management grant.
+
+Migration `2026_09_21_090000_register_faculty_allocation_eligibility_permission.php` is the deployment repair for environments where the Faculty Allocation table migration ran before the eligibility permission was introduced. It idempotently registers the missing active College-delegable permission without granting it to administrator roles.
