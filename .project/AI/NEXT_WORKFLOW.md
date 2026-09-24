@@ -919,6 +919,21 @@ ENR-5 / ADR 206: OWNER QA PASSED / CLOSED. Fresh Admission-route QA confirmed cu
 
 ENR-6 / ADR 208 Student Profile is now IMPLEMENTED / OWNER QA PENDING. Run `.project/AI/QA/ENR6_STUDENT_PROFILE_QA.md`. Do not start downstream Attendance/Examination/Result work until Student Profile owner QA is closed. Identity and Enrollment academic context remain owned by their dedicated modules; Student Profile must not mutate them.
 
+## Current next workflow — 2026-09-22 Attendance Operations / ADR 212
+Rooms, Timetable and Class Scheduling remain under ADR 211 Owner QA. Attendance Operations foundation is IMPLEMENTED / OWNER QA REQUIRED and consumes that chain without duplicating it. QA must verify exact Batch/Section/Course roster scope, class-date Academic Policy resolution, missing-policy blocking, complete-roster draft/finalize, finalized locking, audited correction, rounding/shortage display and zero Fee Demand mutation. After QA, continue Attendance with controlled condonation/special exemption and final Examination Eligibility integration; do not make raw attendance a direct Fee Demand input.
+
+## Current next workflow — 2026-09-24 Attendance Exceptions / Eligibility / ADR 214
+
+Condonation, Medical/Special Exemption and final Examination Attendance Eligibility are IMPLEMENTED / OWNER QA REQUIRED. QA must verify policy enablement and condonation bounds, pending-only decision locking, cross-College denial, mandatory decision remarks, raw Attendance immutability, Course/Term/Overall aggregation, NOT_REQUIRED behavior, approved-exception basis, re-finalization, audit events and zero Fee mutation. After QA, Phase 15 Internal Assessment → Assessment Setup is the next hierarchy milestone.
+
+## Current next workflow — 2026-09-24 Internal Assessment / ADR 215
+
+Assessment Setup, Assignment and Quiz are IMPLEMENTED / OWNER QA REQUIRED. QA must verify Course Offering and resolved-policy linkage, 100% weight cap, pass/max validation, lifecycle locks, same-Course ACTIVE Faculty Allocation, Curriculum Term calendar bounds, Quiz duration, exact Batch/Section/course-choice roster snapshot, cross-College denial, audit events and cleanup dependencies. After QA, Mid Semester is next, followed by Practical and Marks Entry.
+
+## Current next workflow — 2026-09-24 Mid Semester / Practical / Marks Entry / ADR 216
+
+Mid Semester, Practical and Marks Entry are IMPLEMENTED / OWNER QA REQUIRED. QA must verify type-matched ACTIVE components, same-Course Faculty Allocation, required duration, calendar bounds, publication roster snapshot, PUBLISHED/CLOSED activity filtering, complete-roster enforcement, ENTERED/ABSENT behavior, zero-to-maximum validation, correction revision/audit, cross-College denial and cleanup ordering. Marks Approval is the next hierarchy milestone, followed by Internal Marks Finalization.
+
 ### ENR-6.2 QA gate
 Before ENR-6 closure, verify Admission DOB parity, Candidate Profile Photo carry-forward/replacement, category-labelled applicant-choice presentation, reservation-category parity, RBAC/audit, and that Student Identity/Enrollment canonical data remains unchanged.
 

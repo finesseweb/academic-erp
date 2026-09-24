@@ -17,12 +17,14 @@ class FacultyAllocationService
     {
         $offering = $this->offering($college, (int) $data['course_offering_id']);
         $faculty = $this->faculty($college, (int) $data['faculty_user_id']);
-        $sectionId = isset($data['section_id']) ? (int) $data['section_id'] : null;
+        $sectionId = $data['delivery_scope'] === 'SECTION' ? (int) ($data['section_id'] ?? 0) : null;
         if ($sectionId) {
-            $valid = Section::whereKey($sectionId)->where('batch_id', $offering->batch_id)->exists();
+            $valid = Section::whereKey($sectionId)->where('batch_id', $offering->batch_id)->where('status', 'ACTIVE')->exists();
             if (! $valid) {
-                throw ValidationException::withMessages(['section_id' => 'The Section must belong to the Course Offering Batch.']);
+                throw ValidationException::withMessages(['section_id' => 'Select an active Section belonging to the Course Offering Batch.']);
             }
+        } elseif ($data['delivery_scope'] === 'SECTION') {
+            throw ValidationException::withMessages(['section_id' => 'Select the Section for this section-specific allocation.']);
         }
         $duplicate = FacultyAllocation::where('course_offering_id', $offering->id)->where('faculty_user_id', $faculty->id)
             ->where(fn ($q) => $sectionId ? $q->where('section_id', $sectionId) : $q->whereNull('section_id'))

@@ -114,6 +114,9 @@ function AllocationForm({
     const [sectionId, setSectionId] = useState(
         row?.section_id ? String(row.section_id) : 'batch',
     );
+    const [deliveryScope, setDeliveryScope] = useState<'BATCH' | 'SECTION'>(
+        row?.section_id ? 'SECTION' : 'BATCH',
+    );
     const [facultyId, setFacultyId] = useState(
         String(row?.faculty_user_id ?? ''),
     );
@@ -283,6 +286,7 @@ function AllocationForm({
                                             setTermId('');
                                             setOfferingId('');
                                             setSectionId('batch');
+                                            setDeliveryScope('BATCH');
                                         }}
                                     />
                                     <SearchableSelect
@@ -297,6 +301,7 @@ function AllocationForm({
                                             setTermId('');
                                             setOfferingId('');
                                             setSectionId('batch');
+                                            setDeliveryScope('BATCH');
                                         }}
                                     />
                                     <SearchableSelect
@@ -310,6 +315,7 @@ function AllocationForm({
                                             setTermId('');
                                             setOfferingId('');
                                             setSectionId('batch');
+                                            setDeliveryScope('BATCH');
                                         }}
                                     />
                                     <SearchableSelect
@@ -322,6 +328,7 @@ function AllocationForm({
                                             setTermId(value);
                                             setOfferingId('');
                                             setSectionId('batch');
+                                            setDeliveryScope('BATCH');
                                         }}
                                     />
                                 </div>
@@ -338,6 +345,7 @@ function AllocationForm({
                                     onValueChange={(value) => {
                                         setOfferingId(value);
                                         setSectionId('batch');
+                                        setDeliveryScope('BATCH');
                                     }}
                                 />
                                 {errors.course_offering_id && (
@@ -367,6 +375,11 @@ function AllocationForm({
                                     <Label>Delivery Scope</Label>
                                     <input
                                         type="hidden"
+                                        name="delivery_scope"
+                                        value={deliveryScope}
+                                    />
+                                    <input
+                                        type="hidden"
                                         name="section_id"
                                         value={
                                             sectionId === 'batch'
@@ -375,29 +388,59 @@ function AllocationForm({
                                         }
                                     />
                                     <Select
-                                        value={sectionId}
-                                        onValueChange={setSectionId}
+                                        value={deliveryScope}
+                                        onValueChange={(value) => {
+                                            const scope = value as
+                                                'BATCH' | 'SECTION';
+                                            setDeliveryScope(scope);
+                                            setSectionId(
+                                                scope === 'BATCH'
+                                                    ? 'batch'
+                                                    : '',
+                                            );
+                                        }}
                                     >
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="batch">
+                                            <SelectItem value="BATCH">
                                                 Entire Batch
                                             </SelectItem>
-                                            {offering?.batch.sections.map(
-                                                (s) => (
-                                                    <SelectItem
-                                                        key={s.id}
-                                                        value={String(s.id)}
-                                                    >
-                                                        {s.name} ({s.code}) ·{' '}
-                                                        {s.status}
-                                                    </SelectItem>
-                                                ),
-                                            )}
+                                            <SelectItem value="SECTION">
+                                                Specific Section
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    {deliveryScope === 'SECTION' && (
+                                        <Select
+                                            value={sectionId}
+                                            onValueChange={setSectionId}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select Section" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {offering?.batch.sections
+                                                    .filter(
+                                                        (section) =>
+                                                            section.status ===
+                                                            'ACTIVE',
+                                                    )
+                                                    .map((section) => (
+                                                        <SelectItem
+                                                            key={section.id}
+                                                            value={String(
+                                                                section.id,
+                                                            )}
+                                                        >
+                                                            {section.name} (
+                                                            {section.code})
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
                                     {errors.section_id && (
                                         <p className="text-xs text-destructive">
                                             {errors.section_id}

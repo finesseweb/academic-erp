@@ -34,6 +34,7 @@ class CurriculumSlot extends Model
         ];
     }
 
+    /** @return BelongsTo<CurriculumTerm, $this> */
     public function term(): BelongsTo
     {
         return $this->belongsTo(CurriculumTerm::class, 'curriculum_term_id');

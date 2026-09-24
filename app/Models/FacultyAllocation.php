@@ -14,6 +14,7 @@ class FacultyAllocation extends Model
         return ['weekly_load' => 'decimal:2'];
     }
 
+    /** @return BelongsTo<CourseOffering, $this> */
     public function courseOffering(): BelongsTo
     {
         return $this->belongsTo(CourseOffering::class);

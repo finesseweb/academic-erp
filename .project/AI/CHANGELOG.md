@@ -34,3 +34,25 @@
 - Existing safeguards remain: only ACTIVE College-delegable permissions can be submitted, role ownership remains College-scoped, and assign/remove actions still require the corresponding College permission-management capability.
 - University permission management was left unchanged as requested.
 - No database/schema change.
+# 2026-09-24 — Attendance Exceptions and Eligibility
+
+- Implemented the next three Phase 14 milestones: policy-controlled Condonation, Medical/Special Exemption, and final Examination Attendance Eligibility.
+- Added ADR 214, the College Eligibility screen, two auditable persistence tables, five granular permissions, cleanup dependencies and synchronized database/security/page documentation.
+
+# 2026-09-24 — Internal Assessment Setup, Assignment and Quiz
+
+- Implemented the first three Phase 15 milestones with Course Offering, Academic Policy, Faculty Allocation, Academic Calendar and canonical Enrollment linkage.
+- Added stable publication-time student roster snapshots for later Marks Entry.
+
+# 2026-09-24 — Mid Semester, Practical and Marks Entry
+
+- Extended Internal Assessment with governed Mid Semester and Practical activities.
+- Added frozen-roster Marks Entry with absence handling, bounds validation and audited corrections.
+
+# 2026-09-24 — Academic Operations Navigation / Searchable Select Consistency
+- Split College sidebar navigation into Course Delivery, Attendance and Assessment without changing domain ownership, routes or permissions.
+- Course Delivery now contains only Course Offerings, Faculty Allocation, Rooms, Timetable and Class Scheduling.
+- Attendance contains Attendance and Attendance Eligibility.
+- Assessment contains Assessment Setup, Assignments, Quizzes, Mid Semester, Practical and Marks Entry; future assessment milestones remain in this group.
+- Migrated Internal Assessment dynamic selectors to the shared SearchableSelect contract, including Course Offering, Assessment Component, Faculty Allocation and Published Activity; Assessment Type uses the same interaction for page consistency.
+- Documented the rule for future Assessment / Attendance / Examination / Result UI work in ADR 217.

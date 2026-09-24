@@ -3,8 +3,9 @@
 namespace App\Services;
 
 use App\Models\Admission;
+use App\Models\Batch;
 use App\Models\College;
-use App\Models\CollegeAdmissionApplicationFieldValue;
+use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentEnrollment;
 use App\Models\StudentProfileValue;
@@ -41,7 +42,9 @@ class StudentEnrollmentService
 
             $existing = StudentEnrollment::query()->where('admission_id', $admission->id)->lockForUpdate()->first();
             if ($existing) {
-                if ($existing->status === 'ENROLLED') return $existing;
+                if ($existing->status === 'ENROLLED') {
+                    return $existing;
+                }
                 throw ValidationException::withMessages(['enrollment' => 'This admission already has an enrollment record and cannot be enrolled again.']);
             }
 
@@ -124,11 +127,66 @@ class StudentEnrollmentService
         });
     }
 
+    /**
+     * @param  array<int, int>  $enrollmentIds
+     */
+    public function assignPlacements(College $college, array $enrollmentIds, int $batchId, int $sectionId, int $actorId, ?string $ip): int
+    {
+        return DB::transaction(function () use ($college, $enrollmentIds, $batchId, $sectionId, $actorId, $ip) {
+            $ids = collect($enrollmentIds)->map(fn ($id) => (int) $id)->unique()->values();
+            $enrollments = StudentEnrollment::query()->whereIn('id', $ids)->lockForUpdate()->get();
+            if ($ids->isEmpty() || $enrollments->count() !== $ids->count()) {
+                throw ValidationException::withMessages(['enrollment_ids' => 'One or more selected students no longer exist. Refresh the list and try again.']);
+            }
+
+            $batch = Batch::query()->whereKey($batchId)->where('status', 'ACTIVE')->whereHas('offering', fn ($query) => $query->where('college_id', $college->id))->first();
+            if (! $batch) {
+                throw ValidationException::withMessages(['batch_id' => 'Select an active Batch belonging to this College.']);
+            }
+
+            $section = Section::query()->whereKey($sectionId)->where('batch_id', $batch->id)->where('status', 'ACTIVE')->first();
+            if (! $section) {
+                throw ValidationException::withMessages(['section_id' => 'Select an active Section belonging to the selected Batch.']);
+            }
+
+            foreach ($enrollments as $enrollment) {
+                if ((int) $enrollment->college_id !== (int) $college->id || $enrollment->status !== 'ENROLLED') {
+                    throw ValidationException::withMessages(['enrollment_ids' => 'Only active enrollments in this College can receive academic placement.']);
+                }
+                if ((int) $enrollment->college_program_offering_id !== (int) $batch->college_program_offering_id) {
+                    throw ValidationException::withMessages(['batch_id' => 'All selected students must belong to the selected Batch Programme Offering. Mixed or cross-programme placement is not allowed.']);
+                }
+            }
+
+            $changed = 0;
+            foreach ($enrollments as $enrollment) {
+                $before = ['batch_id' => $enrollment->batch_id, 'section_id' => $enrollment->section_id];
+                $after = ['batch_id' => $batch->id, 'section_id' => $section->id];
+                if ($before === $after) {
+                    continue;
+                }
+                $enrollment->update($after);
+                DB::table('audit_logs')->insert([
+                    'actor_user_id' => $actorId, 'event' => 'student.enrollment.placement_assigned',
+                    'resource_type' => 'student_enrollment', 'resource_id' => $enrollment->id,
+                    'scope_type' => 'COLLEGE', 'scope_reference' => 'college:'.$college->id,
+                    'before' => json_encode($before), 'after' => json_encode($after),
+                    'ip_address' => $ip, 'created_at' => now(),
+                ]);
+                $changed++;
+            }
+
+            return $changed;
+        });
+    }
+
     private function copyStudentProfileValues($values, Student $student): void
     {
         foreach ($values as $value) {
             $field = $value->field;
-            if (! $field || $field->student_data_policy !== 'STUDENT_PROFILE' || ! $field->student_profile_key) continue;
+            if (! $field || $field->student_data_policy !== 'STUDENT_PROFILE' || ! $field->student_profile_key) {
+                continue;
+            }
             StudentProfileValue::updateOrCreate(
                 ['student_id' => $student->id, 'profile_key' => $field->student_profile_key],
                 [

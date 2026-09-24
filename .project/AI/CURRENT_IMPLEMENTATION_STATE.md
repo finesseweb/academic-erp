@@ -1257,3 +1257,45 @@ Faculty Allocation / ADR 210 is OWNER QA PASSED / CLOSED. Rooms, Timetable and C
 - Authorized College permission managers can assign/remove the marker from College-owned roles (for example, Faculty); normal College permission delegation remains constrained to permissions the actor holds.
 - University role/permission behavior is intentionally unchanged by this correction.
 - No schema migration. Faculty Allocation remains IMPLEMENTED / OWNER QA REQUIRED.
+
+### 2026-09-22 — Phase 13 Class Scheduling scheduled-edit correction
+Class Scheduling now permits authorized correction of a dated occurrence only while status is `SCHEDULED`. Edit supports Timetable entry, class date and note; server validation is re-run and time/Room snapshots are refreshed from the selected active Timetable. `COMPLETED` and `CANCELLED` are terminal locked states and cannot be edited or reopened. No schema migration. Rooms/Timetable/Class Scheduling remain IMPLEMENTED / OWNER QA REQUIRED under ADR 211.
+
+## 2026-09-22 — Phase 14 Attendance Operations foundation / ADR 212
+Status: **IMPLEMENTED — OWNER QA REQUIRED**.
+
+College Attendance now consumes the exact Class Schedule and canonical Student Enrollment academic context. It resolves the applicable ACTIVE + APPROVED Academic Policy and requires its Attendance Rule, supports complete-roster draft/finalize entry, locks finalized raw records, completes the Class Schedule transactionally, permits permissioned audited correction reopening, and displays policy-rounded finalized attendance/shortage using the resolved Attendance Rule calculation scope. `COURSE` uses the exact Course Offering, `TERM` aggregates the exact Curriculum Term within the same Programme Offering, and `OVERALL` aggregates finalized attendance across the same Programme Offering. Attendance does not mutate Fee Demand or any financial history. Condonation, special exemption and final examination eligibility remain subsequent Attendance milestones.
+
+### 2026-09-22 — Timetable inactive-edit correction
+Timetable now exposes a prefilled Edit action for INACTIVE entries to actors with `college_timetable.manage`. Server-side update additionally verifies that the target Timetable entry itself belongs to the route College before applying the existing active-allocation, Room, effective-period and conflict rules. ACTIVE entries remain locked until deactivated; existing dated Class Schedule snapshots are not rewritten.
+
+### 2026-09-22 — Canonical Student placement and delivery-scope correction
+Attendance Owner QA exposed a canonical placement gap: enrolled Students could have valid identity and course-choice context while `student_enrollments.batch_id` / `section_id` remained NULL, causing section-scoped Attendance rosters to resolve empty. Student Identity is now the single operational UI for audited bulk placement into an ACTIVE Batch and ACTIVE child Section belonging to the same Programme Offering; the duplicate placement action was removed from Student Enrollment. Attendance remains strict and consumes canonical Enrollment placement plus exact course choice. Faculty Allocation now submits an explicit `BATCH` or `SECTION` delivery scope, with no implicit first-Section fallback. Section has no capacity field: strength is derived from active enrolled placements. Room capacity is physical capacity and Timetable/Class Schedule writes and Timetable activation reject rooms smaller than the derived applicable course roster. Fee Demand is unaffected because placement does not create, cancel, or recalculate financial demand. No schema migration or parallel mapping table is introduced. Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+### 2026-09-22 — Academic Calendar to Class Schedule linkage
+Class Schedule create/edit now requires the ACTIVE College-adopted Academic Calendar for the Programme Offering session, an ACTIVE period containing the date for the exact course Curriculum Term, and a date outside effective ACTIVE Holiday/Vacation ranges. ACTIVE College overrides replace the University event dates. Recurring Timetable remains a rule; the dated occurrence is the calendar enforcement boundary. Attendance inherits this validity through Class Schedule. Placement and Fee Demand are unchanged. No schema migration. Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+## Shared Scheduling Time Picker Consistency — 2026-09-23
+**IMPLEMENTED — OWNER QA REQUIRED**
+
+- Course Delivery Timetable create/edit now uses the shared `TimePicker` already established by Interview Scheduling instead of browser-native `type="time"` controls.
+- Start and End Time use explicit hour/minute/AM-PM selectors with a 5-minute step while preserving the existing `HH:mm` backend payload.
+- `UI_UX_GUIDELINES.md` now makes shared `TimePicker` reuse the default for future time-only scheduling fields, preventing page-specific/native time-picker drift.
+- No database/schema or backend validation contract change.
+
+## 2026-09-24 — Attendance controlled exceptions and final eligibility / ADR 214
+
+The next three Phase 14 milestones are IMPLEMENTED / OWNER QA REQUIRED: Attendance Condonation, Medical/Special Attendance Exemption, and final Examination Attendance Eligibility. Condonation is policy-limit constrained; special exemption is policy-enabled; both are separate audited decisions and never rewrite raw attendance. Final eligibility resolves Course/Term/Overall attendance, normal threshold, approved exception and the policy's examination-attendance requirement into a persisted Student Enrollment + Course Offering snapshot. Examination is the next downstream phase consumer after QA.
+
+## 2026-09-24 — Phase 15 Internal Assessment first three milestones / ADR 215
+
+Assessment Setup, Assignment and Quiz are IMPLEMENTED / OWNER QA REQUIRED. Assessment components are configurable per Course Offering and snapshot the resolved Academic Policy. Assignment/Quiz activities require the exact ACTIVE component and Faculty Allocation, remain inside the governed Curriculum Term calendar period, and follow DRAFT → PUBLISHED → CLOSED. Publication transactionally snapshots the exact canonical Enrollment roster for stable later Marks Entry. Mid Semester is the next hierarchy milestone after QA.
+
+Corrective verification: all three Internal Assessment GET endpoints now use exact `{college}` implicit-binding parameter names. Direct route-binding execution for College `1` returned valid Inertia responses for Setup, Assignments and Quizzes; the prior null College ID TypeError is closed.
+
+## 2026-09-24 — Phase 15 Mid Semester, Practical and Marks Entry / ADR 216
+
+The next three Internal Assessment milestones are IMPLEMENTED / OWNER QA REQUIRED. Mid Semester and Practical extend the exact ADR 215 policy/Course Offering/Faculty Allocation/calendar/roster chain. Marks Entry consumes only the immutable publication roster, requires complete-roster ENTERED/ABSENT submission, validates component maximum marks, and audits every first entry/correction with revision numbering. Marks Approval is next after QA.
+
+## 2026-09-24 — Academic Operations navigation and selector consistency
+ADR 217 separates the College sidebar into Course Delivery, Attendance and Assessment presentation groups. This is a UI/navigation correction only and does not change the existing domain hierarchy, routes, permissions or persistence. Internal Assessment dynamic selectors now use the shared project SearchableSelect instead of browser-native selects for Course Offering, Assessment Component, Faculty Allocation and Published Activity; Assessment Type uses the same interaction for visual consistency. Compact row-level ENTERED/ABSENT state selection remains a standard select. Future Assessment, Attendance, Examination and Result pages must follow the shared searchable-select contract. Status: IMPLEMENTED / OWNER QA REQUIRED.

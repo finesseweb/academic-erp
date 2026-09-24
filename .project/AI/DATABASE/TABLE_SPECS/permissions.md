@@ -42,3 +42,10 @@ Migration `2026_09_20_080000_create_course_offerings_table.php` registers `colle
 Migration `2026_09_21_080000_create_faculty_allocations_table.php` registers five management permissions plus College-delegable `college_faculty_allocation.eligible` under Course Delivery. Enable and disable are sensitive; eligibility is not a management grant.
 
 Migration `2026_09_21_090000_register_faculty_allocation_eligibility_permission.php` is the deployment repair for environments where the Faculty Allocation table migration ran before the eligibility permission was introduced. It idempotently registers the missing active College-delegable permission without granting it to administrator roles.
+# ADR 214 Attendance permissions — 2026-09-24
+
+The permission catalog adds `college_attendance_exception.view`, `.request`, `.decide`, plus `college_attendance_eligibility.view` and `.finalize`. All are ACTIVE and College-delegable; decision/finalization are sensitive.
+
+ADR 215 adds ACTIVE College-delegable `college_internal_assessment.view`, `.setup`, `.assignment`, and `.quiz`; setup is marked sensitive.
+
+ADR 216 adds ACTIVE College-delegable `.mid_semester`, `.practical`, and sensitive `.marks_entry` permissions.

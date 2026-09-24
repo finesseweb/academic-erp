@@ -628,6 +628,66 @@ export function AppSidebar() {
                   ],
               },
               {
+                  title: 'Attendance',
+                  icon: ClipboardCheck,
+                  children: [
+                      {
+                          title: 'Attendance',
+                          href: `/college/${collegeId}/attendance`,
+                          icon: ClipboardCheck,
+                          permission: 'college_attendance.view',
+                      },
+                      {
+                          title: 'Attendance Eligibility',
+                          href: `/college/${collegeId}/attendance-eligibility`,
+                          icon: ShieldCheck,
+                          permission: 'college_attendance_eligibility.view',
+                      },
+                  ],
+              },
+              {
+                  title: 'Assessment',
+                  icon: Settings2,
+                  children: [
+                      {
+                          title: 'Assessment Setup',
+                          href: `/college/${collegeId}/internal-assessment/setup`,
+                          icon: Settings2,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Assignments',
+                          href: `/college/${collegeId}/internal-assessment/assignments`,
+                          icon: ClipboardCheck,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Quizzes',
+                          href: `/college/${collegeId}/internal-assessment/quizzes`,
+                          icon: BadgeCheck,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Mid Semester',
+                          href: `/college/${collegeId}/internal-assessment/mid-semesters`,
+                          icon: FileSpreadsheet,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Practical',
+                          href: `/college/${collegeId}/internal-assessment/practicals`,
+                          icon: BookOpenCheck,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Marks Entry',
+                          href: `/college/${collegeId}/internal-assessment/marks`,
+                          icon: FileSpreadsheet,
+                          permission: 'college_internal_assessment.view',
+                      },
+                  ],
+              },
+              {
                   title: 'Admission Setup',
                   icon: FileCog,
                   children: [

@@ -70,7 +70,7 @@ class StudentEnrollmentEligibilityService
         $enrollment = StudentEnrollment::query()
             ->where('college_id', $college->id)
             ->where('admission_id', $admission->id)
-            ->first(['id', 'student_id', 'status', 'enrolled_at']);
+            ->first(['id', 'student_id', 'status', 'enrolled_at', 'batch_id', 'section_id']);
 
         $enrolled = $enrollment?->status === 'ENROLLED';
         $ready = ! $enrolled && (bool) $clearance['is_cleared'];
@@ -96,6 +96,9 @@ class StudentEnrollmentEligibilityService
             'enrollment_id' => $enrollment?->id,
             'student_id' => $enrollment?->student_id,
             'enrolled_at' => optional($enrollment?->enrolled_at)->toIso8601String(),
+            'batch_id' => $enrollment?->batch_id,
+            'section_id' => $enrollment?->section_id,
+            'placement_status' => $enrolled ? (($enrollment?->batch_id && $enrollment?->section_id) ? 'ASSIGNED' : 'PENDING') : null,
         ];
     }
 }

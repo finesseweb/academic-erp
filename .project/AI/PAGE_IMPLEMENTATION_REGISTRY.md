@@ -184,6 +184,7 @@ On `next` / `next N` / `nextN`:
 - University Admin / Academic Policy / Credit & Completion — Phase 1 IMPLEMENTED (package).
 - Academic Policy Approval Execution — IMPLEMENTED; common Inbox integration complete, QA gate pending.
 - University Admin / Academic Policy / Attendance — Phase 2 IMPLEMENTED (package): configurable attendance threshold, calculation level, condonation, exam-eligibility flag, special exemption permission, rounding, validation integration.
+- College / Attendance Operations — ADR 212 IMPLEMENTED, OWNER QA REQUIRED: Class Schedule register, canonical Enrollment roster, policy resolution, draft/finalize lock, audited correction and course percentage/shortage projection.
 
 | Academic Policy — Assessment / Examination | `/admin/academic-policies/{academicPolicy}/assessment-examination` | `resources/js/pages/admin/academic-policies/assessment-examination.tsx` | IMPLEMENTED — Phase 3 |
 
@@ -245,3 +246,12 @@ On `next` / `next N` / `nextN`:
 
 - `PAGE_SPECS/COURSE_DELIVERY/COURSE_OFFERINGS_PAGE.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-20).
 - `PAGE_SPECS/COURSE_DELIVERY/FACULTY_ALLOCATIONS_PAGE.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-21).
+- `PAGE_SPECS/ATTENDANCE/ATTENDANCE_CONDONATION.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/ATTENDANCE/SPECIAL_ATTENDANCE_EXEMPTION.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/ATTENDANCE/EXAMINATION_ATTENDANCE_ELIGIBILITY.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/ASSESSMENT_SETUP.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/ASSIGNMENTS.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/QUIZZES.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/MID_SEMESTER.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/PRACTICAL.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/MARKS_ENTRY.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).

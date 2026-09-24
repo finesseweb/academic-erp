@@ -7,6 +7,8 @@ Routes: `GET/POST /college/{college}/faculty-allocations`, `PATCH /college/{coll
 
 The parent is an existing Course Offering. Faculty is active College Staff of the route College with `college_faculty_allocation.eligible` through an effective College-scoped role. Scope is the entire Batch or one Section belonging to the Course Offering Batch. New records start INACTIVE, active records are immutable until deactivated, and duplicate Faculty + Offering + delivery-scope records are rejected.
 
+Delivery Scope is an explicit required control: Batch-wide submits `BATCH` and no Section; Section-specific submits `SECTION` and requires an active same-Batch Section. No first-Section default is permitted, and changing a hierarchy parent resets scope to Batch-wide and clears Section state.
+
 ## Selection workflow
 Allocation uses searchable dependent selection: Current Academic Session by default → Program Offering → Discipline → Semester/Term → Course Offering. Changing a parent clears downstream values. Course search includes course code/name, Batch, specialization and status. Faculty search includes name, email and active roles.
 

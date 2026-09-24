@@ -91,6 +91,15 @@ class CourseDeliveryScheduleController extends Controller
         return back()->with('toast', ['type' => 'success', 'message' => 'Class scheduled.']);
     }
 
+    public function updateClass(Request $r, College $college, ClassSchedule $classSchedule, CourseDeliverySchedulingService $s): RedirectResponse
+    {
+        $this->auth($r, $college, 'college_class_schedule.manage');
+        $data = $r->validate(['timetable_entry_id' => ['required', 'integer'], 'class_date' => ['required', 'date'], 'notes' => ['nullable', 'string', 'max:2000']]);
+        $s->updateClass($college, $classSchedule, $data, $r->user()->id);
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Scheduled class updated.']);
+    }
+
     public function classStatus(Request $r, College $college, ClassSchedule $classSchedule, CourseDeliverySchedulingService $s): RedirectResponse
     {
         $this->auth($r, $college, 'college_class_schedule.status');

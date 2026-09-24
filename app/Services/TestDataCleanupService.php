@@ -1001,6 +1001,16 @@ class TestDataCleanupService
             $this->deleteWhereIn('fee_demands', 'id', $feeDemandIds);
 
             // Canonical Student/Enrollment children before Admission.
+            $this->deleteWhereIn('student_attendance_eligibilities', 'student_enrollment_id', $enrollmentIds);
+            $this->deleteWhereIn('attendance_exception_requests', 'student_enrollment_id', $enrollmentIds);
+            $assessmentStudentIds = Schema::hasTable('internal_assessment_activity_students') ? DB::table('internal_assessment_activity_students')->whereIn('student_enrollment_id', $enrollmentIds)->pluck('id') : collect();
+            $this->deleteWhereIn('internal_assessment_marks', 'internal_assessment_activity_student_id', $assessmentStudentIds);
+            $this->deleteWhereIn('internal_assessment_activity_students', 'student_enrollment_id', $enrollmentIds);
+            if (Schema::hasTable('attendance_records')) {
+                $attendanceRegisterIds = DB::table('attendance_records')->whereIn('student_enrollment_id', $enrollmentIds)->pluck('attendance_register_id')->unique();
+                $this->deleteWhereIn('attendance_records', 'attendance_register_id', $attendanceRegisterIds);
+                $this->deleteWhereIn('attendance_registers', 'id', $attendanceRegisterIds);
+            }
             $this->deleteWhereIn('student_enrollment_course_choices', 'student_enrollment_id', $enrollmentIds);
             $this->deleteWhereIn('student_profile_values', 'student_id', $studentIds);
             $this->deleteWhereIn('student_enrollments', 'student_id', $studentIds);
@@ -1276,6 +1286,11 @@ class TestDataCleanupService
                 $enrollmentIdsForReset = Schema::hasTable('student_enrollments')
                     ? DB::table('student_enrollments')->whereIn('student_id', $studentIds)->pluck('id')
                     : collect();
+                $this->deleteWhereIn('student_attendance_eligibilities', 'student_enrollment_id', $enrollmentIdsForReset);
+                $this->deleteWhereIn('attendance_exception_requests', 'student_enrollment_id', $enrollmentIdsForReset);
+                $assessmentStudentIds = Schema::hasTable('internal_assessment_activity_students') ? DB::table('internal_assessment_activity_students')->whereIn('student_enrollment_id', $enrollmentIdsForReset)->pluck('id') : collect();
+                $this->deleteWhereIn('internal_assessment_marks', 'internal_assessment_activity_student_id', $assessmentStudentIds);
+                $this->deleteWhereIn('internal_assessment_activity_students', 'student_enrollment_id', $enrollmentIdsForReset);
                 $this->deleteWhereIn('student_enrollment_course_choices', 'student_enrollment_id', $enrollmentIdsForReset);
                 $this->deleteWhereIn('student_profile_values', 'student_id', $studentIds);
                 $this->deleteWhereIn('student_enrollments', 'student_id', $studentIds);
@@ -1398,11 +1413,28 @@ class TestDataCleanupService
                     ->whereIn('college_id', $collegeIds)
                     ->pluck('id');
                 $batchIdsForReset = DB::table('batches')->whereIn('college_program_offering_id', $batchOfferingIds)->pluck('id');
+                $courseOfferingIds = Schema::hasTable('course_offerings')
+                    ? DB::table('course_offerings')->whereIn('batch_id', $batchIdsForReset)->pluck('id')
+                    : collect();
+                $this->deleteWhereIn('student_attendance_eligibilities', 'course_offering_id', $courseOfferingIds);
+                $this->deleteWhereIn('attendance_exception_requests', 'course_offering_id', $courseOfferingIds);
+                $assessmentComponentIds = Schema::hasTable('internal_assessment_components') ? DB::table('internal_assessment_components')->whereIn('course_offering_id', $courseOfferingIds)->pluck('id') : collect();
+                $assessmentActivityIds = Schema::hasTable('internal_assessment_activities') ? DB::table('internal_assessment_activities')->whereIn('internal_assessment_component_id', $assessmentComponentIds)->pluck('id') : collect();
+                $assessmentStudentIds = Schema::hasTable('internal_assessment_activity_students') ? DB::table('internal_assessment_activity_students')->whereIn('internal_assessment_activity_id', $assessmentActivityIds)->pluck('id') : collect();
+                $this->deleteWhereIn('internal_assessment_marks', 'internal_assessment_activity_student_id', $assessmentStudentIds);
+                $this->deleteWhereIn('internal_assessment_activity_students', 'internal_assessment_activity_id', $assessmentActivityIds);
+                $this->deleteWhereIn('internal_assessment_activities', 'internal_assessment_component_id', $assessmentComponentIds);
+                $this->deleteWhereIn('internal_assessment_components', 'id', $assessmentComponentIds);
                 if (Schema::hasTable('faculty_allocations')) {
-                    $courseOfferingIds = DB::table('course_offerings')->whereIn('batch_id', $batchIdsForReset)->pluck('id');
                     $facultyAllocationIds = DB::table('faculty_allocations')->whereIn('course_offering_id', $courseOfferingIds)->pluck('id');
                     if (Schema::hasTable('timetable_entries')) {
                         $timetableIds = DB::table('timetable_entries')->whereIn('faculty_allocation_id', $facultyAllocationIds)->pluck('id');
+                        if (Schema::hasTable('attendance_registers')) {
+                            $classScheduleIds = DB::table('class_schedules')->whereIn('timetable_entry_id', $timetableIds)->pluck('id');
+                            $attendanceRegisterIds = DB::table('attendance_registers')->whereIn('class_schedule_id', $classScheduleIds)->pluck('id');
+                            $this->deleteWhereIn('attendance_records', 'attendance_register_id', $attendanceRegisterIds);
+                            $this->deleteWhereIn('attendance_registers', 'id', $attendanceRegisterIds);
+                        }
                         $this->deleteWhereIn('class_schedules', 'timetable_entry_id', $timetableIds);
                         $this->deleteWhereIn('timetable_entries', 'id', $timetableIds);
                     }
@@ -4286,6 +4318,11 @@ class TestDataCleanupService
             $enrollmentIds = Schema::hasTable('student_enrollments')
                 ? DB::table('student_enrollments')->where('student_id', $record->id)->pluck('id')
                 : collect();
+            $this->deleteWhereIn('student_attendance_eligibilities', 'student_enrollment_id', $enrollmentIds);
+            $this->deleteWhereIn('attendance_exception_requests', 'student_enrollment_id', $enrollmentIds);
+            $assessmentStudentIds = Schema::hasTable('internal_assessment_activity_students') ? DB::table('internal_assessment_activity_students')->whereIn('student_enrollment_id', $enrollmentIds)->pluck('id') : collect();
+            $this->deleteWhereIn('internal_assessment_marks', 'internal_assessment_activity_student_id', $assessmentStudentIds);
+            $this->deleteWhereIn('internal_assessment_activity_students', 'student_enrollment_id', $enrollmentIds);
             $this->deleteWhereIn('student_enrollment_course_choices', 'student_enrollment_id', $enrollmentIds);
             $this->deleteWhereIn('student_profile_values', 'student_id', collect([$record->id]));
             $this->deleteWhereIn('student_enrollments', 'student_id', collect([$record->id]));
@@ -5100,7 +5137,7 @@ class TestDataCleanupService
         if (! $record) {
             abort(404);
         }
-        $downstream = $this->downstreamReferences($id, [['faculty_allocations', 'course_offering_id']]);
+        $downstream = $this->downstreamReferences($id, [['faculty_allocations', 'course_offering_id'], ['internal_assessment_components', 'course_offering_id']]);
         if (count($downstream) > 0) {
             abort(422, 'Clean Faculty Allocations before deleting this Course Offering.');
         }
@@ -5132,7 +5169,7 @@ class TestDataCleanupService
                 'status' => $row->status,
                 'kind' => 'COURSE_OFFERING',
                 'dependencies' => [],
-                'blocked' => count($refs = $this->downstreamReferences($row->id, [['faculty_allocations', 'course_offering_id']])) > 0,
+                'blocked' => count($refs = $this->downstreamReferences($row->id, [['faculty_allocations', 'course_offering_id'], ['internal_assessment_components', 'course_offering_id']])) > 0,
                 'blocking_references' => $refs,
             ])->values()->all();
     }
@@ -5177,6 +5214,11 @@ class TestDataCleanupService
         $refs = $table === 'timetable_entries' ? $this->downstreamReferences($id, [['class_schedules', 'timetable_entry_id']]) : ($table === 'college_rooms' ? $this->downstreamReferences($id, [['timetable_entries', 'room_id'], ['class_schedules', 'room_id']]) : []);
         if (count($refs)) {
             abort(422, 'Clean dependent Course Delivery records first.');
+        }
+        if ($table === 'class_schedules' && Schema::hasTable('attendance_registers')) {
+            $registerIds = DB::table('attendance_registers')->where('class_schedule_id', $id)->pluck('id');
+            $this->deleteWhereIn('attendance_records', 'attendance_register_id', $registerIds);
+            $this->deleteWhereIn('attendance_registers', 'id', $registerIds);
         }
         DB::table($table)->where('id', $id)->delete();
         $this->audit('TEST_'.strtoupper($table).'_CLEANED', 'test_data_cleanup', $id, ['record' => (array) $record], $actorId);

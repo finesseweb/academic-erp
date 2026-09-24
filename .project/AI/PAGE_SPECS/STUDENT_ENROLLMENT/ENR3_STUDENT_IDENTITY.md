@@ -7,11 +7,13 @@ Status: IMPLEMENTED — OWNER QA REQUIRED
 
 Purpose: configure and assign Student UID, University Roll No. and enrollment-specific Class Roll No. for enrolled students. Exam Roll is explicitly excluded.
 
+Student Identity is also the canonical placement UI. Authorized users may select multiple enrollments from one Programme Offering and atomically assign them to an ACTIVE Batch and its ACTIVE child Section. Mixed-offering selections, cross-College rows and invalid parent/child combinations are rejected. Placement writes the existing Enrollment FKs and emits one audit event per changed enrollment; it does not alter identity numbers, Admission, Intake or Fee Demand.
+
 The page uses Session -> Programme Offering dependent filters, server-side search/pagination, shared loading infrastructure, theme-native controls/icons, shared App Dialog confirmation, button processing states and Toast feedback.
 
 Identity formats are College-specific. Saving rules never changes already assigned identifiers. Existing ENR-2 students with NULL identifiers show Pending and may be assigned. New enrollments are assigned through the same transactional identity service.
 
-QA: migration; permission; sidebar/page scope; default settings; format save; existing student assignment; no replacement on repeated assignment; new enrollment auto-assignment; College uniqueness; Programme Offering class-roll scope; concurrent sequence safety; loader/dialog/toast; cross-college denial; Exam Roll absent; Admission/Fee/Enrollment regression.
+QA: migration; permission; sidebar/page scope; default settings; format save; existing student assignment; no replacement on repeated assignment; new enrollment auto-assignment; College uniqueness; Programme Offering class-roll scope; concurrent sequence safety; bulk placement single-offering guard; Batch/Section parent validation; atomic rollback; loader/dialog/toast; cross-college denial; Exam Roll absent; Admission/Fee/Enrollment regression.
 
 ## ENR-3 QA refinement — Discipline visibility and dependent filter (2026-09-17)
 - Enrolled Students table displays Discipline as a separate academic-context column beside Programme.

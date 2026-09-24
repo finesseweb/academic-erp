@@ -26,6 +26,7 @@ class CurriculumCourseMapping extends Model
         ];
     }
 
+    /** @return BelongsTo<CurriculumSlot, $this> */
     public function slot(): BelongsTo
     {
         return $this->belongsTo(CurriculumSlot::class, 'curriculum_slot_id');

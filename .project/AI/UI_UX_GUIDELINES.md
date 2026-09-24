@@ -144,6 +144,12 @@ Requirements:
 - Persist date-only business values as database `DATE` values and serialize them to Inertia as `YYYY-MM-DD` to prevent timezone drift.
 - Preserve semantic tokens, keyboard/focus behavior, accessible month/year labels, selected/disabled states, responsive dialog behavior, and all four built-in themes.
 
+### Shared Time Picker Standard
+- Time-only business fields must use the shared theme-aware `TimePicker` rather than browser-native `<input type="time">` or page-specific time controls whenever the shared component can represent the field.
+- The canonical interaction is the existing Interview Scheduling pattern: explicit hour, minute and AM/PM selectors, with the minute step chosen by the workflow (5 minutes by default for scheduling screens).
+- Persist/submit time-only values in the existing 24-hour `HH:mm` contract; the shared picker is a presentation control and must not change backend time semantics.
+- New or modified scheduling forms must reuse `TimePicker` so timetable, interview and future scheduling workflows remain visually and behaviorally consistent. Any intentional exception requires documentation in the page specification.
+
 ## 9. Tables and Data-Heavy Screens
 Standard data tables should support only the capabilities relevant to the page, chosen from:
 - keyword search

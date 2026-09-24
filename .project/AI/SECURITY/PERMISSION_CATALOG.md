@@ -103,6 +103,26 @@ Initial examples; expand as modules are specified.
 - `attendance.edit`
 - `attendance.report`
 - `attendance.export`
+- `college_attendance_exception.view`
+- `college_attendance_exception.request`
+- `college_attendance_exception.decide`
+- `college_attendance_eligibility.view`
+- `college_attendance_eligibility.finalize`
+
+The five College Attendance exception/eligibility permissions are persisted by the ADR 214 migration, College-delegable, and granted forward to protected `SUPER_ADMIN` / `COLLEGE_ADMIN` roles. Decision and finalization are sensitive audited actions.
+
+## Internal Assessment
+- `college_internal_assessment.view`
+- `college_internal_assessment.setup`
+- `college_internal_assessment.assignment`
+- `college_internal_assessment.quiz`
+- `college_internal_assessment.mid_semester`
+- `college_internal_assessment.practical`
+- `college_internal_assessment.marks_entry`
+
+ADR 215 persists these College-delegable permissions and grants them forward to protected `SUPER_ADMIN` / `COLLEGE_ADMIN`. Setup is sensitive; all mutation capabilities are College-scoped and audited.
+
+ADR 216 persists Mid Semester, Practical and sensitive Marks Entry capabilities and grants them to protected administrators. All mutations retain College/resource scope enforcement.
 
 ## Fees / Accounts
 - `fee.view`
@@ -405,3 +425,8 @@ All checks are server-authoritative and scoped to the route College through Batc
 - `college_class_schedule.view`, `.manage`, `.status`
 
 All are College-delegable. Timetable enable/disable and Class Schedule status are sensitive.
+# Attendance Operations (ADR 212)
+- `college_attendance.view` — view College-scoped attendance registers and policy-derived summaries.
+- `college_attendance.manage` — create/update draft attendance for eligible Class Schedules.
+- `college_attendance.finalize` — finalize and lock a complete register; sensitive.
+- `college_attendance.correct` — reopen finalized attendance with an audited reason; sensitive.

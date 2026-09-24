@@ -6,6 +6,7 @@ use App\Models\ClassSchedule;
 use App\Models\College;
 use App\Models\CollegeRoom;
 use App\Models\FacultyAllocation;
+use App\Models\StudentEnrollment;
 use App\Models\TimetableEntry;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
@@ -14,6 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 class CourseDeliverySchedulingService
 {
+    public function __construct(private readonly AcademicCalendarDeliveryService $academicCalendar) {}
+
     /** @param array<string, mixed> $data */
     public function saveRoom(College $college, array $data, int $actor, ?CollegeRoom $room = null): CollegeRoom
     {
@@ -41,6 +44,9 @@ class CourseDeliverySchedulingService
     /** @param array<string, mixed> $data */
     public function saveTimetable(College $college, array $data, int $actor, ?TimetableEntry $entry = null): TimetableEntry
     {
+        if ($entry) {
+            $this->entry($college, $entry->id);
+        }
         if ($entry && $entry->status === 'ACTIVE') {
             throw ValidationException::withMessages(['timetable' => 'Deactivate the Timetable entry before editing.']);
         }
@@ -49,6 +55,7 @@ class CourseDeliverySchedulingService
             throw ValidationException::withMessages(['faculty_allocation_id' => 'Only an ACTIVE Faculty Allocation can be used in Timetable.']);
         }
         $room = $this->room($college, $data['room_id'] ?? null);
+        $this->assertRoomCapacity($allocation, $room);
         if ($data['start_time'] >= $data['end_time']) {
             throw ValidationException::withMessages(['end_time' => 'End time must be after start time.']);
         } if (! empty($data['effective_until']) && $data['effective_until'] < $data['effective_from']) {
@@ -75,6 +82,7 @@ class CourseDeliverySchedulingService
             if ($room && $room->status !== 'ACTIVE') {
                 throw ValidationException::withMessages(['status' => 'Timetable activation requires an ACTIVE Room.']);
             }
+            $this->assertRoomCapacity($allocation, $room);
             $this->assertTimetableConflict($allocation, $room, $entry->day_of_week, $entry->start_time, $entry->end_time, Carbon::parse($entry->effective_from)->toDateString(), $entry->effective_until ? Carbon::parse($entry->effective_until)->toDateString() : null, $entry->id);
             $this->assertWeeklyLoad($allocation, $entry);
         } if ($entry->status === $status) {
@@ -87,24 +95,64 @@ class CourseDeliverySchedulingService
     /** @param array<string, mixed> $data */
     public function createClass(College $college, array $data, int $actor): ClassSchedule
     {
+        return $this->saveClassOccurrence($college, $data, $actor);
+    }
+
+    /** @param array<string, mixed> $data */
+    public function updateClass(College $college, ClassSchedule $row, array $data, int $actor): ClassSchedule
+    {
+        $this->entry($college, $row->timetable_entry_id);
+        if ($row->status !== 'SCHEDULED') {
+            throw ValidationException::withMessages(['class_schedule' => 'Only a SCHEDULED class can be edited.']);
+        }
+
+        return $this->saveClassOccurrence($college, $data, $actor, $row);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function saveClassOccurrence(College $college, array $data, int $actor, ?ClassSchedule $row = null): ClassSchedule
+    {
         $entry = $this->entry($college, (int) $data['timetable_entry_id']);
         if ($entry->status !== 'ACTIVE') {
             throw ValidationException::withMessages(['timetable_entry_id' => 'Only an ACTIVE Timetable entry can schedule a class.']);
         }
-        if ($this->allocation($college, $entry->faculty_allocation_id)->status !== 'ACTIVE') {
+        $allocation = $this->allocation($college, $entry->faculty_allocation_id);
+        if ($allocation->status !== 'ACTIVE') {
             throw ValidationException::withMessages(['timetable_entry_id' => 'The linked Faculty Allocation is inactive.']);
         }
+        $this->assertRoomCapacity($allocation, $this->room($college, $entry->room_id));
         $date = Carbon::parse($data['class_date']);
+        $this->academicCalendar->assertClassDateAllowed($college, $allocation, $date);
         if ($date->dayOfWeekIso !== $entry->day_of_week) {
             throw ValidationException::withMessages(['class_date' => 'Class date must match the Timetable weekday.']);
-        } if ($date->lt($entry->effective_from) || ($entry->effective_until && $date->gt($entry->effective_until))) {
+        }
+        if ($date->lt($entry->effective_from) || ($entry->effective_until && $date->gt($entry->effective_until))) {
             throw ValidationException::withMessages(['class_date' => 'Class date is outside the Timetable effective period.']);
         }
-        if (ClassSchedule::where('timetable_entry_id', $entry->id)->whereDate('class_date', $data['class_date'])->exists()) {
+        $duplicate = ClassSchedule::where('timetable_entry_id', $entry->id)
+            ->whereDate('class_date', $data['class_date'])
+            ->when($row, fn ($q) => $q->whereKeyNot($row->id))
+            ->exists();
+        if ($duplicate) {
             throw ValidationException::withMessages(['class_date' => 'A class is already scheduled from this Timetable entry on the selected date.']);
         }
-        $row = ClassSchedule::create(['timetable_entry_id' => $entry->id, 'class_date' => $data['class_date'], 'start_time' => $entry->start_time, 'end_time' => $entry->end_time, 'room_id' => $entry->room_id, 'status' => 'SCHEDULED', 'notes' => $data['notes'] ?? null, 'created_by' => $actor, 'updated_by' => $actor]);
-        $this->audit('CLASS_SCHEDULED', $row, $college, $actor, null, $row->toArray());
+
+        $values = [
+            'timetable_entry_id' => $entry->id,
+            'class_date' => $data['class_date'],
+            'start_time' => $entry->start_time,
+            'end_time' => $entry->end_time,
+            'room_id' => $entry->room_id,
+            'notes' => $data['notes'] ?? null,
+            'updated_by' => $actor,
+        ];
+        $before = $row?->toArray();
+        if ($row) {
+            $row->update($values);
+        } else {
+            $row = ClassSchedule::create($values + ['status' => 'SCHEDULED', 'created_by' => $actor]);
+        }
+        $this->audit($before ? 'CLASS_SCHEDULE_UPDATED' : 'CLASS_SCHEDULED', $row, $college, $actor, $before, $row->fresh()->toArray());
 
         return $row;
     }
@@ -114,7 +162,14 @@ class CourseDeliverySchedulingService
         $this->entry($college, $row->timetable_entry_id);
         if ($row->status === $status) {
             return;
-        }$before = ['status' => $row->status];
+        }
+        if ($row->status !== 'SCHEDULED') {
+            throw ValidationException::withMessages(['status' => 'COMPLETED or CANCELLED classes are locked and cannot be changed.']);
+        }
+        if (! in_array($status, ['COMPLETED', 'CANCELLED'], true)) {
+            throw ValidationException::withMessages(['status' => 'A SCHEDULED class may only be marked COMPLETED or CANCELLED.']);
+        }
+        $before = ['status' => $row->status];
         $row->update(['status' => $status, 'updated_by' => $actor]);
         $this->audit('CLASS_SCHEDULE_STATUS_UPDATED', $row, $college, $actor, $before, ['status' => $status]);
     }
@@ -189,6 +244,31 @@ class CourseDeliverySchedulingService
                     ($existingMinutes + $candidateMinutes) / 60,
                     (float) $allocation->weekly_load,
                 ),
+            ]);
+        }
+    }
+
+    private function assertRoomCapacity(FacultyAllocation $allocation, ?CollegeRoom $room): void
+    {
+        if (! $room || $room->capacity === null) {
+            return;
+        }
+
+        $allocation->loadMissing('courseOffering.batch');
+        $courseOffering = $allocation->courseOffering;
+        $strength = StudentEnrollment::query()
+            ->where('status', 'ENROLLED')
+            ->where('batch_id', $courseOffering->batch_id)
+            ->when($allocation->section_id, fn ($query) => $query->where('section_id', $allocation->section_id))
+            ->whereExists(fn ($query) => $query->selectRaw('1')->from('student_enrollment_course_choices as choices')
+                ->whereColumn('choices.student_enrollment_id', 'student_enrollments.id')
+                ->where('choices.curriculum_course_mapping_id', $courseOffering->curriculum_course_mapping_id))
+            ->count();
+
+        if ($strength > (int) $room->capacity) {
+            $scope = $allocation->section_id ? 'Section' : 'Batch';
+            throw ValidationException::withMessages([
+                'room_id' => "Room {$room->code} has capacity {$room->capacity}, but the applicable {$scope} course roster has {$strength} students.",
             ]);
         }
     }

@@ -2,6 +2,9 @@
 
 ENR-3 owns Student UID, University Roll Number, and Enrollment Class Roll Number. Exam Roll remains outside ENR-3.
 
+## Canonical placement UI addendum — 2026-09-22
+Student Identity is the single UI boundary for assigning existing canonical `student_enrollments.batch_id` and `section_id`. Bulk placement is atomic, restricted to enrollments from one Programme Offering, and validates an ACTIVE same-Offering Batch plus ACTIVE child Section. Student Enrollment does not duplicate this action. The addendum introduces no placement table, Section capacity or financial side effect.
+
 ## Test Data Cleanup addendum — 2026-09-17
 System Maintenance → Test Data Cleanup exposes a **Student Management → Students** group. Cleaning an individual test Student removes Student-owned profile/enrollment/identity data and restores Applicant lifecycle linkage when applicable, while preserving source Application, Admission and Fee records. Individual cleanup never rewinds identity sequences; assigned numbers remain non-reusable.
 

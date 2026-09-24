@@ -611,3 +611,23 @@ Integrity invariant: a Course Offering's Curriculum Course Mapping must resolve 
 ## Phase 13 Scheduling chain (2026-09-21)
 
 `Course Offering -> Faculty Allocation -> Timetable Entry -> Class Schedule`; optional `College Room -> Timetable Entry`, snapshotted as `College Room -> Class Schedule`.
+
+## Phase 14 Attendance Operations foundation (ADR 212 — 2026-09-22)
+
+`Class Schedule (1) -> (0..1) Attendance Register -> (1..N) Attendance Records -> Student Enrollment`.
+
+`Attendance Register -> resolved Academic Policy -> Academic Policy Attendance Rule` supplies calculation level, threshold, rounding and future condonation/exemption/exam controls. Raw records consume canonical Enrollment course choices and never Admission/Import provenance. Attendance has no write relationship to Fee Demand; future finance eligibility consumes final Academic Progression output.
+
+## ADR 214 — Attendance exceptions and final eligibility (2026-09-24)
+
+`Student Enrollment + Course Offering + Academic Policy -> Attendance Exception Request` records typed Condonation or Special Exemption decisions without changing Attendance Records.
+
+`Student Enrollment + Course Offering -> Student Attendance Eligibility` is the unique finalized snapshot containing the resolved Academic Policy, finalized aggregate and approved-exception basis for downstream Examination consumption.
+
+## ADR 215 — Internal Assessment (2026-09-24)
+
+`Course Offering + resolved Academic Policy -> Internal Assessment Component -> Internal Assessment Activity -> Faculty Allocation`.
+
+On publication: `Internal Assessment Activity -> Internal Assessment Activity Students -> canonical Student Enrollment`. Membership is resolved through the exact Programme Offering + Batch + optional Section + Curriculum Course Mapping choice and is the stable target for later Marks Entry.
+
+ADR 216 adds `Internal Assessment Activity Student (1) -> (0..1) Internal Assessment Mark`. Marks retain their activity/student provenance through the immutable publication roster; component maximum/pass rules remain reachable through Activity → Component.

@@ -20,3 +20,6 @@ Use `resources/js/components/ui/searchable-select.tsx` for single-select dataset
 - Client-side search is suitable for already-loaded, College-scoped lists of practical size.
 - Above approximately 100 options, or when payload size becomes material, use debounced server-side search with limited/paginated results while retaining this interaction contract.
 - New pages and materially touched pages must follow this standard. Existing local searchable picker copies should migrate to the shared component when those pages are next changed.
+
+## Academic operations clarification — 2026-09-24
+ADR 217 applies this contract explicitly to Attendance, Assessment, Examination and Result work. Dynamic ID-backed selectors (including Course Offering, Assessment Component, Faculty Allocation, Published Activity and comparable growing datasets) must use the shared `SearchableSelect`; do not add browser-native or page-local searchable selectors on new/materially touched pages. Assessment Setup also uses the shared interaction for Assessment Type to keep that form visually consistent. Tiny row-level state enums such as ENTERED / ABSENT may remain compact standard selects where search has no practical value.

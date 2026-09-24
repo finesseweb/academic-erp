@@ -83,3 +83,12 @@ SUPER_ADMIN and COLLEGE_ADMIN receive the five management permissions. `college_
 ## Course Delivery scheduling defaults (2026-09-21)
 
 SUPER_ADMIN and COLLEGE_ADMIN receive Room, Timetable and Class Scheduling permissions. Other roles receive them only through College role permission assignment.
+# ADR 214 Attendance protected-role grants — 2026-09-24
+
+The forward migration grants the five Attendance exception/eligibility permissions to protected `SUPER_ADMIN` and `COLLEGE_ADMIN` roles. College-owned roles may receive them through the existing delegation controls; backend College scope remains mandatory.
+
+## ADR 215 Internal Assessment grants — 2026-09-24
+
+Protected `SUPER_ADMIN` and `COLLEGE_ADMIN` receive view/setup/assignment/quiz permissions. Authorized College roles such as Faculty may be delegated view and the appropriate activity capability. Faculty Allocation and server-side College ownership remain separate mandatory domain checks.
+
+ADR 216 grants protected `SUPER_ADMIN` and `COLLEGE_ADMIN` Mid Semester, Practical and Marks Entry permissions. College roles may receive delegated capabilities; Marks Entry remains sensitive and audited.

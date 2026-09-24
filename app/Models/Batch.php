@@ -23,6 +23,7 @@ class Batch extends Model
         return $this->hasMany(Section::class);
     }
 
+    /** @return BelongsTo<CollegeProgramOffering, $this> */
     public function offering(): BelongsTo
     {
         return $this->belongsTo(

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StudentEnrollment extends Model
 {
@@ -15,11 +16,44 @@ class StudentEnrollment extends Model
 
     protected $casts = ['enrolled_at' => 'datetime', 'cancelled_at' => 'datetime'];
 
-    public function student(): BelongsTo { return $this->belongsTo(Student::class); }
-    public function college(): BelongsTo { return $this->belongsTo(College::class); }
-    public function offering(): BelongsTo { return $this->belongsTo(CollegeProgramOffering::class, 'college_program_offering_id'); }
-    public function discipline(): BelongsTo { return $this->belongsTo(AcademicDiscipline::class, 'discipline_id'); }
-    public function admission(): BelongsTo { return $this->belongsTo(Admission::class); }
-    public function batch(): BelongsTo { return $this->belongsTo(Batch::class); }
-    public function section(): BelongsTo { return $this->belongsTo(Section::class); }
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class);
+    }
+
+    public function college(): BelongsTo
+    {
+        return $this->belongsTo(College::class);
+    }
+
+    public function offering(): BelongsTo
+    {
+        return $this->belongsTo(CollegeProgramOffering::class, 'college_program_offering_id');
+    }
+
+    public function discipline(): BelongsTo
+    {
+        return $this->belongsTo(AcademicDiscipline::class, 'discipline_id');
+    }
+
+    public function admission(): BelongsTo
+    {
+        return $this->belongsTo(Admission::class);
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(Batch::class);
+    }
+
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(Section::class);
+    }
+
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class);
+    }
+
 }

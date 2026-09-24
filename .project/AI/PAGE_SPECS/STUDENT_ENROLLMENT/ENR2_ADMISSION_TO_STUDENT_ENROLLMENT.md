@@ -26,3 +26,8 @@ Student UID / University Roll / Class Roll / Exam Roll generation (ENR-3); CSV m
 
 ## ADR 202 — ENR2-11 mapping UI completion
 The Application Form Builder exposes `student_data_policy` as **Data Usage** for University base fields and College-owned dynamic fields. Newly created dynamic fields default to Student Profile. Application Only remains available for admission-specific answers. Existing historical fields keep their stored policy, and Student Profile copies the submitted answer into `student_profile_values` only when a future enrollment creates the Student. Existing Student profiles are not retroactively rewritten by changing this setting.
+
+## 2026-09-22 corrective extension — canonical Batch / Section placement
+Enrollment owns the canonical Batch / Section placement data stored directly on `student_enrollments.batch_id` and `student_enrollments.section_id`. An enrolled student may be assigned or moved only to an ACTIVE Batch belonging to the same College Programme Offering and an ACTIVE Section belonging to that Batch. The mutation is audited as `student.enrollment.placement_assigned`.
+
+Student Enrollment remains the enrollment queue and does not expose placement mutation. Student Identity is the single placement UI and supports atomic bulk assignment for both Admission- and Import-origin enrollments. A selection must belong to one Programme Offering. No Attendance-specific student mapping is created. Section-scoped Course Delivery and Attendance consume this canonical Enrollment placement. Placement does not mutate Fee Demand.

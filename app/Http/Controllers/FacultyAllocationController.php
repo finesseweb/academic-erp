@@ -76,7 +76,7 @@ class FacultyAllocationController extends Controller
 
     private function validated(Request $request): array
     {
-        return $request->validate(['course_offering_id' => ['required', 'integer'], 'section_id' => ['nullable', 'integer'], 'faculty_user_id' => ['required', 'integer'],
+        return $request->validate(['course_offering_id' => ['required', 'integer'], 'delivery_scope' => ['required', Rule::in(['BATCH', 'SECTION'])], 'section_id' => ['nullable', 'integer', 'required_if:delivery_scope,SECTION'], 'faculty_user_id' => ['required', 'integer'],
             'teaching_role' => ['required', Rule::in(['PRIMARY', 'CO_FACULTY', 'PRACTICAL'])], 'weekly_load' => ['nullable', 'numeric', 'min:0.25', 'max:168'], 'notes' => ['nullable', 'string', 'max:2000']]);
     }
 

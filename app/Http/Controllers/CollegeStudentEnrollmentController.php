@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\AcademicSession;
+use App\Models\Admission;
 use App\Models\College;
 use App\Models\CollegeProgramOffering;
 use App\Services\StudentEnrollmentEligibilityService;
 use App\Services\StudentEnrollmentService;
-use App\Models\Admission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,9 +32,11 @@ class CollegeStudentEnrollmentController extends Controller
             ->where('college_id', $college->id)
             ->when($sessionId > 0, fn ($q) => $q->where('academic_session_id', $sessionId))
             ->orderBy('program_template_id')->get(['id', 'program_template_id', 'academic_session_id', 'status'])
-            ->map(fn ($o) => ['id'=>(int)$o->id,'name'=>$o->programTemplate?->name,'code'=>$o->programTemplate?->code,'status'=>$o->status])->values();
+            ->map(fn ($o) => ['id' => (int) $o->id, 'name' => $o->programTemplate?->name, 'code' => $o->programTemplate?->code, 'status' => $o->status])->values();
 
-        if ($offeringId > 0 && ! $offerings->contains('id', $offeringId)) $offeringId = 0;
+        if ($offeringId > 0 && ! $offerings->contains('id', $offeringId)) {
+            $offeringId = 0;
+        }
 
         $filters = [
             'session_id' => $sessionId,
@@ -45,7 +47,7 @@ class CollegeStudentEnrollmentController extends Controller
         ];
 
         return Inertia::render('college-student-enrollments/index', [
-            'college' => $college->only(['id','name','code']),
+            'college' => $college->only(['id', 'name', 'code']),
             'sessions' => $sessions,
             'offerings' => $offerings,
             'students' => $eligibility->queue($college, $filters),
@@ -53,6 +55,7 @@ class CollegeStudentEnrollmentController extends Controller
             'can' => ['enroll' => $request->user()->hasCollegePermission('college_student_enrollment.enroll', $college->id)],
         ]);
     }
+
     public function store(Request $request, College $college, Admission $admission, StudentEnrollmentService $enrollment): RedirectResponse
     {
         abort_unless($request->user()->hasCollegePermission('college_student_enrollment.enroll', $college->id), 403);
@@ -63,5 +66,4 @@ class CollegeStudentEnrollmentController extends Controller
             'message' => 'Student enrolled successfully.',
         ]);
     }
-
 }

@@ -103,6 +103,8 @@ Key rules:
 
 ### Academic Policies Phase 2
 - `academic_policy_attendance_rules` — optional one-to-one Attendance Policy section for an Academic Policy version; stores attendance threshold, calculation level, condonation controls, exam-eligibility requirement, special exemption permission, rounding rule, and notes.
+- `attendance_registers` — one policy-bound DRAFT/FINALIZED operational register per dated Class Schedule, with audited correction revision metadata.
+- `attendance_records` — one raw attendance status per canonical Student Enrollment per Attendance Register; no fee or eligibility decision is stored here.
 
 ### academic_policy_assessment_exam_rules
 One-to-one Assessment / Examination governance configuration for `academic_policies`. Stores general pass/absence/grace/re-attempt permissions. Component-specific structures are intentionally deferred to configurable Assessment Scheme masters.
@@ -288,3 +290,16 @@ Operational Course Offering-to-Faculty bridge with optional same-Batch Section s
 ## Phase 13 Scheduling — `college_rooms`, `timetable_entries`, `class_schedules` (2026-09-21)
 
 Linked Room master, recurring Timetable rules and dated Class occurrences. See ADR 211 and `TABLE_SPECS/course_delivery_scheduling.md`.
+# Attendance exception and eligibility — ADR 214 (2026-09-24)
+
+- `attendance_exception_requests` — College-scoped typed Condonation / Medical-Special Exemption request and decision history, anchored to Student Enrollment, Course Offering and the resolved Academic Policy snapshot.
+- `student_attendance_eligibilities` — unique Student Enrollment + Course Offering final Attendance eligibility snapshot for downstream Examination consumption.
+- Migration `2026_09_24_090000_create_attendance_exception_and_eligibility.php` also registers five College-delegable RBAC permissions and grants them to protected administrator roles. No Fee table or relationship is changed.
+
+## Internal Assessment — ADR 215 (2026-09-24)
+
+- `internal_assessment_components` — Course Offering component definitions linked to resolved Academic Policy.
+- `internal_assessment_activities` — Assignment/Quiz operational instances linked to component and Faculty Allocation.
+- `internal_assessment_activity_students` — publication-time canonical Enrollment roster snapshot.
+- Migration `2026_09_24_130000_create_internal_assessment_setup.php` also registers four permissions and protected-role grants.
+- `internal_assessment_marks` — pre-approval ENTERED/ABSENT marks row, unique per publication-roster student, with correction revision and entry actor/time. Migration `2026_09_24_170000_create_internal_assessment_marks_entry.php` also registers three permissions and protected-role grants.

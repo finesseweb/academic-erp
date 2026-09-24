@@ -1,5 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
-import { CalendarCheck, Plus } from 'lucide-react';
+import { CalendarCheck, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -128,6 +128,80 @@ function Add({ collegeId, entries }: { collegeId: number; entries: Entry[] }) {
         </Dialog>
     );
 }
+function Edit({
+    collegeId,
+    entries,
+    row,
+}: {
+    collegeId: number;
+    entries: Entry[];
+    row: Row;
+}) {
+    const [e, setE] = useState(String(row.timetable_entry_id));
+    const [date, setDate] = useState(String(row.class_date).slice(0, 10));
+
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button size="icon" variant="ghost" aria-label="Edit scheduled class">
+                    <Pencil />
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogTitle>Edit Scheduled Class</DialogTitle>
+                <DialogDescription>
+                    Scheduled classes can be changed until they are completed or
+                    cancelled. Time and room are refreshed from the selected
+                    active Timetable entry.
+                </DialogDescription>
+                <Form
+                    method="patch"
+                    action={`/college/${collegeId}/class-schedules/${row.id}`}
+                    className="space-y-4"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <SearchableSelect
+                                name="timetable_entry_id"
+                                label="Timetable Entry"
+                                value={e}
+                                onValueChange={setE}
+                                options={entries.map((x) => ({
+                                    value: String(x.id),
+                                    label: `${x.faculty_allocation.course_offering.curriculum_course_mapping.course.code} · ${x.faculty_allocation.course_offering.curriculum_course_mapping.course.name}`,
+                                    description: `${x.faculty_allocation.faculty.name} · ${x.faculty_allocation.course_offering.batch.name} · ${x.start_time.slice(0, 5)}–${x.end_time.slice(0, 5)}`,
+                                }))}
+                            />
+                            <DatePicker
+                                id={`class-schedule-date-${row.id}`}
+                                name="class_date"
+                                value={date}
+                                onValueChange={setDate}
+                            />
+                            <Textarea
+                                name="notes"
+                                defaultValue={row.notes ?? ''}
+                                placeholder="Class note (optional)"
+                            />
+                            {Object.values(errors).map((x, i) => (
+                                <p key={i} className="text-xs text-destructive">
+                                    {x}
+                                </p>
+                            ))}
+                            <DialogFooter>
+                                <Button disabled={processing || !e || !date}>
+                                    {processing && <Spinner />}
+                                    Save Changes
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function Classes({ college, entries, classes, can }: Props) {
     return (
         <>
@@ -241,61 +315,57 @@ export default function Classes({ college, entries, classes, can }: Props) {
                                                 </Badge>
                                             </td>
                                             <td className="p-3">
-                                                {can.status && (
-                                                    <Form
-                                                        method="patch"
-                                                        action={`/college/${college.id}/class-schedules/${x.id}/status`}
-                                                    >
-                                                        {({ processing }) => (
-                                                            <div className="flex gap-2">
-                                                                <Select
-                                                                    name="status"
-                                                                    defaultValue={
-                                                                        x.status
-                                                                    }
-                                                                >
-                                                                    <SelectTrigger className="w-36">
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {[
-                                                                            'SCHEDULED',
-                                                                            'COMPLETED',
-                                                                            'CANCELLED',
-                                                                        ].map(
-                                                                            (
-                                                                                s,
-                                                                            ) => (
-                                                                                <SelectItem
-                                                                                    key={
-                                                                                        s
-                                                                                    }
-                                                                                    value={
-                                                                                        s
-                                                                                    }
-                                                                                >
-                                                                                    {
-                                                                                        s
-                                                                                    }
-                                                                                </SelectItem>
-                                                                            ),
-                                                                        )}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                                <Button
-                                                                    size="sm"
-                                                                    disabled={
-                                                                        processing
-                                                                    }
-                                                                >
-                                                                    {processing && (
-                                                                        <Spinner />
-                                                                    )}
-                                                                    Save
-                                                                </Button>
-                                                            </div>
+                                                {x.status === 'SCHEDULED' ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {can.manage && (
+                                                            <Edit
+                                                                collegeId={college.id}
+                                                                entries={entries}
+                                                                row={x}
+                                                            />
                                                         )}
-                                                    </Form>
+                                                        {can.status && (
+                                                            <Form
+                                                                method="patch"
+                                                                action={`/college/${college.id}/class-schedules/${x.id}/status`}
+                                                            >
+                                                                {({ processing }) => (
+                                                                    <div className="flex gap-2">
+                                                                        <Select
+                                                                            name="status"
+                                                                            defaultValue="SCHEDULED"
+                                                                        >
+                                                                            <SelectTrigger className="w-36">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="SCHEDULED">
+                                                                                    SCHEDULED
+                                                                                </SelectItem>
+                                                                                <SelectItem value="COMPLETED">
+                                                                                    COMPLETED
+                                                                                </SelectItem>
+                                                                                <SelectItem value="CANCELLED">
+                                                                                    CANCELLED
+                                                                                </SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            disabled={processing}
+                                                                        >
+                                                                            {processing && <Spinner />}
+                                                                            Save
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                            </Form>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        Locked after {x.status.toLowerCase()}.
+                                                    </span>
                                                 )}
                                             </td>
                                         </tr>

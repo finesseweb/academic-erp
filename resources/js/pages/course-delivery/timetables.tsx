@@ -1,5 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
-import { CalendarDays, Plus, Power } from 'lucide-react';
+import { CalendarDays, Pencil, Plus, Power } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { TimePicker } from '@/components/ui/time-picker';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
@@ -24,6 +24,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 type Allocation = {
     id: number;
     status: string;
@@ -55,6 +56,7 @@ type Entry = {
     effective_from: string;
     effective_until: string | null;
     status: string;
+    notes: string | null;
     faculty_allocation: {
         faculty: { name: string };
         section: { name: string } | null;
@@ -164,11 +166,11 @@ function Add({
                                 />
                                 <div>
                                     <Label>Start Time</Label>
-                                    <Input name="start_time" type="time" />
+                                    <TimePicker id="timetable-start-time" name="start_time" minuteStep={5} />
                                 </div>
                                 <div>
                                     <Label>End Time</Label>
-                                    <Input name="end_time" type="time" />
+                                    <TimePicker id="timetable-end-time" name="end_time" minuteStep={5} />
                                 </div>
                                 <div>
                                     <Label>Effective From</Label>
@@ -197,6 +199,173 @@ function Add({
                             <DialogFooter>
                                 <Button disabled={processing || !a || !from}>
                                     {processing && <Spinner />}Save Entry
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function Edit({
+    collegeId,
+    allocations,
+    rooms,
+    entry,
+}: {
+    collegeId: number;
+    allocations: Allocation[];
+    rooms: Room[];
+    entry: Entry;
+}) {
+    const [allocation, setAllocation] = useState(
+        String(entry.faculty_allocation_id),
+    );
+    const [room, setRoom] = useState(
+        entry.room_id ? String(entry.room_id) : '',
+    );
+    const [day, setDay] = useState(String(entry.day_of_week));
+    const [from, setFrom] = useState(String(entry.effective_from).slice(0, 10));
+    const [until, setUntil] = useState(
+        entry.effective_until ? String(entry.effective_until).slice(0, 10) : '',
+    );
+
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="ghost">
+                    <Pencil />
+                    Edit
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogTitle>Edit Timetable Entry</DialogTitle>
+                <DialogDescription>
+                    Update this inactive recurring slot. Conflict and effective
+                    period validation will run again when you save.
+                </DialogDescription>
+                <Form
+                    method="patch"
+                    action={`/college/${collegeId}/timetables/${entry.id}`}
+                    className="space-y-4"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <SearchableSelect
+                                name="faculty_allocation_id"
+                                label="Faculty Allocation"
+                                value={allocation}
+                                onValueChange={setAllocation}
+                                options={allocations.map((x) => ({
+                                    value: String(x.id),
+                                    label: `${x.course_offering.curriculum_course_mapping.course.code} · ${x.course_offering.curriculum_course_mapping.course.name}`,
+                                    description: `${x.faculty.name} · ${x.course_offering.batch.name}${x.section ? ` · ${x.section.name}` : ' · Entire Batch'} · ${x.status}`,
+                                }))}
+                            />
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <Label>Weekday</Label>
+                                    <Select
+                                        name="day_of_week"
+                                        value={day}
+                                        onValueChange={setDay}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {days
+                                                .slice(1)
+                                                .map((value, index) => (
+                                                    <SelectItem
+                                                        key={value}
+                                                        value={String(
+                                                            index + 1,
+                                                        )}
+                                                    >
+                                                        {value}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <SearchableSelect
+                                    name="room_id"
+                                    label="Room"
+                                    value={room}
+                                    onValueChange={setRoom}
+                                    options={rooms
+                                        .filter(
+                                            (candidate) =>
+                                                candidate.status === 'ACTIVE' ||
+                                                candidate.id === entry.room_id,
+                                        )
+                                        .map((candidate) => ({
+                                            value: String(candidate.id),
+                                            label: `${candidate.code} · ${candidate.name}`,
+                                        }))}
+                                    placeholder="Select room (optional)"
+                                />
+                                <div>
+                                    <Label>Start Time</Label>
+                                    <TimePicker
+                                        id={`timetable-edit-start-time-${entry.id}`}
+                                        name="start_time"
+                                        defaultValue={entry.start_time.slice(0, 5)}
+                                        minuteStep={5}
+                                    />
+                                </div>
+                                <div>
+                                    <Label>End Time</Label>
+                                    <TimePicker
+                                        id={`timetable-edit-end-time-${entry.id}`}
+                                        name="end_time"
+                                        defaultValue={entry.end_time.slice(0, 5)}
+                                        minuteStep={5}
+                                    />
+                                </div>
+                                <div>
+                                    <Label>Effective From</Label>
+                                    <DatePicker
+                                        id={`timetable-edit-from-${entry.id}`}
+                                        name="effective_from"
+                                        value={from}
+                                        onValueChange={setFrom}
+                                    />
+                                </div>
+                                <div>
+                                    <Label>Effective Until (optional)</Label>
+                                    <DatePicker
+                                        id={`timetable-edit-until-${entry.id}`}
+                                        name="effective_until"
+                                        value={until}
+                                        onValueChange={setUntil}
+                                    />
+                                </div>
+                            </div>
+                            <Textarea
+                                name="notes"
+                                defaultValue={entry.notes ?? ''}
+                                placeholder="Notes (optional)"
+                            />
+                            {Object.values(errors).map((error, index) => (
+                                <p
+                                    key={index}
+                                    className="text-xs text-destructive"
+                                >
+                                    {error}
+                                </p>
+                            ))}
+                            <DialogFooter>
+                                <Button
+                                    disabled={
+                                        processing || !allocation || !from
+                                    }
+                                >
+                                    {processing && <Spinner />}
+                                    Save Changes
                                 </Button>
                             </DialogFooter>
                         </>
@@ -329,43 +498,62 @@ export default function Timetables({
                                                     </Badge>
                                                 </td>
                                                 <td className="p-3">
-                                                    {((target === 'ACTIVE' &&
-                                                        can.enable) ||
-                                                        (target ===
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {e.status ===
                                                             'INACTIVE' &&
-                                                            can.disable)) && (
-                                                        <Form
-                                                            method="patch"
-                                                            action={`/college/${college.id}/timetables/${e.id}/status`}
-                                                        >
-                                                            {({
-                                                                processing,
-                                                            }) => (
-                                                                <>
-                                                                    <input
-                                                                        type="hidden"
-                                                                        name="status"
-                                                                        value={
-                                                                            target
-                                                                        }
-                                                                    />
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        disabled={
-                                                                            processing
-                                                                        }
-                                                                    >
-                                                                        <Power />
-                                                                        {target ===
-                                                                        'ACTIVE'
-                                                                            ? 'Activate'
-                                                                            : 'Deactivate'}
-                                                                    </Button>
-                                                                </>
+                                                            can.manage && (
+                                                                <Edit
+                                                                    collegeId={
+                                                                        college.id
+                                                                    }
+                                                                    allocations={
+                                                                        allocations
+                                                                    }
+                                                                    rooms={
+                                                                        rooms
+                                                                    }
+                                                                    entry={e}
+                                                                />
                                                             )}
-                                                        </Form>
-                                                    )}
+                                                        {((target ===
+                                                            'ACTIVE' &&
+                                                            can.enable) ||
+                                                            (target ===
+                                                                'INACTIVE' &&
+                                                                can.disable)) && (
+                                                            <Form
+                                                                method="patch"
+                                                                action={`/college/${college.id}/timetables/${e.id}/status`}
+                                                            >
+                                                                {({
+                                                                    processing,
+                                                                }) => (
+                                                                    <>
+                                                                        <input
+                                                                            type="hidden"
+                                                                            name="status"
+                                                                            value={
+                                                                                target
+                                                                            }
+                                                                        />
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            disabled={
+                                                                                processing
+                                                                            }
+                                                                        >
+                                                                            <Power />
+                                                                            {target ===
+                                                                            'ACTIVE'
+                                                                                ? 'Activate'
+                                                                                : 'Deactivate'}
+                                                                        </Button>
+                                                                    </>
+                                                                )}
+                                                            </Form>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );

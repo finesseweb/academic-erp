@@ -12,11 +12,13 @@ class CourseOffering extends Model
         'batch_id', 'curriculum_course_mapping_id', 'status', 'notes', 'created_by', 'updated_by',
     ];
 
+    /** @return BelongsTo<Batch, $this> */
     public function batch(): BelongsTo
     {
         return $this->belongsTo(Batch::class);
     }
 
+    /** @return BelongsTo<CurriculumCourseMapping, $this> */
     public function curriculumCourseMapping(): BelongsTo
     {
         return $this->belongsTo(CurriculumCourseMapping::class);
@@ -25,5 +27,11 @@ class CourseOffering extends Model
     public function facultyAllocations(): HasMany
     {
         return $this->hasMany(FacultyAllocation::class);
+    }
+
+    /** @return HasMany<InternalAssessmentComponent, $this> */
+    public function internalAssessmentComponents(): HasMany
+    {
+        return $this->hasMany(InternalAssessmentComponent::class);
     }
 }
