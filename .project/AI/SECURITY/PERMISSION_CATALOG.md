@@ -103,6 +103,26 @@ Initial examples; expand as modules are specified.
 - `attendance.edit`
 - `attendance.report`
 - `attendance.export`
+- `college_attendance_exception.view`
+- `college_attendance_exception.request`
+- `college_attendance_exception.decide`
+- `college_attendance_eligibility.view`
+- `college_attendance_eligibility.finalize`
+
+The five College Attendance exception/eligibility permissions are persisted by the ADR 214 migration, College-delegable, and granted forward to protected `SUPER_ADMIN` / `COLLEGE_ADMIN` roles. Decision and finalization are sensitive audited actions.
+
+## Internal Assessment
+- `college_internal_assessment.view`
+- `college_internal_assessment.setup`
+- `college_internal_assessment.assignment`
+- `college_internal_assessment.quiz`
+- `college_internal_assessment.mid_semester`
+- `college_internal_assessment.practical`
+- `college_internal_assessment.marks_entry`
+
+ADR 215 persists these College-delegable permissions and grants them forward to protected `SUPER_ADMIN` / `COLLEGE_ADMIN`. Setup is sensitive; all mutation capabilities are College-scoped and audited.
+
+ADR 216 persists Mid Semester, Practical and sensitive Marks Entry capabilities and grants them to protected administrators. All mutations retain College/resource scope enforcement.
 
 ## Fees / Accounts
 - `fee.view`
@@ -368,3 +388,45 @@ Fee Structure item authoring is governed by the corresponding structure `update`
 - `college_fee_adjustment.post` — sensitive College-delegable permission to post manual CREDIT/DEBIT adjustments.
 - `college_fee_adjustment.reverse` — sensitive College-delegable permission to reverse a manual adjustment or an entire POSTED receipt.
 - `college_fee_refund.post` — sensitive College-delegable permission to post refunds against refundable paid allocations only.
+
+## Fee Clearance — ADR 197 (implemented 2026-09-16)
+- `college_fee_clearance.view` — College-delegable, non-sensitive read permission for the authoritative Fee Clearance projection at exact College scope. It grants no collection, adjustment, reversal, refund, demand mutation or manual clearance capability.
+
+Protected default grants are synchronized for `SUPER_ADMIN` and `COLLEGE_ADMIN` by migration `2026_09_16_080000_register_fee_clearance_permission.php`. Runtime access must remain server-enforced; sidebar/page visibility is UX only.
+
+### Student Enrollment — ENR-1
+- `college_student_enrollment.view` — College-delegable, non-sensitive read permission for the Student Enrollment eligibility queue. It grants no Student creation, Enrollment mutation, roll-number assignment, import, Fee Clearance override, or finance mutation capability.
+
+### Student Enrollment — ENR-2
+- `college_student_enrollment.enroll` — sensitive College-delegable permission. Authorizes the canonical Admission → Student Enrollment mutation; server still enforces College scope, CONFIRMED Admission, Programme Offering validity, duplicate protection and live Fee Clearance.
+
+### Student Management — ENR-3.6 alignment
+- `college_student_enrollment.view` — module `Student Management`; view enrollment queue.
+- `college_student_enrollment.enroll` — module `Student Management`; execute enrollment transaction.
+- `college_student_identity.view` — module `Student Management`; view Student Identity page/rules/assignments.
+- `college_student_identity.manage` — module `Student Management`; configure rules and assign identities; sensitive mutation permission.
+
+## Course Delivery — Course Offerings (2026-09-20)
+- `college_course_offering.view` — view College Course Offerings; College-delegable.
+- `college_course_offering.create` — create INACTIVE Course Offerings; College-delegable.
+- `college_course_offering.enable` — activate Course Offerings; College-delegable; sensitive.
+- `college_course_offering.disable` — deactivate Course Offerings; College-delegable; sensitive.
+
+All checks are server-authoritative and scoped to the route College through Batch -> Program Offering ownership. Default protected grants: SUPER_ADMIN and COLLEGE_ADMIN.
+## Course Delivery — Faculty Allocation (2026-09-21)
+
+- `college_faculty_allocation.view`, `.create`, `.update` — College-delegable.
+- `college_faculty_allocation.enable`, `.disable` — College-delegable and sensitive.
+- `college_faculty_allocation.eligible` — College-delegable Faculty teaching eligibility; does not grant management access.
+## Course Delivery — Scheduling (2026-09-21)
+
+- `college_room.view`, `.manage`
+- `college_timetable.view`, `.manage`, `.enable`, `.disable`
+- `college_class_schedule.view`, `.manage`, `.status`
+
+All are College-delegable. Timetable enable/disable and Class Schedule status are sensitive.
+# Attendance Operations (ADR 212)
+- `college_attendance.view` — view College-scoped attendance registers and policy-derived summaries.
+- `college_attendance.manage` — create/update draft attendance for eligible Class Schedules.
+- `college_attendance.finalize` — finalize and lock a complete register; sensitive.
+- `college_attendance.correct` — reopen finalized attendance with an audited reason; sensitive.

@@ -28,3 +28,6 @@ Do not add hard-coded Mid Semester, Internal, External, Practical, Viva, Assignm
 If `require_separate_component_pass = true`, the future result engine must evaluate each applicable configured component requirement. Phase 3 stores the policy instruction only; it does not invent component definitions before the Assessment Scheme exists.
 
 Grace, supplementary and improvement toggles permit later controlled workflows; they never automatically alter marks or create attempts.
+## Implemented Internal Assessment consumer — 2026-09-24
+
+ADR 215 Assessment Setup now resolves this ACTIVE + APPROVED policy automatically for each College Course Offering. Configurable component definitions remain in Internal Assessment; this policy supplies governing pass/absence/grace behavior and is snapshotted on each component. Assignment and Quiz activities inherit the component and never duplicate policy rules.

@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Laravel\Fortify\Contracts\LogoutResponse;
+use Laravel\Fortify\Contracts\LoginResponse;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
@@ -31,6 +32,19 @@ class FortifyServiceProvider extends ServiceProvider
          * public/home route (which currently renders the Laravel welcome
          * page).
          */
+        $this->app->singleton(
+            LoginResponse::class,
+            fn () => new class implements LoginResponse
+            {
+                public function toResponse($request)
+                {
+                    $user=$request->user();
+                    if($user?->account_type==='STUDENT') return redirect()->route($user->must_change_password?'student.password.change':'student.portal');
+                    return redirect()->intended(config('fortify.home'));
+                }
+            }
+        );
+
         $this->app->singleton(
             LogoutResponse::class,
             fn () => new class implements LogoutResponse

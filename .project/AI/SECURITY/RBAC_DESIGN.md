@@ -97,6 +97,7 @@ Examples:
 - Department Admin/HOD: one college + one or more departments.
 - Faculty: one college + assigned courses/classes/offerings.
 - Student: own student identity/records only.
+- Student-facing module access is role/policy driven, not individually ticked per Student account. As Student Portal modules are implemented, the standard Student authorization profile exposes only the capabilities applicable to the authenticated Student's own canonical Student + Enrollment context. College Users -> Students remains login/security administration, not academic permission assignment.
 
 Avoid encoding every possible scope dimension as nullable columns without first verifying actual ERP relationships. Prefer a model that follows the real academic ownership graph.
 
@@ -137,3 +138,9 @@ Finance permissions also obey University-vs-College governance in `../DOMAIN/FEE
 When a new module becomes part of an existing protected administrator's responsibility, the module's mandatory permissions must be synchronized into that protected role by a forward migration. Do not rely on the Role Permission UI to mutate protected system roles.
 
 For College Academic Setup, `COLLEGE_ADMIN` must automatically receive the mandatory permissions for each implemented College-level module while those permissions may separately remain delegable to College-owned custom roles where appropriate.
+
+## Student Management permission tree (ENR-3.6)
+Role-permission presentation must group both resources under the business module `Student Management`:
+- Student Enrollment: View / Enroll
+- Student Identity: View / Manage
+View and mutation permissions are intentionally separate. A route must enforce its own resource permission; Student Identity must not borrow Student Enrollment View for page access.

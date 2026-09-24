@@ -108,3 +108,20 @@ At the end of every implementation task report:
 - Permission/scope enforcement where applicable
 
 Never claim completion until implementation, database, security, tests and documentation are synchronized.
+
+## Database-impact review — mandatory future-proof rule (2026-09-16)
+Every implementation milestone MUST perform and report a database-impact review even when no new table is created.
+
+Database impact includes both schema changes **and data/RBAC migrations**, including permission registration, protected-role grants, seed/reference rows, status/default changes, backfills and other migration-controlled persisted data.
+
+Required routing:
+- new/changed schema -> Schema Catalog, affected TABLE_SPEC(s), Relationship Map/index documentation as applicable;
+- permission row registered/changed -> `DATABASE/TABLE_SPECS/permissions.md` plus `SECURITY/PERMISSION_CATALOG.md`;
+- default role-permission rows registered/changed -> `SECURITY/ROLE_MATRIX.md` and permission documentation; update database relationship docs only if the relationship itself changes;
+- derived/projection feature with no table -> document explicitly in `DATABASE/SCHEMA_CATALOG.md` that no domain table exists, list the authoritative source tables, and state whether any migration is data-only;
+- no database impact at all -> implementation report must explicitly state `No database change`.
+
+A migration file must never be treated as documentation-neutral merely because it does not call `Schema::create` or `Schema::table`. Before packaging a milestone delta, compare every new/modified migration against the Database and Security documentation routing above.
+
+### Student Enrollment branch preservation
+ENR-0..ENR-4 are controlled sub-milestones inside the existing architectural roadmap, not a replacement roadmap. Each ENR must update its implementation state, QA gate, database/security/page documentation impact and explicit next milestone. After ENR-4 closure, resume the pre-existing Project OS architectural flow; do not invent an unrelated successor milestone.

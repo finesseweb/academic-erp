@@ -12,7 +12,7 @@ Default status for all entries:
 - Implementation Approval: REQUIRED
 - Review Status: NOT_APPLICABLE
 
-## Repository Implementation Snapshot (2026-09-12)
+## Repository Implementation Snapshot (2026-09-20)
 
 Verified from `routes/web.php`, controllers, and `resources/js/pages`.
 
@@ -31,6 +31,7 @@ Verified from `routes/web.php`, controllers, and `resources/js/pages`.
 - Academic Policies: header, Credit & Completion, Attendance, Assessment/Examination, Grading, Progression, and approval lifecycle.
 - Academic Calendars: University calendar and College calendar/overrides.
 - College academic setup: Program Offerings, Intake/Seat Capacity, Reservation Seat Distribution, Batches, and Sections.
+- Course Delivery: Course Offerings owner-QA passed; Faculty Allocation implemented and owner QA required.
 - Admissions: cycles, selection rules, form setup, internal applications, score capture, interviews, merit generation, document verification, seat allocation, confirmation, and public/applicant application flows.
 - Student portal: dashboard route and page shell.
 
@@ -183,6 +184,7 @@ On `next` / `next N` / `nextN`:
 - University Admin / Academic Policy / Credit & Completion — Phase 1 IMPLEMENTED (package).
 - Academic Policy Approval Execution — IMPLEMENTED; common Inbox integration complete, QA gate pending.
 - University Admin / Academic Policy / Attendance — Phase 2 IMPLEMENTED (package): configurable attendance threshold, calculation level, condonation, exam-eligibility flag, special exemption permission, rounding, validation integration.
+- College / Attendance Operations — ADR 212 IMPLEMENTED, OWNER QA REQUIRED: Class Schedule register, canonical Enrollment roster, policy resolution, draft/finalize lock, audited correction and course percentage/shortage projection.
 
 | Academic Policy — Assessment / Examination | `/admin/academic-policies/{academicPolicy}/assessment-examination` | `resources/js/pages/admin/academic-policies/assessment-examination.tsx` | IMPLEMENTED — Phase 3 |
 
@@ -229,3 +231,27 @@ On `next` / `next N` / `nextN`:
 - Controller: `CollegeFeeAdjustmentController`
 - Service: `FeeAdjustmentRefundService`
 - Status: IMPLEMENTED / OWNER QA REQUIRED (2026-09-12)
+
+## Fee Clearance — 2026-09-16
+- PAGE_SPEC: `PAGE_SPECS/COLLEGE_FINANCE/FEE_CLEARANCE_PAGE.md`
+- Route: `/college/{college}/fee-clearance`
+- Page: `resources/js/pages/college-fee-clearance/index.tsx`
+- Controller: `CollegeFeeClearanceController`
+- Service: `FeeClearanceService`
+- Permission: `college_fee_clearance.view`
+- Governing decision: ADR 197
+- Status: IMPLEMENTED / OWNER_QA_REQUIRED
+- Accounting model: read-only projection over required Demand Item snapshots + authoritative Student Fee Ledger; no duplicate clearance balance/table.
+- Downstream gate: Student Enrollment remains blocked until owner QA PASS.
+
+- `PAGE_SPECS/COURSE_DELIVERY/COURSE_OFFERINGS_PAGE.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-20).
+- `PAGE_SPECS/COURSE_DELIVERY/FACULTY_ALLOCATIONS_PAGE.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-21).
+- `PAGE_SPECS/ATTENDANCE/ATTENDANCE_CONDONATION.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/ATTENDANCE/SPECIAL_ATTENDANCE_EXEMPTION.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/ATTENDANCE/EXAMINATION_ATTENDANCE_ELIGIBILITY.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/ASSESSMENT_SETUP.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/ASSIGNMENTS.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/QUIZZES.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/MID_SEMESTER.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/PRACTICAL.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).
+- `PAGE_SPECS/INTERNAL_ASSESSMENT/MARKS_ENTRY.md` — IMPLEMENTED, PENDING_REVIEW / OWNER QA REQUIRED (2026-09-24).

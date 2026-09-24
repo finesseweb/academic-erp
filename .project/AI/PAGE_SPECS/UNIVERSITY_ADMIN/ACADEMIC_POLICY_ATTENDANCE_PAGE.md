@@ -53,7 +53,7 @@ The Attendance Policy is a configuration source. Student-level processing is **n
 Future Attendance must resolve the applicable policy by scope and use these settings as follows:
 
 - `minimum_attendance_percentage`: normal threshold.
-- `calculation_level`: determines whether eligibility is evaluated course-wise, term-wise, or overall.
+- `calculation_level`: determines whether attendance is aggregated course-wise, term-wise, or overall. Attendance Operations now consumes this dynamically: `COURSE` = exact Course Offering; `TERM` = exact Curriculum Term within the same Programme Offering; `OVERALL` = all finalized attendance within the same Programme Offering for that student.
 - `condonation_allowed`: permits or blocks a future condonation workflow.
 - `condonation_minimum_percentage` / `maximum_condonable_shortage_percentage`: limits eligibility to request condonation; they do not automatically grant it.
 - `medical_special_exemption_allowed`: permits or blocks a future controlled special-exemption workflow; it never grants an exemption automatically.

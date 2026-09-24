@@ -26,8 +26,24 @@ class CurriculumCourseMapping extends Model
         ];
     }
 
+    /** @return BelongsTo<CurriculumSlot, $this> */
     public function slot(): BelongsTo
     {
         return $this->belongsTo(CurriculumSlot::class, 'curriculum_slot_id');
+    }
+
+    public function course(): BelongsTo
+    {
+        return $this->belongsTo(Course::class);
+    }
+
+    public function discipline(): BelongsTo
+    {
+        return $this->belongsTo(AcademicDiscipline::class, 'discipline_id');
+    }
+
+    public function specialization(): BelongsTo
+    {
+        return $this->belongsTo(AcademicDiscipline::class, 'specialization_id');
     }
 }

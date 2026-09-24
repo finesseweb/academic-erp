@@ -1059,3 +1059,243 @@ Final confirmed gates:
 - Final Fee Demand / Fee Collection Due Groups / Student Fee Ledger reconciliation spot-check — **PASS**.
 
 **Phase consequence:** the ADR 190 correction/refund/reversal QA gate is closed. Fee Clearance is no longer blocked by ADR 190 and is the next Fee Phase implementation. This closure does not mark Fee Clearance itself implemented.
+
+## 2026-09-16 — Fee Clearance (ADR 197)
+**Status: IMPLEMENTED / OWNER QA REQUIRED**
+
+Fee Management now includes a College-scoped Fee Clearance register/detail page. Clearance is an authoritative read-only projection for CONFIRMED Admissions: only active/non-cancelled Fee Demand Items whose snapshot is `is_enrollment_clearance_required = true` participate. Current item liability is derived from the Student Fee Ledger financial history rather than a duplicate stored clearance balance. States are PENDING, CLEARED and NOT_REQUIRED; CLEARED and NOT_REQUIRED expose an open Enrollment gate. Refunds, reversals and debit adjustments automatically re-open the gate when they restore required-item liability. Permission: `college_fee_clearance.view`. No Student Enrollment behavior is implemented yet.
+
+**Next gate:** owner QA must pass ADR 197 before Student Enrollment / Student Lifecycle implementation begins.
+
+## 2026-09-16 — Fee Clearance premium UI / scalable filtering refinement
+Fee Clearance now follows the frozen UI standards: shared themed Select controls, Lucide semantic icons, visible Inertia loading state with duplicate-action protection, and server-side Academic Session → Programme Offering dependent filtering. Programme Offering is scoped by College + selected Session and preserved through search/pagination/detail requests. No database migration or accounting-rule change is introduced by this refinement. Owner QA remains required.
+
+## 2026-09-16 — ADR 198 Shared Application Loading Infrastructure — IMPLEMENTED / OWNER QA REQUIRED
+- Added application-level `AppLoadingProvider` around the Inertia app, parallel to the existing shared Toast and App Dialog infrastructure.
+- Standard Inertia navigation/filter/pagination/reload requests now receive automatic theme-native loading feedback project-wide.
+- Added `useAppLoading()` for pages that need contextual table/card/filter blocking while sharing the same authoritative Inertia request state.
+- Fee Clearance migrated from page-local router start/finish callbacks to the shared loading infrastructure; its existing table overlay and duplicate-action protection now consume the global state.
+- Form/mutation buttons continue to use Inertia `processing`; non-Inertia async operations remain responsible for shared contextual Spinner/Skeleton/progress states.
+- No database change.
+
+
+### 2026-09-16 — Shared loading UI refinement (ADR 198)
+- Global Inertia loading is now visibly centered in the work area with the canonical Spinner and a restrained blocking backdrop.
+- Existing Inertia pages receive the generic loading state automatically; materially touched pages can provide contextual resource labels without registering local router lifecycle handlers.
+- Student Fee Ledger and Fee Clearance use contextual shared loading labels.
+- Database impact: NONE.
+
+### 2026-09-16 — Fee Management navigation refinement
+College Fee Management sidebar presentation is workflow ordered: Fee Setup → Scholarship / Benefits → Payment Gateways → Fee Demands → Student Benefits → Payment Collection → Student Fee Ledger → Adjustments / Refunds → Late Fine / Penalty → Fee Clearance. Each entry uses a semantic theme-native Lucide icon. Fee Clearance remains the final derived financial gate before downstream Enrollment. This is navigation/UI only; no database or authorization behavior changed.
+
+## 2026-09-16 — Student Enrollment ENR-0 / ADR 199
+Status: **IMPLEMENTED / OWNER QA REQUIRED**.
+
+- Fee Clearance is Owner-QA accepted and the Student Enrollment branch is now eligible.
+- Added the stable `students` master, `student_enrollments` academic-membership table and `student_profile_values` dynamic-profile snapshot table.
+- Completed `applicant_profiles.student_id -> students.id` FK promised by ADR 034.
+- Added Admission Form field mapping metadata (`APPLICATION_ONLY|STUDENT_PROFILE` + optional profile key); no existing dynamic field is auto-promoted.
+- Student identity remains separate from session/programme placement. ENR-3 owns UID/roll-number generation; ENR-4 owns CSV import UI/workflow.
+- No Student Enrollment page/action is implemented in ENR-0.
+- Next eligible milestone after Owner QA PASS: **ENR-1 Enrollment Eligibility Queue**.
+
+## 2026-09-16 — Fee Clearance owner QA closure
+Owner confirmed Fee Clearance end-to-end behavior: required liability PENDING -> CLEARED after settlement; receipt reversal and eligible refund re-open required liability and return clearance to PENDING/BLOCKED; non-clearance-required unpaid heads do not block enrollment. Programme Offering filtering, shared loading behavior and Fee Management navigation refinements were also accepted. ADR 197 is **OWNER QA PASS / CLOSED**.
+
+## 2026-09-16 — ENR-0 Owner QA closure / ENR-1 Enrollment Eligibility Queue
+**ENR-0 / ADR 199: OWNER QA PASS / CLOSED.** Owner verified migration execution/status, all three foundation tables, nullable `applicant_profiles.student_id` FK, Application Form Builder regression, historical Application regression, and existing Admission regression. ENR-0 is closed.
+
+**ENR-1: IMPLEMENTED / OWNER QA REQUIRED.** Added College-scoped Student Enrollment eligibility queue at `/college/{college}/student-enrollments`. It lists only CONFIRMED Admissions in the selected Academic Session / Programme Offering, consumes `FeeClearanceService` as the sole financial gate, and derives `READY`, `BLOCKED`, or `ENROLLED` without creating/updating Student or Enrollment records. Permission: `college_student_enrollment.view`. ENR-2 remains blocked until ENR-1 Owner QA PASS.
+
+## Student Enrollment checkpoint — 2026-09-16 / ENR-2
+- ENR-0 / ADR 199: IMPLEMENTED / OWNER QA PASS / CLOSED.
+- ENR-1 / ADR 200: IMPLEMENTED / OWNER QA PASS / CLOSED.
+- ENR-2 / ADR 201: IMPLEMENTED / OWNER QA REQUIRED.
+- READY rows can now be enrolled through the canonical transaction; server rechecks Fee Clearance and College/Admission scope before mutation.
+- ENR-3 Student Identity is BLOCKED until ENR-2 Owner QA PASS.
+
+### ENR-2 QA refinement — 2026-09-16
+Enrollment confirmation now displays Discipline using the existing Application Academic Preference relationship. This is a presentation/read-model refinement only; no database change.
+
+## ENR-2 corrective completion — ADR 202 (2026-09-16)
+- Dynamic Application Form fields now expose **Data Usage** in University and College-owned field Add/Edit dialogs.
+- Existing/historical fields remain `APPLICATION_ONLY` unless explicitly changed. For newly created dynamic fields, the Form Builder defaults Data Usage to `STUDENT_PROFILE`; administrators may choose `APPLICATION_ONLY` for admission-specific answers.
+- Policy changes are prospective for Student creation: existing `student_profile_values` are not backfilled or rewritten.
+- No database structural change/migration in ADR 202; it exposes the ENR-0 columns already present on `college_admission_form_fields`.
+- ENR2-11 QA is pending before ENR-2 closure.
+
+### ENR-3 Student Identity — 2026-09-17
+IMPLEMENTED / OWNER QA REQUIRED (ADR 203). Student UID and University Roll are Student-owned; Class Roll is Enrollment-owned; Exam Roll remains Examination-owned. College-specific formats and lock-protected sequences are implemented. Existing ENR-2 enrollments can be assigned from Student Identity; future enrollment assignment uses the same transactional service. ENR-4 remains blocked until ENR-3 Owner QA PASS.
+
+### ENR-3 QA cleanup support — 2026-09-17
+ENR-3 is still IMPLEMENTED / OWNER QA REQUIRED. The existing Full Academic Test Reset is ENR-3-aware and removes identity settings/sequences only after affected Student lifecycle test rows are removed. Targeted Student identity cleanup preserves sequence advancement and never reuses consumed numbers. See `.project/AI/QA/ENR3_TEST_DATA_CLEANUP.md`.
+
+- ENR-3.3 implemented: Class Roll sequence scope is configurable per College as Programme Offering (default) or Discipline; existing Class Rolls remain immutable.
+
+### ENR-3.4 correction (2026-09-17)
+- Student Enrollment no longer auto-assigns institutional identity.
+- Student Identity Assign is the authoritative/manual issuance action.
+- Test Data Cleanup includes identity-only cleanup preserving Student + Enrollment and never rewinding sequences.
+- QA pending owner verification.
+
+## ENR-3 closure / ENR-4 implementation — 2026-09-17
+- **ENR-3 / ADR 203: OWNER QA PASS / CLOSED.** Owner verified manual identity assignment, configurable Class Roll scope, Discipline UI, safe test sequence-reset semantics, Student Management RBAC View/Manage alignment and Identity audit events.
+- **ENR-4 / ADR 204: IMPLEMENTED / OWNER QA REQUIRED.** Student Management now includes College-scoped CSV Student Import / Migration: template → upload → Session/Programme Offering → mapping → validation/preview → confirmed transactional import.
+- IMPORT provenance writes the same `students` and `student_enrollments` architecture; no fake Admission/Application/Fee records are created. Blank identity remains Pending.
+- ENR-4 adds nullable `student_enrollments.discipline_id` so imported students can participate in Discipline filtering and Discipline-scoped Class Roll identity rules. No new domain table.
+
+### ENR-4.2 Student Import dynamic profile mapping — 2026-09-17
+IMPLEMENTED / OWNER QA PENDING. Student Import now derives offering-applicable Admission Form fields marked STUDENT_PROFILE, supports searchable one-to-one CSV column mapping, and persists imported values to student_profile_values. No schema change.
+
+## ENR-4.3 — current QA state (2026-09-17)
+Drag-and-plug mapping and Programme Offering-scoped saved mapping/template infrastructure are implemented. Migration `2026_09_17_140000_create_student_import_mappings.php` is pending Owner environment execution/QA. ENR-4 remains OWNER QA IN PROGRESS; do not mark ADR 204 closed until save/load/template and final import regression pass.
+
+### 2026-09-17 — ENR-4.4 Curriculum-linked import (ADR 204)
+Student Import academic context now follows the same Programme Offering → Curriculum resolution used by Admission Forms. Discipline, Specialization and curriculum Choice categories are validated through `ApplicantAcademicPreferenceService`; mandatory courses resolve automatically. Enrollment now carries Curriculum/Discipline/Specialization and resolved enrollment-course links for both Admission and Import routes. Mapping UI uses accordions with Core Student open by default. OWNER QA PENDING.
+
+### ENR-4.4.1 — Migration Recovery + DB Documentation Hardening — OWNER QA PENDING
+- Corrects MySQL error 1059 from an overlong generated FK name in ENR-4.4.
+- Uses explicit short FK names and restart-safe existence checks for known partial DDL.
+- DB impact documentation now records schema ownership, relationships, constraints/indexes and recovery behavior.
+- ADR 205 makes DB documentation completeness a permanent milestone closure gate.
+
+## ENR-4.5 — Student Import validation contract (2026-09-17)
+Status: IMPLEMENTED / OWNER QA PENDING.
+Student Import now enforces required mapping and row-level required values for applicable Admission Form `STUDENT_PROFILE` fields, while `APPLICATION_ONLY` remains excluded. Curriculum academic targets remain authoritative through `ApplicantAcademicPreferenceService`; invalid/missing configured academic values block import and never create masters. If no applicable ACTIVE Admission Form Template exists, the UI explicitly states that import will use Core Student + Curriculum Academic Context only and permits the migration. No DB schema change; DB impact documentation updated.
+
+### ENR-4.6 — Academic Choice Parity — 2026-09-17
+- Student Import now mirrors Admission academic package vs genuine course-choice semantics.
+- Course-choice targets are dynamic from curriculum slot min/max; 2 choices => two sockets, 3 => three sockets, etc.
+- Genuine choices accept actual Curriculum Course Codes; Offered From/Common/category/term context resolves internally from Curriculum Course Mapping.
+- Package mode remains one configured academic-option selection with linked papers resolved internally.
+- No schema migration. Owner QA remains in progress; ENR-4 is not closed.
+
+### ENR-4.8 — Offered-From Admission/Import parity — 2026-09-17
+- Owner corrected the user-facing choice contract: non-package academic choices now show/accept Offered From (History, Hindi, Common / Interdisciplinary, etc.), not internal course codes.
+- Admission Form stores the resolved Curriculum Course Mapping ID behind the Offered From selection; final review also presents Offered From rather than exposing course codes.
+- Student Import dynamically creates Offered From choice sockets from Curriculum slot min/max and resolves CSV Offered From code/name through the same `ApplicantAcademicPreferenceService` before writing Enrollment course choices.
+- Ambiguous same-slot Offered From configuration (more than one active mapping for one source) is blocked rather than guessed.
+- ENR-4 remains OWNER QA IN PROGRESS. Admission and Import parity must be verified against the same Curriculum before closure.
+
+### ENR-4.9 — Candidate/Application Offered-From parity
+- College `Applications / Candidate Eligibility` create/edit mirrors the public Applicant Admission Form: users choose Offered From while existing curriculum-course-mapping IDs remain the persisted academic choice.
+- Academic Package behavior is preserved.
+- No schema change / no migration. ENR-4 remains OWNER QA IN PROGRESS.
+
+### ENR-5 — Canonical Enrollment Academic Normalization — 2026-09-18
+- ADMISSION and IMPORT now share `StudentEnrollmentAcademicContextService` for canonical Enrollment academic persistence.
+- Legacy pre-ENR-4.4 ADMISSION enrollments can be dry-run/repaired from their own authoritative Application Academic Preference + saved Application Course Choices with `students:normalize-enrollment-academics`.
+- Conflicting/missing provenance is never guessed; it is reported `NEEDS_REVIEW`.
+- Downstream Student Profile/Attendance/Examination/Result/Marksheet/Promotion must consume Student + Enrollment canonical context and must not branch by provenance.
+- DB impact: data normalization only; no schema migration.
+- Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+## ADR 207 — Test Data Cleanup reset levels — 2026-09-18
+- Added Admission & Merit Workflow Reset for repeatable admission QA without rebuilding submitted applicant forms.
+- Module reset preserves Applications/answers, Applicant identities, Scores, Programme Offering, Intake/Seat Capacity, Curriculum and academic masters; generated downstream Merit/Seat/Admission/Admission-Student data is reset child-first.
+- Full Academic Test Reset explicitly preserves Users/login accounts including the designated `test@...` bootstrap login.
+- Full reset now includes canonical Student children and IMPORT-source Students; Enrollment Course Choices are deleted before Enrollments.
+- No schema change / no migration. Owner QA pending; see `.project/AI/QA/ADR207_TEST_DATA_CLEANUP_QA.md`.
+
+
+### 2026-09-18 — ADR 207 follow-up: Academic Calendar Period cleanup
+Test Data Cleanup now exposes Academic Calendar Period assignments under Academic Setup as targeted QA cleanup records. Deleting one removes only the session/calendar period assignment, preserves the parent calendar and academic masters, and preserves calendar events. No Fee Management behavior was changed. No schema migration. Owner QA pending.
+
+## 2026-09-18 — ENR-5 CLOSED / ENR-6 Student Profile started
+ENR-5 / ADR 206 is OWNER QA PASSED / CLOSED. Owner QA confirmed legacy Admission normalization, idempotent rerun, and a fresh Admission-route Student enrollment persisted canonical academic context without requiring normalization.
+
+ENR-6 / ADR 208 is OWNER QA PASSED / CLOSED. Student Management now includes Student Profile with server-paginated Session → Programme Offering filtering, one-Student detail/edit, governed STUDENT_PROFILE values, read-only Student Identity fields, and read-only canonical Enrollment/course context. Admission/Import remain provenance only. Profile mutation is protected by `college_student_profile.edit` and audited as `student.profile.updated`. FILE/IMAGE profile values remain read-only in ENR-6.1. No Student-domain schema change; permission/reference migration only.
+
+### 2026-09-18 — ENR-6.2 profile presentation/lifecycle correction
+Student Profile now uses the shared DatePicker for DOB, promotes the governed Candidate Profile Photo to the profile header with permission-gated private viewing and auditable replacement, and presents current Enrollment context at the top. Academic choices are category-labelled `APPLICANT_CHOICE` summaries resolved through canonical Curriculum mappings; AUTO_MANDATORY courses and internal IDs are not exposed as profile choices. OWNER QA remains pending.
+
+### 2026-09-19 — ENR-6.3 Import-source profile photo parity
+Student Profile photo capability now follows the applicable governed Admission Form configuration for the Student's current Programme Offering rather than the existence of an Admission-copied photo value. IMPORT Students therefore receive the same empty photo slot and Add Photo action when `CANDIDATE_PROFILE_PHOTO` is configured as `STUDENT_PROFILE`. First upload creates the canonical profile-value row; subsequent replacements reuse it. CSV import remains unchanged and does not map FILE/IMAGE fields. Owner QA pending.
+
+### 2026-09-19 — ENR-4.6C College Student account credential correction / ADR 204C
+- College Users -> Students retains current-session Session -> Programme Offering -> Discipline filtering, canonical Admission/Import visibility, University-consistent Active/Inactive status, View Profile and login Enable/Disable.
+- Student `Send Password Reset Link` is superseded by `Generate New Temporary Password`; the existing password is invalidated, `must_change_password=true`, and the replacement is delivered through the actor-scoped one-time credential CSV. College Staff reset-link behavior is unchanged.
+- Unified Student account regeneration audits `student.account.temporary_password_regenerated`; no plaintext credential is audited and no database schema change is required.
+- Student Portal future information architecture is now documented in MASTER_DEVELOPMENT_HIERARCHY without changing or renumbering the existing phase roadmap. It is a downstream consumer specification, not a new immediate implementation phase.
+- ADR 204C is OWNER QA PASSED / CLOSED.
+
+
+## 2026-09-20 — Phase 13 Course Delivery started / Course Offerings implemented
+Owner confirmed ENR-6 / ADR 208 and ADR 204C QA PASS / CLOSED. The next hierarchy milestone is Phase 13 Course Delivery -> Course Offerings. ADR 209 implements batch-level Course Offering as `Batch + Curriculum Course Mapping`, preserving the existing Program Offering, Curriculum, Batch and Section architecture without duplication. College-scoped create and activate/deactivate flows, RBAC, audit events, and database integrity guards are implemented. New Course Offerings start INACTIVE. Section-specific delivery is intentionally deferred to later Faculty Allocation/Class Scheduling. Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+### 2026-09-20 — Phase 13 Course Offering creation refinement
+Course Offering creation now derives applicable delivery records in bulk from existing University Curriculum structure using Batch + University-defined Discipline + Term. Mandatory common/discipline mappings are included automatically; choice mappings are included only where enrolled students selected them. Curriculum credits/countability are displayed read-only. No schema/hierarchy change. Owner QA remains required.
+
+
+### 2026-09-20 — Phase 13 Course Offering preview layout correction
+The Add Course Offerings dialog now uses a wider responsive layout and explicit Curriculum Preview column sizing so Course, Scope, Credits, Counting and Rule remain readable on desktop. Small viewports remain bounded to the viewport and the preview table can scroll horizontally. No business logic, schema, hierarchy, or Course Offering derivation rules changed. Owner QA remains required.
+
+- 2026-09-20: Course Offerings curriculum-preview modal responsive overflow corrected: shared Dialog breakpoint width is overridden, forced table minimum width removed, and preview is horizontal-scroll-free with wrapped cells and vertical-only list scrolling.
+
+### 2026-09-20 — Phase 13 Course Offering pre-enrollment correction
+Course Offering creation no longer depends on Student Enrollment or Student Course Choice records. For Batch + University-defined Discipline + Term, all active applicable MANDATORY mappings are auto-included/locked and all active applicable CHOICE mappings are visible/selectable for College delivery planning. Credits/countability remain inherited read-only from the University Curriculum. No schema/hierarchy change. Owner QA remains required.
+
+### 2026-09-20 — Phase 13 Course Offering delivery navigation refinement
+Course Offering delivery list now follows Session -> Program Offering -> Batch -> Discipline filters, defaulting Session to the current Academic Session and Program Offering/Batch to the first applicable context. Results are grouped from existing University Curriculum metadata as Discipline -> Semester/Term -> optional Specialization -> Course Offering. Semester rows are expandable and show total COUNTABLE Curriculum credits; specialization is derived from the existing Curriculum Course Mapping and Academic Discipline hierarchy and is not duplicated on Course Offering. No schema/hierarchy change. Owner QA remains required.
+
+
+### 2026-09-20 — Phase 13 Course Offering Curriculum-credit linkage correction
+Course Delivery semester/discipline credit summaries no longer sum Course Offering rows. They now consume the existing University Curriculum Slot rules: MANDATORY contributes Slot credits once; CHOICE contributes Slot credits × min_selection for Required Credits and × max_selection for Maximum Credits; NON_COUNTABLE Slots are excluded from countable totals. Multiple offered alternatives in one Slot therefore do not inflate curriculum credits. Course Offering remains a delivery instance and does not own or override academic credit rules. No schema/hierarchy change. Owner QA remains required.
+
+## 2026-09-21 — Course Offerings closure / Faculty Allocation (ADR 210)
+Course Offerings / ADR 209 is OWNER QA PASSED / CLOSED. Faculty Allocation is IMPLEMENTED / OWNER QA REQUIRED. It consumes Course Offerings and active College-scoped Faculty users, supports Batch-wide or same-Batch Section scope, teaching role and optional weekly load, and includes inactive-first lifecycle, RBAC, audit and dependency-safe cleanup. Timetable remains blocked until Faculty Allocation owner QA passes.
+
+### Faculty Allocation selection refinement
+Faculty Allocation defaults to the Current Academic Session and follows searchable Session → Program Offering → Discipline → Semester/Term → Course Offering selection. Faculty is searchable by name/email/role, and the page links to College Users and College Roles for onboarding. `UI_SEARCHABLE_SELECT_STANDARD.md` is the shared project-wide rule for dynamic/large selectors.
+
+## 2026-09-21 — Faculty Allocation closure / next three Course Delivery milestones
+Faculty Allocation / ADR 210 is OWNER QA PASSED / CLOSED. Rooms, Timetable and Class Scheduling are IMPLEMENTED / OWNER QA REQUIRED under ADR 211. The authoritative chain is Course Offering → Faculty Allocation → recurring Timetable Entry → dated Class Schedule, with optional College Room linkage, overlap protection, RBAC, audit and child-first cleanup. Attendance is next and remains blocked until owner QA passes.
+
+
+### 2026-09-21 — Faculty Allocation College-role eligibility permission correction
+- College Role → Permissions now exposes `college_faculty_allocation.eligible` as a College-delegable eligibility marker even when the assigning College administrator does not personally hold that marker.
+- Authorized College permission managers can assign/remove the marker from College-owned roles (for example, Faculty); normal College permission delegation remains constrained to permissions the actor holds.
+- University role/permission behavior is intentionally unchanged by this correction.
+- No schema migration. Faculty Allocation remains IMPLEMENTED / OWNER QA REQUIRED.
+
+### 2026-09-22 — Phase 13 Class Scheduling scheduled-edit correction
+Class Scheduling now permits authorized correction of a dated occurrence only while status is `SCHEDULED`. Edit supports Timetable entry, class date and note; server validation is re-run and time/Room snapshots are refreshed from the selected active Timetable. `COMPLETED` and `CANCELLED` are terminal locked states and cannot be edited or reopened. No schema migration. Rooms/Timetable/Class Scheduling remain IMPLEMENTED / OWNER QA REQUIRED under ADR 211.
+
+## 2026-09-22 — Phase 14 Attendance Operations foundation / ADR 212
+Status: **IMPLEMENTED — OWNER QA REQUIRED**.
+
+College Attendance now consumes the exact Class Schedule and canonical Student Enrollment academic context. It resolves the applicable ACTIVE + APPROVED Academic Policy and requires its Attendance Rule, supports complete-roster draft/finalize entry, locks finalized raw records, completes the Class Schedule transactionally, permits permissioned audited correction reopening, and displays policy-rounded finalized attendance/shortage using the resolved Attendance Rule calculation scope. `COURSE` uses the exact Course Offering, `TERM` aggregates the exact Curriculum Term within the same Programme Offering, and `OVERALL` aggregates finalized attendance across the same Programme Offering. Attendance does not mutate Fee Demand or any financial history. Condonation, special exemption and final examination eligibility remain subsequent Attendance milestones.
+
+### 2026-09-22 — Timetable inactive-edit correction
+Timetable now exposes a prefilled Edit action for INACTIVE entries to actors with `college_timetable.manage`. Server-side update additionally verifies that the target Timetable entry itself belongs to the route College before applying the existing active-allocation, Room, effective-period and conflict rules. ACTIVE entries remain locked until deactivated; existing dated Class Schedule snapshots are not rewritten.
+
+### 2026-09-22 — Canonical Student placement and delivery-scope correction
+Attendance Owner QA exposed a canonical placement gap: enrolled Students could have valid identity and course-choice context while `student_enrollments.batch_id` / `section_id` remained NULL, causing section-scoped Attendance rosters to resolve empty. Student Identity is now the single operational UI for audited bulk placement into an ACTIVE Batch and ACTIVE child Section belonging to the same Programme Offering; the duplicate placement action was removed from Student Enrollment. Attendance remains strict and consumes canonical Enrollment placement plus exact course choice. Faculty Allocation now submits an explicit `BATCH` or `SECTION` delivery scope, with no implicit first-Section fallback. Section has no capacity field: strength is derived from active enrolled placements. Room capacity is physical capacity and Timetable/Class Schedule writes and Timetable activation reject rooms smaller than the derived applicable course roster. Fee Demand is unaffected because placement does not create, cancel, or recalculate financial demand. No schema migration or parallel mapping table is introduced. Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+### 2026-09-22 — Academic Calendar to Class Schedule linkage
+Class Schedule create/edit now requires the ACTIVE College-adopted Academic Calendar for the Programme Offering session, an ACTIVE period containing the date for the exact course Curriculum Term, and a date outside effective ACTIVE Holiday/Vacation ranges. ACTIVE College overrides replace the University event dates. Recurring Timetable remains a rule; the dated occurrence is the calendar enforcement boundary. Attendance inherits this validity through Class Schedule. Placement and Fee Demand are unchanged. No schema migration. Status: IMPLEMENTED / OWNER QA REQUIRED.
+
+## Shared Scheduling Time Picker Consistency — 2026-09-23
+**IMPLEMENTED — OWNER QA REQUIRED**
+
+- Course Delivery Timetable create/edit now uses the shared `TimePicker` already established by Interview Scheduling instead of browser-native `type="time"` controls.
+- Start and End Time use explicit hour/minute/AM-PM selectors with a 5-minute step while preserving the existing `HH:mm` backend payload.
+- `UI_UX_GUIDELINES.md` now makes shared `TimePicker` reuse the default for future time-only scheduling fields, preventing page-specific/native time-picker drift.
+- No database/schema or backend validation contract change.
+
+## 2026-09-24 — Attendance controlled exceptions and final eligibility / ADR 214
+
+The next three Phase 14 milestones are IMPLEMENTED / OWNER QA REQUIRED: Attendance Condonation, Medical/Special Attendance Exemption, and final Examination Attendance Eligibility. Condonation is policy-limit constrained; special exemption is policy-enabled; both are separate audited decisions and never rewrite raw attendance. Final eligibility resolves Course/Term/Overall attendance, normal threshold, approved exception and the policy's examination-attendance requirement into a persisted Student Enrollment + Course Offering snapshot. Examination is the next downstream phase consumer after QA.
+
+## 2026-09-24 — Phase 15 Internal Assessment first three milestones / ADR 215
+
+Assessment Setup, Assignment and Quiz are IMPLEMENTED / OWNER QA REQUIRED. Assessment components are configurable per Course Offering and snapshot the resolved Academic Policy. Assignment/Quiz activities require the exact ACTIVE component and Faculty Allocation, remain inside the governed Curriculum Term calendar period, and follow DRAFT → PUBLISHED → CLOSED. Publication transactionally snapshots the exact canonical Enrollment roster for stable later Marks Entry. Mid Semester is the next hierarchy milestone after QA.
+
+Corrective verification: all three Internal Assessment GET endpoints now use exact `{college}` implicit-binding parameter names. Direct route-binding execution for College `1` returned valid Inertia responses for Setup, Assignments and Quizzes; the prior null College ID TypeError is closed.
+
+## 2026-09-24 — Phase 15 Mid Semester, Practical and Marks Entry / ADR 216
+
+The next three Internal Assessment milestones are IMPLEMENTED / OWNER QA REQUIRED. Mid Semester and Practical extend the exact ADR 215 policy/Course Offering/Faculty Allocation/calendar/roster chain. Marks Entry consumes only the immutable publication roster, requires complete-roster ENTERED/ABSENT submission, validates component maximum marks, and audits every first entry/correction with revision numbering. Marks Approval is next after QA.
+
+## 2026-09-24 — Academic Operations navigation and selector consistency
+ADR 217 separates the College sidebar into Course Delivery, Attendance and Assessment presentation groups. This is a UI/navigation correction only and does not change the existing domain hierarchy, routes, permissions or persistence. Internal Assessment dynamic selectors now use the shared project SearchableSelect instead of browser-native selects for Course Offering, Assessment Component, Faculty Allocation and Published Activity; Assessment Type uses the same interaction for visual consistency. Compact row-level ENTERED/ABSENT state selection remains a standard select. Future Assessment, Attendance, Examination and Result pages must follow the shared searchable-select contract. Status: IMPLEMENTED / OWNER QA REQUIRED.

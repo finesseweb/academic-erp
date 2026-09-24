@@ -1,61 +1,10 @@
-# University Administration Implementation Roadmap
 
-## Domain Rule
-The ERP is University-centered. The University is the business root. `SUPER_ADMIN` is the highest University-level role and operates the University Administration workspace.
+## Student Enrollment controlled implementation branch — 2026-09-16
+Fee Clearance is Owner-QA accepted. Student Enrollment now proceeds as the approved ENR branch without replacing this roadmap:
 
-## Module 1 — Authentication
-Pages: Login, Forgot Password, Reset Password, Change Password, Profile.
+`ENR-0 Student Data Architecture -> ENR-1 Eligibility Queue -> ENR-2 Admission-to-Enrollment -> ENR-3 Student Identity -> ENR-4 CSV Import/Migration -> resume this roadmap`.
 
-## Module 2 — University Administration Shell & Dashboard
-Protected `/admin` workspace with sidebar, topbar, page header, responsive navigation, themes and permission-aware menu presentation.
+ADR 199 owns the Student-vs-Enrollment boundary, dynamic Application-to-Student mapping contract, field-history rule and direct legacy-import convergence. Each ENR requires Owner QA before the next is eligible.
 
-Dashboard should eventually show real University-level summaries such as affiliated Colleges, users, roles and security activity.
-
-## Module 3 — Role & Permission Management
-Roles List, Create Role, Edit Role, Permission Matrix and Permission Catalog.
-RBAC supports University-wide, College and narrower scopes.
-
-## Module 4 — User Management
-Users List, Create/Edit User and Role/Scope Assignment.
-
-## Module 5 — University & Affiliated College Management
-Pages:
-- University Profile
-- Affiliated Colleges List
-- Create Affiliated College
-- Edit Affiliated College
-
-Each College can later contain Administration, Campus, Faculties/Schools, Departments, Programs, Batches, Semesters/Terms, Courses, Employees/Faculty, Students, Parents/Guardians and College Fee Management.
-
-College Fee Management includes Fee Structure and College-level Installment Plans under University finance policy.
-
-## Module 6 — Audit & Themes
-Audit Logs and Theme Management.
-Theme priority: permitted User Preference -> Affiliated College Default -> University Global Default -> Premium Light fallback.
-
-## Acceptance Direction
-The University administration foundation is complete only when authentication, RBAC enforcement, role management, user scope assignment, University/Affiliated College management, audit and documented theme controls operate consistently.
-
-
-## Curriculum Structure Update — 2026-08-22
-- Curriculum Header: implemented.
-- Terms / Semesters: implemented.
-- Curriculum Slots Phase 1: implemented with Course Category, Slot Name and Display Order.
-- Slot-level Credits are not introduced.
-- Course / Paper Mapping remains a later milestone.
-- Copy / Clone Structure is approved as the future reuse pattern when a new Curriculum/version needs an existing structure; source and target records remain independent.
-
-
-## Academic Policies Phase 1 — 2026-08-24
-- Academic Policy Header/Master: IMPLEMENTED_IN_REPLACEMENT_PACKAGE.
-- Scope foundation: University / Program Template / Curriculum.
-- Academic Session, version, effective dates and Draft lifecycle foundation implemented.
-- Credit / Completion Policy rule section implemented.
-- Policy validation checkpoint implemented.
-- Permission-aware sidebar entry implemented under Academic Setup after Curriculum.
-- Route: `/admin/academic-policies`; permission: `academic_policy.view`.
-- Approval execution and policy amendment/version activation are IMPLEMENTED through the common Academic Approval engine; final QA is the current gate.
-- Academic Calendar: IMPLEMENTED_IN_REPLACEMENT_PACKAGE on 2026-08-25; QA and owner review pending.
-- Future approval-enabled modules must reuse the same common engine; only subject-specific validation and final lifecycle behavior belong in module handlers/services.
-
-- Academic Calendar foundation includes one official University calendar per Academic Session, normalized events and event-level future College override governance.
+### ENR branch completion checkpoint — 2026-09-17
+ENR-3 / ADR 203 is Owner-QA closed. ENR-4 / ADR 204 Student Import / Migration is implemented and awaiting Owner QA. After ENR-4 Owner QA closure, resume the authoritative roadmap rather than creating an additional ENR milestone.

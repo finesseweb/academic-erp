@@ -189,6 +189,7 @@ class CollegeAdmissionFormSetupController extends Controller
             'college_admission_form_panel_id'=>['nullable','integer','exists:college_admission_form_panels,id'],
             'label'=>['required','string','max:180'],'field_key'=>['required','string','max:100','regex:/^[a-z][a-z0-9_]*$/'],
             'field_type'=>['required',Rule::in(['TEXT','NUMBER','DATE','EMAIL','PHONE','TEXTAREA','SELECT','RADIO','CHECKBOX','MULTISELECT','FILE','IMAGE','YES_NO'])],
+            'student_data_policy'=>['required',Rule::in(['APPLICATION_ONLY','STUDENT_PROFILE'])],
             'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999'],
             'options'=>['nullable','string','max:5000'],'max_kb'=>['nullable','integer','min:1','max:51200'],'extensions'=>['nullable','string','max:500'],
             'condition_source_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
@@ -211,7 +212,7 @@ class CollegeAdmissionFormSetupController extends Controller
         $field = DB::transaction(function() use($fieldRuleService,$step,$data,$sourceField,$scopeSelections){
             $field=$step->fields()->create([
                 'college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,
-                'field_key'=>$data['field_key'],'label'=>trim($data['label']),'field_type'=>$data['field_type'],'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,
+                'field_key'=>$data['field_key'],'label'=>trim($data['label']),'field_type'=>$data['field_type'],'student_data_policy'=>$data['student_data_policy'],'student_profile_key'=>$data['student_data_policy']==='STUDENT_PROFILE'?$data['field_key']:null,'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,
                 'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??(($step->fields()->max('display_order')??0)+10),
                 'validation_rules'=>$fieldRuleService->intrinsicRules($data, $data['field_type']),
                 'status'=>'ACTIVE',
@@ -294,7 +295,7 @@ class CollegeAdmissionFormSetupController extends Controller
         $fieldRuleService = app(CollegeAdmissionFieldRuleService::class); $data=$request->validate([
             ...$fieldRuleService->requestRules(),
             'college_admission_form_panel_id'=>['nullable','integer','exists:college_admission_form_panels,id'],
-            'label'=>['required','string','max:180'],'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999'],
+            'label'=>['required','string','max:180'],'student_data_policy'=>['required',Rule::in(['APPLICATION_ONLY','STUDENT_PROFILE'])],'placeholder'=>['nullable','string','max:220'],'help_text'=>['nullable','string','max:2000'],'is_required'=>['nullable','boolean'],'display_order'=>['nullable','integer','min:0','max:9999'],
             'condition_source_field_id'=>['nullable','integer','exists:college_admission_form_fields,id'],
             'condition_operator'=>['nullable',Rule::in(['EQUALS','NOT_EQUALS','IN','NOT_IN','CONTAINS','IS_EMPTY','IS_NOT_EMPTY'])],
             'condition_values'=>['nullable','string','max:5000'],
@@ -312,7 +313,7 @@ class CollegeAdmissionFormSetupController extends Controller
         $this->assertConditionConfiguration($field, $sourceField, $data);
         $fieldRuleService->assertConfiguration($template, $step, $field->field_type, $data, $field);
         DB::transaction(function () use ($field, $fieldRuleService, $data, $sourceField, $scopeSelections, $scopeProvided) {
-            $field->update(['college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,'label'=>trim($data['label']),'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??$field->display_order,'validation_rules'=>$fieldRuleService->intrinsicRules($data, $field->field_type, $field->validation_rules??[])]);
+            $field->update(['college_admission_form_panel_id'=>$data['college_admission_form_panel_id']??null,'label'=>trim($data['label']),'student_data_policy'=>$data['student_data_policy'],'student_profile_key'=>$data['student_data_policy']==='STUDENT_PROFILE'?($field->student_profile_key?:$field->field_key):null,'placeholder'=>$data['placeholder']??null,'help_text'=>$data['help_text']??null,'is_required'=>(bool)($data['is_required']??false),'display_order'=>$data['display_order']??$field->display_order,'validation_rules'=>$fieldRuleService->intrinsicRules($data, $field->field_type, $field->validation_rules??[])]);
             $fieldRuleService->sync($field,$data);
             if ($scopeProvided) $this->syncAcademicScopes($field, $scopeSelections);
             $this->syncCondition($field, $sourceField, $data);

@@ -25,6 +25,7 @@ Create and manage operational Sections below College Batches without redefining 
 - Edit Section code/name/notes.
 - Activation/deactivation is separate from edit and protected by explicit lifecycle permissions.
 - Section create/activation must never change Intake capacity, Reservation, Seat Allocation or Admission Confirmation.
+- Section has no capacity/max-strength input or persisted field. Operational strength is derived from active enrolled Student placements; physical-room suitability is enforced by Course Delivery against `college_rooms.capacity`.
 
 ## RBAC
 - `college_section.view`

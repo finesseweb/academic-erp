@@ -32,3 +32,9 @@ For milestone ZIP delivery:
 ### Schema Field Verification
 
 Before adding eager-load field lists, query projections, DTOs, or frontend types for an existing table, verify the exact field names against the current migration and `.project/AI/DATABASE/TABLE_SPECS` documentation. Do not infer names such as `version_no` when the canonical schema uses a different field such as `version`.
+
+## Async UX completion check (ADR 198)
+Before a new or materially modified UI milestone is implementation-complete, classify each user-visible asynchronous operation as Inertia navigation/data refresh, form mutation, remote/non-Inertia request, upload/export, or long-running processing. Confirm it uses the shared loading infrastructure and appropriate contextual Spinner/Skeleton/progress state. A screen that can appear frozen during a real asynchronous wait is not implementation-complete.
+
+## ENR-0 foundation staging rule — ADR 199
+A schema-only lifecycle foundation may precede its creation UI/service when the roadmap explicitly stages the feature. In that case Full Academic Test Reset must already know the child-first dependency order, while individual record cleanup becomes mandatory in the milestone that first exposes record creation. ENR-0 follows this rule: reset order covers `student_profile_values -> student_enrollments -> applicant profile unlink -> students -> admissions`; ENR-2 must add Student/Enrollment individual cleanup together with its creation transaction.

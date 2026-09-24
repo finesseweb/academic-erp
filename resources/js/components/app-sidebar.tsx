@@ -1,12 +1,18 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    BadgeCheck,
+    BadgePercent,
     BookOpenCheck,
+    BookOpenText,
     Database,
     Building2,
     CalendarRange,
     ClipboardCheck,
     CreditCard,
+    HandCoins,
     FileCog,
+    Fingerprint,
+    FileSpreadsheet,
     ChevronRight,
     GraduationCap,
     GitBranch,
@@ -15,11 +21,17 @@ import {
     Layers3,
     Rows3,
     LayoutGrid,
+    ReceiptText,
+    RotateCcw,
+    Settings2,
     ScrollText,
     Shield,
     ShieldCheck,
     TicketCheck,
+    TriangleAlert,
+    WalletCards,
     UsersRound,
+    UserRound,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
@@ -260,9 +272,7 @@ const platformItems: TreeNavItem[] = [
             },
         ],
     },
-
 ];
-
 
 function normalizePath(path: string): string {
     const cleanPath = path.split('?')[0].split('#')[0];
@@ -449,7 +459,7 @@ function TreeItem({
                 <div className="overflow-hidden">
                     <div
                         className={[
-                            'relative ml-4 border-l border-sidebar-border pl-3 pt-1',
+                            'relative ml-4 border-l border-sidebar-border pt-1 pl-3',
                             'transition-transform duration-300 ease-out motion-reduce:transition-none',
                             isOpen ? 'translate-y-0' : '-translate-y-1',
                         ].join(' ')}
@@ -473,7 +483,6 @@ function TreeItem({
         </SidebarMenuItem>
     );
 }
-
 
 function SidebarTree({
     items,
@@ -583,6 +592,102 @@ export function AppSidebar() {
                   ],
               },
               {
+                  title: 'Course Delivery',
+                  icon: BookOpenText,
+                  children: [
+                      {
+                          title: 'Course Offerings',
+                          href: `/college/${collegeId}/course-offerings`,
+                          icon: BookOpenCheck,
+                          permission: 'college_course_offering.view',
+                      },
+                      {
+                          title: 'Faculty Allocation',
+                          href: `/college/${collegeId}/faculty-allocations`,
+                          icon: UsersRound,
+                          permission: 'college_faculty_allocation.view',
+                      },
+                      {
+                          title: 'Rooms',
+                          href: `/college/${collegeId}/rooms`,
+                          icon: Building2,
+                          permission: 'college_room.view',
+                      },
+                      {
+                          title: 'Timetable',
+                          href: `/college/${collegeId}/timetables`,
+                          icon: CalendarRange,
+                          permission: 'college_timetable.view',
+                      },
+                      {
+                          title: 'Class Scheduling',
+                          href: `/college/${collegeId}/class-schedules`,
+                          icon: CalendarRange,
+                          permission: 'college_class_schedule.view',
+                      },
+                  ],
+              },
+              {
+                  title: 'Attendance',
+                  icon: ClipboardCheck,
+                  children: [
+                      {
+                          title: 'Attendance',
+                          href: `/college/${collegeId}/attendance`,
+                          icon: ClipboardCheck,
+                          permission: 'college_attendance.view',
+                      },
+                      {
+                          title: 'Attendance Eligibility',
+                          href: `/college/${collegeId}/attendance-eligibility`,
+                          icon: ShieldCheck,
+                          permission: 'college_attendance_eligibility.view',
+                      },
+                  ],
+              },
+              {
+                  title: 'Assessment',
+                  icon: Settings2,
+                  children: [
+                      {
+                          title: 'Assessment Setup',
+                          href: `/college/${collegeId}/internal-assessment/setup`,
+                          icon: Settings2,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Assignments',
+                          href: `/college/${collegeId}/internal-assessment/assignments`,
+                          icon: ClipboardCheck,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Quizzes',
+                          href: `/college/${collegeId}/internal-assessment/quizzes`,
+                          icon: BadgeCheck,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Mid Semester',
+                          href: `/college/${collegeId}/internal-assessment/mid-semesters`,
+                          icon: FileSpreadsheet,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Practical',
+                          href: `/college/${collegeId}/internal-assessment/practicals`,
+                          icon: BookOpenCheck,
+                          permission: 'college_internal_assessment.view',
+                      },
+                      {
+                          title: 'Marks Entry',
+                          href: `/college/${collegeId}/internal-assessment/marks`,
+                          icon: FileSpreadsheet,
+                          permission: 'college_internal_assessment.view',
+                      },
+                  ],
+              },
+              {
                   title: 'Admission Setup',
                   icon: FileCog,
                   children: [
@@ -642,7 +747,8 @@ export function AppSidebar() {
                           title: 'Document Verification',
                           href: `/college/${collegeId}/admission-document-verification`,
                           icon: ClipboardCheck,
-                          permission: 'college_admission_document_verification.view',
+                          permission:
+                              'college_admission_document_verification.view',
                           directNavigation: true,
                       },
                       {
@@ -663,34 +769,20 @@ export function AppSidebar() {
               },
               {
                   title: 'Fee Management',
-                  icon: TicketCheck,
+                  icon: WalletCards,
                   children: [
                       {
                           title: 'Fee Setup',
                           href: `/college/${collegeId}/fee-management`,
-                          icon: TicketCheck,
+                          icon: Settings2,
                           permission: 'college_fee_structure.view',
                           directNavigation: true,
                       },
                       {
                           title: 'Scholarship / Benefits',
                           href: `/college/${collegeId}/fee-scholarships`,
-                          icon: TicketCheck,
+                          icon: HandCoins,
                           permission: 'college_fee_scholarship.view',
-                          directNavigation: true,
-                      },
-                      {
-                          title: 'Fee Demands',
-                          href: `/college/${collegeId}/fee-demands`,
-                          icon: ScrollText,
-                          permission: 'college_fee_demand.view',
-                          directNavigation: true,
-                      },
-                      {
-                          title: 'Student Benefits',
-                          href: `/college/${collegeId}/fee-student-benefits`,
-                          icon: TicketCheck,
-                          permission: 'college_fee_student_benefit.view',
                           directNavigation: true,
                       },
                       {
@@ -701,31 +793,86 @@ export function AppSidebar() {
                           directNavigation: true,
                       },
                       {
+                          title: 'Fee Demands',
+                          href: `/college/${collegeId}/fee-demands`,
+                          icon: ReceiptText,
+                          permission: 'college_fee_demand.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Student Benefits',
+                          href: `/college/${collegeId}/fee-student-benefits`,
+                          icon: BadgePercent,
+                          permission: 'college_fee_student_benefit.view',
+                          directNavigation: true,
+                      },
+                      {
                           title: 'Payment Collection',
                           href: `/college/${collegeId}/fee-payments`,
-                          icon: ScrollText,
+                          icon: WalletCards,
                           permission: 'college_fee_payment.view',
                           directNavigation: true,
                       },
                       {
                           title: 'Student Fee Ledger',
                           href: `/college/${collegeId}/fee-ledger`,
-                          icon: ScrollText,
+                          icon: BookOpenText,
                           permission: 'college_fee_ledger.view',
                           directNavigation: true,
                       },
                       {
                           title: 'Adjustments / Refunds',
                           href: `/college/${collegeId}/fee-adjustments`,
-                          icon: ScrollText,
+                          icon: RotateCcw,
                           permission: 'college_fee_adjustment.view',
                           directNavigation: true,
                       },
                       {
                           title: 'Late Fine / Penalty',
                           href: `/college/${collegeId}/fee-late-fines`,
-                          icon: ScrollText,
+                          icon: TriangleAlert,
                           permission: 'college_fee_late_fine.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Fee Clearance',
+                          href: `/college/${collegeId}/fee-clearance`,
+                          icon: BadgeCheck,
+                          permission: 'college_fee_clearance.view',
+                          directNavigation: true,
+                      },
+                  ],
+              },
+              {
+                  title: 'Student Management',
+                  icon: GraduationCap,
+                  children: [
+                      {
+                          title: 'Student Enrollment',
+                          href: `/college/${collegeId}/student-enrollments`,
+                          icon: GraduationCap,
+                          permission: 'college_student_enrollment.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Student Profile',
+                          href: `/college/${collegeId}/student-profiles`,
+                          icon: UserRound,
+                          permission: 'college_student_profile.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Student Identity',
+                          href: `/college/${collegeId}/student-identities`,
+                          icon: Fingerprint,
+                          permission: 'college_student_identity.view',
+                          directNavigation: true,
+                      },
+                      {
+                          title: 'Student Import / Migration',
+                          href: `/college/${collegeId}/student-imports`,
+                          icon: FileSpreadsheet,
+                          permission: 'college_student_import.view',
                           directNavigation: true,
                       },
                   ],
@@ -735,7 +882,10 @@ export function AppSidebar() {
 
     const items = useMemo(
         () => [
-            ...filterByPermission(platformItems, auth.universityPermissions ?? []),
+            ...filterByPermission(
+                platformItems,
+                auth.universityPermissions ?? [],
+            ),
             ...filterByPermission(collegeItems, auth.permissions),
         ],
         [collegeId, auth.permissions, auth.universityPermissions],

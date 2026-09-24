@@ -152,7 +152,21 @@ Handled through College-scoped roles:
 ## 09 — Student & Parent Access Management
 - Student Master
 - Student Login
-- Student Role Assignment
+- Student Role Assignment / standard Student authorization policy
+  - Student-facing access is inherited from the Student role/policy; do not create per-student module-access checkboxes.
+  - Student access resolves through the authenticated User -> canonical Student -> applicable/current Enrollment context.
+- **Student Portal Information Architecture [FUTURE STUDENT-FACING SPECIFICATION — does not renumber or replace implementation phases]**
+  - Dashboard — compact current academic context and summaries/next actions from implemented student-facing modules.
+  - My Profile — canonical Student profile.
+  - My Academics — current/applicable Enrollment, Programme Offering, Discipline/Curriculum and course context.
+  - Academic Calendar — dedicated calendar view; Dashboard may surface upcoming applicable events.
+  - Attendance — student-owned attendance view when Attendance Operations is implemented.
+  - Fees — student-owned fee/demand/payment/ledger view when exposed to Student Portal.
+  - Examinations — student-owned examination schedule/eligibility/admit-card context when implemented.
+  - Results — student-owned published result view when implemented.
+  - Documents / Certificates and Notifications may be added later when their authoritative modules exist.
+  - Student Portal is a consumer of authoritative domain modules; it must not duplicate Calendar, Fee, Attendance, Examination, Result, Student or Enrollment truth.
+  - Admission vs Import is provenance only and must not create separate Student Portal navigation or permission paths.
 - Parent / Guardian Master
 - Parent Login
 - Parent -> Linked Student(s)

@@ -59,3 +59,36 @@ College Calendar permissions are College-scoped and delegable through the normal
 - University roles with Fee Structure create/update permissions choose `MANDATORY` or `OPTIONAL` College Applicability on University-owned structures.
 - College roles require `college_fee_structure.adopt` to Adopt / Stop Using an OPTIONAL University Fee Structure in their exact College scope.
 - MANDATORY University Fee Structures are read-only and automatically effective for matching Colleges; no College permission may override or opt them out.
+
+## ADR 197 — Fee Clearance default grants (2026-09-16)
+- `SUPER_ADMIN`: `college_fee_clearance.view`
+- `COLLEGE_ADMIN`: `college_fee_clearance.view`
+- Custom College roles: may receive `college_fee_clearance.view` through the existing College-delegable permission-assignment flow.
+
+The permission is read-only and non-sensitive. It does not grant any financial mutation capability.
+
+### Student Enrollment — ENR-1
+- `SUPER_ADMIN`: `college_student_enrollment.view`
+- `COLLEGE_ADMIN`: `college_student_enrollment.view`
+- Custom College roles: may receive `college_student_enrollment.view` through the existing College-delegable permission assignment flow.
+
+### ENR-2 default protected grants
+- `college_student_enrollment.enroll`: SUPER_ADMIN = granted; COLLEGE_ADMIN = granted. Other College staff require explicit delegated permission and remain College-scoped.
+
+## Course Delivery defaults (2026-09-20)
+`SUPER_ADMIN` and `COLLEGE_ADMIN` receive the four `college_course_offering.*` permissions by migration. Other College roles receive no automatic Course Offering access and may receive College-delegable permissions through the existing role/permission workflow.
+## Faculty Allocation defaults (2026-09-21)
+
+SUPER_ADMIN and COLLEGE_ADMIN receive the five management permissions. `college_faculty_allocation.eligible` is deliberately not granted by default; College administrators grant it to their Faculty role. Allocation-management permission does not make a user teaching faculty.
+## Course Delivery scheduling defaults (2026-09-21)
+
+SUPER_ADMIN and COLLEGE_ADMIN receive Room, Timetable and Class Scheduling permissions. Other roles receive them only through College role permission assignment.
+# ADR 214 Attendance protected-role grants — 2026-09-24
+
+The forward migration grants the five Attendance exception/eligibility permissions to protected `SUPER_ADMIN` and `COLLEGE_ADMIN` roles. College-owned roles may receive them through the existing delegation controls; backend College scope remains mandatory.
+
+## ADR 215 Internal Assessment grants — 2026-09-24
+
+Protected `SUPER_ADMIN` and `COLLEGE_ADMIN` receive view/setup/assignment/quiz permissions. Authorized College roles such as Faculty may be delegated view and the appropriate activity capability. Faculty Allocation and server-side College ownership remain separate mandatory domain checks.
+
+ADR 216 grants protected `SUPER_ADMIN` and `COLLEGE_ADMIN` Mid Semester, Practical and Marks Entry permissions. College roles may receive delegated capabilities; Marks Entry remains sensitive and audited.

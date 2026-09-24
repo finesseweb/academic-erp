@@ -8,7 +8,7 @@ use Illuminate\Validation\ValidationException;
 
 class AcademicPolicyResolverService
 {
-    public function resolveForOffering(CollegeProgramOffering $offering): ?AcademicPolicy
+    public function resolveForOffering(CollegeProgramOffering $offering, ?string $effectiveDate = null): ?AcademicPolicy
     {
         $offering->loadMissing(['college:id,university_id', 'programTemplate.degree.degreeLevel:id', 'curriculum:id']);
 
@@ -18,7 +18,7 @@ class AcademicPolicyResolverService
         }
 
         $degreeLevelId = $offering->programTemplate?->degree?->degreeLevel?->id;
-        $today = now()->toDateString();
+        $today = $effectiveDate ?? now()->toDateString();
 
         $candidates = AcademicPolicy::query()
             ->where('university_id', $universityId)

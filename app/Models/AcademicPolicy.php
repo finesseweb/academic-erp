@@ -48,20 +48,77 @@ class AcademicPolicy extends Model
         ];
     }
 
-    public function university(): BelongsTo { return $this->belongsTo(University::class); }
-    public function academicSession(): BelongsTo { return $this->belongsTo(AcademicSession::class); }
-    public function degreeLevel(): BelongsTo { return $this->belongsTo(DegreeLevel::class); }
-    public function programTemplate(): BelongsTo { return $this->belongsTo(ProgramTemplate::class); }
-    public function curriculum(): BelongsTo { return $this->belongsTo(Curriculum::class); }
-    public function parentPolicy(): BelongsTo { return $this->belongsTo(self::class, 'parent_policy_id'); }
-    public function supersededBy(): BelongsTo { return $this->belongsTo(self::class, 'superseded_by_id'); }
-    public function revisions(): HasMany { return $this->hasMany(self::class, 'parent_policy_id'); }
-    public function creditCompletionRule(): HasOne { return $this->hasOne(AcademicPolicyCreditCompletionRule::class); }
-    public function attendanceRule(): HasOne { return $this->hasOne(AcademicPolicyAttendanceRule::class); }
-    public function assessmentExamRule(): HasOne { return $this->hasOne(AcademicPolicyAssessmentExamRule::class); }
-    public function gradingRule(): HasOne { return $this->hasOne(AcademicPolicyGradingRule::class); }
-    public function gradeBands(): HasMany { return $this->hasMany(AcademicPolicyGradeBand::class)->orderBy('display_order')->orderByDesc('minimum_percent')->orderBy('id'); }
-    public function progressionRuleSets(): HasMany { return $this->hasMany(AcademicPolicyProgressionRuleSet::class)->orderBy('display_order')->orderBy('id'); }
+    public function university(): BelongsTo
+    {
+        return $this->belongsTo(University::class);
+    }
+
+    public function academicSession(): BelongsTo
+    {
+        return $this->belongsTo(AcademicSession::class);
+    }
+
+    public function degreeLevel(): BelongsTo
+    {
+        return $this->belongsTo(DegreeLevel::class);
+    }
+
+    public function programTemplate(): BelongsTo
+    {
+        return $this->belongsTo(ProgramTemplate::class);
+    }
+
+    public function curriculum(): BelongsTo
+    {
+        return $this->belongsTo(Curriculum::class);
+    }
+
+    public function parentPolicy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_policy_id');
+    }
+
+    public function supersededBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'superseded_by_id');
+    }
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_policy_id');
+    }
+
+    public function creditCompletionRule(): HasOne
+    {
+        return $this->hasOne(AcademicPolicyCreditCompletionRule::class);
+    }
+
+    /** @return HasOne<AcademicPolicyAttendanceRule, $this> */
+    public function attendanceRule(): HasOne
+    {
+        return $this->hasOne(AcademicPolicyAttendanceRule::class);
+    }
+
+    public function assessmentExamRule(): HasOne
+    {
+        return $this->hasOne(AcademicPolicyAssessmentExamRule::class);
+    }
+
+    public function gradingRule(): HasOne
+    {
+        return $this->hasOne(AcademicPolicyGradingRule::class);
+    }
+
+    public function gradeBands(): HasMany
+    {
+        return $this->hasMany(AcademicPolicyGradeBand::class)->orderBy('display_order')->orderByDesc('minimum_percent')->orderBy('id');
+    }
+
+    public function progressionRuleSets(): HasMany
+    {
+        return $this->hasMany(AcademicPolicyProgressionRuleSet::class)->orderBy('display_order')->orderBy('id');
+    }
+
     public function creditCategoryRequirements(): HasMany
     {
         return $this->hasMany(AcademicPolicyCreditCategoryRequirement::class)

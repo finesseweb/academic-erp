@@ -535,3 +535,99 @@ The Student Fee Ledger is a projection across these existing relationships. No `
 `FeePayment -> FeePaymentAllocation -> FeePaymentRefundAllocation <- FeePaymentRefund`
 
 Each Refund Allocation also snapshots direct FKs to Fee Demand, Fee Demand Item, optional Installment Schedule, and optional Late Fine Charge. This preserves provenance and allows exact balance restoration without rewriting the original payment allocation.
+
+## ADR 197 — Fee Clearance derived relationship (2026-09-16)
+Fee Clearance introduces **no new physical foreign-key relationship**.
+
+Logical projection path:
+`College Admission -> Fee Demand -> enrollment-clearance-required Fee Demand Items -> Benefits / Payment Allocations / Adjustments / Reversals / Refunds -> derived Fee Clearance -> Student Enrollment gate`.
+
+The permission-registration migration uses the already-documented authorization relationships `permissions -> role_permissions <- roles`; it adds rows only and does not alter those relationships.
+
+## Student Enrollment Foundation — ADR 199
+`users (0..1) -> students.user_id` (one reusable portal identity; imported Students may initially have none)
+
+`college_admission_applications (0..1) -> students.college_admission_application_id`
+
+`admissions (0..1) -> students.admission_id`
+
+`students (1) -> (0..N) student_enrollments`
+
+`college_program_offerings (1) -> (0..N) student_enrollments`
+
+`batches (0..1) -> student_enrollments.batch_id`
+
+`sections (0..1) -> student_enrollments.section_id`
+
+`students (1) -> (0..N) student_profile_values`
+
+`college_admission_form_fields (0..1) -> student_profile_values.source_application_field_id`
+
+`students (0..1) -> applicant_profiles.student_id`
+
+Programme Offering carries Academic Session. Student identity therefore remains stable while Enrollment carries the session/programme context. Batch/Section hierarchy consistency is a service-level validation requirement in later enrollment/assignment milestones, not merely an FK check.
+
+## ENR-3 / ADR 203
+`colleges 1—1 student_identity_settings`; `colleges 1—N student_identity_sequences`. Permanent Student UID/University Roll live on `students`; enrollment-specific Class Roll lives on `student_enrollments`. Exam Roll is outside ENR-3.
+
+### ENR-3.3 Class Roll scope
+`student_identity_settings.class_roll_scope` selects Programme Offering or Discipline sequencing. Discipline scope is derived through `student_enrollments.admission_id → admissions → college_admission_applications → academic preference → discipline_id`; no duplicate discipline ownership is added to Student/Enrollment.
+
+### ENR-4 Discipline normalization
+`academic_disciplines (0..1) -> student_enrollments.discipline_id`. For new ADMISSION enrollments this snapshots the already-authoritative Application Academic Preference Discipline; for IMPORT enrollments it is resolved from mapped `discipline_code`. Student Identity consumes Enrollment Discipline first, with legacy Admission preference fallback for pre-ENR-4 rows.
+
+## ADR 206 — Canonical Enrollment Academic Context — 2026-09-18
+Both Student entry routes converge before downstream academic processing:
+
+`Application -> Admission -> Student -> Student Enrollment <- Student Import`
+
+Canonical downstream relationships:
+- `student_enrollments.curriculum_id -> curricula.id`
+- `student_enrollments.discipline_id -> academic_disciplines.id`
+- `student_enrollments.specialization_id -> academic_disciplines.id`
+- `student_enrollment_course_choices.student_enrollment_id -> student_enrollments.id`
+- `student_enrollment_course_choices.curriculum_term_id -> curriculum_terms.id`
+- `student_enrollment_course_choices.curriculum_slot_id -> curriculum_slots.id`
+- `student_enrollment_course_choices.curriculum_course_mapping_id -> curriculum_course_mappings.id`
+- `student_enrollment_course_choices.course_id -> courses.id`
+
+For legacy ADMISSION rows only, normalization source is:
+`student_enrollments.admission_id -> admissions -> college_admission_applications -> college_admission_application_academic_preferences / college_admission_application_course_choices -> canonical Enrollment context`.
+
+Application/Admission remains provenance/history after normalization. Attendance, Examination, Result, Marksheet, Promotion, Registration and Student Profile must consume Student + Enrollment academic context rather than provenance-specific branches.
+
+### ENR-6 Student Profile consumption rule (2026-09-18)
+Student Profile reads `students (1) -> (0..N) student_profile_values` and `students (1) -> (0..N) student_enrollments -> student_enrollment_course_choices`. Profile editing may mutate Student core/profile values only; identity and Enrollment academic relationships are displayed but remain owned by Student Identity/Enrollment modules. `source_type` is provenance only.
+
+## Phase 13 Course Delivery — Course Offering (2026-09-20)
+`college_program_offerings.id -> batches.college_program_offering_id -> course_offerings.batch_id`
+
+`curricula.id -> curriculum_terms.curriculum_id -> curriculum_slots.curriculum_term_id -> curriculum_course_mappings.curriculum_slot_id -> course_offerings.curriculum_course_mapping_id`
+
+Integrity invariant: a Course Offering's Curriculum Course Mapping must resolve to the same `curricula.id` stored on its Batch's parent Program Offering. `sections` remain independent children of Batch and are not parents of Course Offering in this milestone.
+## Phase 13 Course Delivery — Faculty Allocation (2026-09-21)
+
+`Course Offering -> Faculty Allocation -> Faculty User`, with optional `Faculty Allocation -> Section` constrained by service validation to the Course Offering Batch. Timetable is the next downstream consumer.
+## Phase 13 Scheduling chain (2026-09-21)
+
+`Course Offering -> Faculty Allocation -> Timetable Entry -> Class Schedule`; optional `College Room -> Timetable Entry`, snapshotted as `College Room -> Class Schedule`.
+
+## Phase 14 Attendance Operations foundation (ADR 212 — 2026-09-22)
+
+`Class Schedule (1) -> (0..1) Attendance Register -> (1..N) Attendance Records -> Student Enrollment`.
+
+`Attendance Register -> resolved Academic Policy -> Academic Policy Attendance Rule` supplies calculation level, threshold, rounding and future condonation/exemption/exam controls. Raw records consume canonical Enrollment course choices and never Admission/Import provenance. Attendance has no write relationship to Fee Demand; future finance eligibility consumes final Academic Progression output.
+
+## ADR 214 — Attendance exceptions and final eligibility (2026-09-24)
+
+`Student Enrollment + Course Offering + Academic Policy -> Attendance Exception Request` records typed Condonation or Special Exemption decisions without changing Attendance Records.
+
+`Student Enrollment + Course Offering -> Student Attendance Eligibility` is the unique finalized snapshot containing the resolved Academic Policy, finalized aggregate and approved-exception basis for downstream Examination consumption.
+
+## ADR 215 — Internal Assessment (2026-09-24)
+
+`Course Offering + resolved Academic Policy -> Internal Assessment Component -> Internal Assessment Activity -> Faculty Allocation`.
+
+On publication: `Internal Assessment Activity -> Internal Assessment Activity Students -> canonical Student Enrollment`. Membership is resolved through the exact Programme Offering + Batch + optional Section + Curriculum Course Mapping choice and is the stable target for later Marks Entry.
+
+ADR 216 adds `Internal Assessment Activity Student (1) -> (0..1) Internal Assessment Mark`. Marks retain their activity/student provenance through the immutable publication roster; component maximum/pass rules remain reachable through Activity → Component.

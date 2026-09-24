@@ -814,3 +814,133 @@ Owner explicitly approved implementation of Student Fee Ledger on 2026-09-12 whi
 14. Test Data Cleanup: clean Refund first, verify balances restore; clean Adjustment; then clean Payment. A Payment with Refund children must be blocked until Refund cleanup.
 15. Reconcile Ledger closing principal position with Payment Collection / Demand Outstanding after each operation.
 16. After owner QA PASS, implement **Fee Clearance**. Do not start Student Enrollment before Fee Clearance is implemented and accepted.
+
+## Immediate QA — ADR 197 Fee Clearance
+1. Run migrations, clear Laravel caches, and rebuild frontend.
+2. Open Fee Management → Fee Clearance for a CONFIRMED Admission with at least one Demand Item marked Required for Enrollment Clearance.
+3. Verify unpaid required item = PENDING and Enrollment gate BLOCKED.
+4. Part-pay the required item; verify exact remaining clearance outstanding and PENDING.
+5. Fully clear all required items by valid posted payments/benefits/credit adjustments; verify CLEARED and gate OPEN.
+6. Post a Refund, Payment Reversal or Debit Adjustment restoring required liability; verify the same Admission returns to PENDING automatically.
+7. Verify outstanding non-clearance-required Fee Items do not block Fee Clearance.
+8. Verify an Admission with Fee Demands but no active required items shows NOT_REQUIRED and gate OPEN.
+9. Verify cancelled Demand Items do not participate.
+10. Reconcile Fee Clearance item liability with Student Fee Ledger entries for the same Demand Item.
+11. Verify a role without `college_fee_clearance.view` has no sidebar item and receives 403 on direct URL.
+12. After owner QA PASS, Student Enrollment / Student Lifecycle becomes the next implementation and must consume `FeeClearanceService::forAdmission(...)[is_cleared]` rather than reimplementing fee logic.
+
+## Student Enrollment Phase — ENR branch approved 2026-09-16
+Fee Clearance Owner QA is accepted. Student Enrollment is split into five controlled milestones under ADR 199:
+1. ENR-0 — Student Data Architecture.
+2. ENR-1 — Enrollment Eligibility Queue.
+3. ENR-2 — Admission -> Student Enrollment transaction.
+4. ENR-3 — Student Identity / roll-number rules.
+5. ENR-4 — CSV Student Import / Migration.
+
+### Immediate QA — ENR-0 / ADR 199
+1. Run `php artisan migrate` and confirm `students`, `student_enrollments`, and `student_profile_values` are created.
+2. Confirm `applicant_profiles.student_id` has an FK to `students.id` and existing Applicant rows remain valid/null.
+3. Confirm Admission Form Field schema has `student_data_policy` defaulting to `APPLICATION_ONLY` and nullable `student_profile_key`; existing fields must migrate without becoming Student-profile fields automatically.
+4. Confirm no Enrollment page/sidebar/action appears yet; ENR-0 is foundation only.
+5. Confirm existing Admission, Fee Clearance, Fee Ledger, Application Form Builder and Applicant login flows still open/work without regression.
+6. Confirm migration rollback on a disposable/local DB removes only ENR-0 structures/columns and restores the prior schema.
+
+After Owner QA PASS, `next` approves ENR-1 only. Do not implement ENR-2/3/4 early.
+
+### ENR-0 closure / ENR-1 immediate QA — 2026-09-16
+ENR-0 / ADR 199 is **OWNER QA PASS / CLOSED**.
+
+ENR-1 Enrollment Eligibility Queue is **IMPLEMENTED / OWNER QA REQUIRED**. QA in order:
+1. Run migration `2026_09_16_153000_register_student_enrollment_view_permission` and confirm it is Ran.
+2. Open Student Management -> Student Enrollment as College Admin; shared loader and theme-native UI must work.
+3. Confirm Session -> Programme Offering dependency and server-side search/pagination.
+4. A CONFIRMED Admission with Fee Clearance CLEARED or NOT_REQUIRED must show READY when no active enrollment exists.
+5. A CONFIRMED Admission with Fee Clearance PENDING must show BLOCKED with the fee-clearance reason/outstanding amount.
+6. Admissions outside the selected Session/Programme Offering must not appear.
+7. Non-CONFIRMED Admissions must not appear.
+8. Confirm ENR-1 exposes no Enroll/Create mutation action; Student and Student Enrollment tables must remain unchanged by queue viewing/filtering.
+9. Verify a user without `college_student_enrollment.view` cannot access the page and cross-College scope cannot leak.
+10. After Owner QA PASS, `next` approves ENR-2 only: Admission -> Student Enrollment transaction. Do not implement ENR-3/ENR-4 early.
+
+## ENR-2 Owner QA — Admission → Student Enrollment
+1. Run migration `2026_09_16_163000_register_student_enrollment_enroll_permission.php` and confirm `college_student_enrollment.enroll` exists.
+2. Open a READY confirmed admission and confirm the Enroll action appears only for an authorized user.
+3. Click Enroll; verify the shared confirmation dialog shows the correct Student, Admission, Programme, Session and Fee Clearance.
+4. Confirm enrollment and verify shared `Enrolling student…` loading feedback plus success Toast.
+5. Verify the row becomes ENROLLED and cannot be enrolled again.
+6. Verify exactly one `students` row and one `student_enrollments` row exist for the Admission; `student_uid` remains NULL for ENR-3.
+7. For an Applicant-owned admission, verify `applicant_profiles.student_id` points to the Student, lifecycle becomes STUDENT_ENABLED, and the same user account becomes STUDENT/ACTIVE; no second login is created.
+8. If application fields are governed `STUDENT_PROFILE`, verify only those mapped values appear in `student_profile_values`; APPLICATION_ONLY fields must not be copied.
+9. Make another READY admission PENDING through authoritative finance correction before clicking an already-open Enroll action; server must reject enrollment and create no Student/Enrollment.
+10. Verify another College cannot enroll this Admission and a user without `college_student_enrollment.enroll` receives no action / cannot POST successfully.
+11. Verify College Audit Log contains `student.enrolled` with actor, College scope, Student/Admission/Offering references.
+12. Re-test ENR-1 filters/loader and Fee Clearance after enrollment for regression.
+
+After Owner QA PASS, close ADR 201 and proceed to ENR-3 Student Identity. Do not generate Student UID/Roll identifiers during ENR-2 QA.
+
+## ENR-3 Owner QA gate — ADR 203
+ENR-3 is implemented and requires Owner QA before ENR-4. Verify migration/permission, Student Identity page and College scope, numbering-format save, assignment for an existing enrolled student, immutable/idempotent repeat assignment, automatic assignment on a new enrollment, class-roll Programme Offering scope, shared loader/dialog/toast, and that Exam Roll is not generated. After Owner QA PASS, close ADR 203 and `next` proceeds to ENR-4 Student Import / Migration.
+
+## ENR-4 Owner QA gate — ADR 204
+1. Run `2026_09_17_130000_enable_student_import_migration.php`; confirm `student_enrollments.discipline_id` and Student Management permissions `college_student_import.view/manage`.
+2. Verify Student Management → Student Import / Migration visibility follows View permission; direct URL/POST are 403 without matching permission.
+3. Download template, upload a CSV and verify Session → Programme Offering dependency plus arbitrary CSV-header mapping.
+4. Validate a file containing at least one bad DOB/email/unknown Discipline/duplicate identity; invalid count must appear and Import must remain blocked with zero Student/Enrollment mutation.
+5. Correct the CSV; verify all rows validate and only first 20 are previewed when the file is larger while totals cover the full file.
+6. Confirm import; verify exactly one `students` and one `student_enrollments` row per CSV row, both `source_type=IMPORT`, correct College/Offering/Discipline and no Admission/Application/Fee records fabricated.
+7. Verify imported existing Student UID / University Roll / Class Roll are preserved. Blank identifiers must show Pending in Student Identity and be assignable there.
+8. With Class Roll Scope = Discipline, verify imported Discipline Code drives the correct Class Roll scope and Identity assignment. With Programme Offering scope, verify offering-wide behavior remains correct.
+9. Verify `student.import.completed` in Audit Log with actor, College, offering and row count.
+10. Regression: enroll one Admission-origin student and verify its existing Application Academic Preference Discipline is copied to Enrollment and Student Identity still filters/displays it correctly.
+11. Verify cross-College import token/Offering access cannot be used.
+12. After Owner QA PASS, close ADR 204 / ENR-4 and return to the authoritative University Administration roadmap.
+
+## ENR-5 Owner QA — Canonical Enrollment Academic Normalization
+1. Dry-run the known legacy Admission enrollment: `php artisan students:normalize-enrollment-academics --enrollment=6`.
+2. Confirm it reports READY and expected Curriculum/Discipline/Specialization/course mappings from that Enrollment's own Admission/Application records; no DB mutation in dry-run.
+3. Apply only that row: `php artisan students:normalize-enrollment-academics --enrollment=6 --apply`.
+4. Re-run dry-run; it must report ALREADY_CANONICAL (restart/idempotency proof).
+5. Compare one ADMISSION and one IMPORT Enrollment under the same Programme Offering/Curriculum; both must expose academic truth from `student_enrollments` + `student_enrollment_course_choices` without provenance fallback.
+6. Verify Audit Log contains `student.enrollment.academic_normalized` for Enrollment 6.
+7. Create/enroll one new Admission-origin Student after this patch and verify it is canonical immediately; no normalization command should be needed.
+8. Import one Student after this patch and verify the same canonical tables remain the persistence target.
+9. If any row reports NEEDS_REVIEW, do not force/hand-edit it; inspect the documented provenance mismatch and correct source/data deliberately.
+10. After Owner QA PASS, close ENR-5 and proceed to Student Profile/View/Edit as the next Student lifecycle milestone.
+
+## Immediate QA — ADR 207 Test Data Cleanup Reset Levels
+Before resuming ENR-5 fresh Admission canonical-persistence QA, run Admission & Merit Workflow Reset. Verify Applications remain, generated Merit/Seat/Admission/Admission-Student data clears, Intake capacity becomes editable after deactivation, then regenerate the admission workflow. Also regression-test Full Academic Test Reset and confirm the designated `test@...` login remains usable after reset.
+
+
+### Immediate QA follow-up — Academic Calendar Period cleanup
+Before returning to ENR-5 fresh Admission QA: verify targeted Academic Calendar Period cleanup, re-add the current/amended curriculum Period 1 through Academic Calendar, then verify existing Fee Item calendar validation passes only after valid period dates exist. Do not apply the abandoned University Fee visibility patch as part of this workflow.
+
+## ENR-5 closure / ENR-6 next gate — 2026-09-18
+ENR-5 / ADR 206: OWNER QA PASSED / CLOSED. Fresh Admission-route QA confirmed current Admission enrollment writes canonical Curriculum/Discipline/Course Choice context directly.
+
+ENR-6 / ADR 208 Student Profile is now IMPLEMENTED / OWNER QA PENDING. Run `.project/AI/QA/ENR6_STUDENT_PROFILE_QA.md`. Do not start downstream Attendance/Examination/Result work until Student Profile owner QA is closed. Identity and Enrollment academic context remain owned by their dedicated modules; Student Profile must not mutate them.
+
+## Current next workflow — 2026-09-22 Attendance Operations / ADR 212
+Rooms, Timetable and Class Scheduling remain under ADR 211 Owner QA. Attendance Operations foundation is IMPLEMENTED / OWNER QA REQUIRED and consumes that chain without duplicating it. QA must verify exact Batch/Section/Course roster scope, class-date Academic Policy resolution, missing-policy blocking, complete-roster draft/finalize, finalized locking, audited correction, rounding/shortage display and zero Fee Demand mutation. After QA, continue Attendance with controlled condonation/special exemption and final Examination Eligibility integration; do not make raw attendance a direct Fee Demand input.
+
+## Current next workflow — 2026-09-24 Attendance Exceptions / Eligibility / ADR 214
+
+Condonation, Medical/Special Exemption and final Examination Attendance Eligibility are IMPLEMENTED / OWNER QA REQUIRED. QA must verify policy enablement and condonation bounds, pending-only decision locking, cross-College denial, mandatory decision remarks, raw Attendance immutability, Course/Term/Overall aggregation, NOT_REQUIRED behavior, approved-exception basis, re-finalization, audit events and zero Fee mutation. After QA, Phase 15 Internal Assessment → Assessment Setup is the next hierarchy milestone.
+
+## Current next workflow — 2026-09-24 Internal Assessment / ADR 215
+
+Assessment Setup, Assignment and Quiz are IMPLEMENTED / OWNER QA REQUIRED. QA must verify Course Offering and resolved-policy linkage, 100% weight cap, pass/max validation, lifecycle locks, same-Course ACTIVE Faculty Allocation, Curriculum Term calendar bounds, Quiz duration, exact Batch/Section/course-choice roster snapshot, cross-College denial, audit events and cleanup dependencies. After QA, Mid Semester is next, followed by Practical and Marks Entry.
+
+## Current next workflow — 2026-09-24 Mid Semester / Practical / Marks Entry / ADR 216
+
+Mid Semester, Practical and Marks Entry are IMPLEMENTED / OWNER QA REQUIRED. QA must verify type-matched ACTIVE components, same-Course Faculty Allocation, required duration, calendar bounds, publication roster snapshot, PUBLISHED/CLOSED activity filtering, complete-roster enforcement, ENTERED/ABSENT behavior, zero-to-maximum validation, correction revision/audit, cross-College denial and cleanup ordering. Marks Approval is the next hierarchy milestone, followed by Internal Marks Finalization.
+
+### ENR-6.2 QA gate
+Before ENR-6 closure, verify Admission DOB parity, Candidate Profile Photo carry-forward/replacement, category-labelled applicant-choice presentation, reservation-category parity, RBAC/audit, and that Student Identity/Enrollment canonical data remains unchanged.
+
+### ENR-6.3 QA addendum — Import photo parity (2026-09-19)
+Before ENR-6 closure, verify an IMPORT-source Student under an offering with an applicable governed Candidate Profile Photo field: empty placeholder/Add Photo before first upload, persistent photo after upload, same-row replacement on second upload, audit/RBAC, and no regression to Admission-source photo inheritance. Do not add image columns to CSV import for this milestone.
+
+### ENR-4.6C corrective QA — College Student temporary credential action (2026-09-19)
+Before formal ENR-4/ENR-6 documentation closure, verify College Users -> Students no longer shows `Send Password Reset Link` for Students. Generate New Temporary Password must invalidate the old password, provide the actor-scoped one-time credential download, force password change on next login, work for canonical Admission- and Import-origin Student accounts in the same College, reject cross-College access, and write `student.account.temporary_password_regenerated` without plaintext. Re-test Enable/Disable Login and confirm it does not mutate Student Enrollment status. This corrective QA does not alter the existing phase hierarchy.
+
+Student Portal future navigation is documented under MASTER_DEVELOPMENT_HIERARCHY section 09 as a downstream information-architecture contract. Do not start Attendance/Examination/Result merely because their future Student Portal destinations are documented; continue to honor the existing milestone gates.
